@@ -1,0 +1,328 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<html lang="zh-Hant">
+<head>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8">
+    <title>列印計費系統</title>
+    <style>
+        body { font-family: Arial, "Microsoft JhengHei", sans-serif; padding: 20px; }
+        table { border-collapse: collapse; margin: 10px 0; width: 80%; }
+        th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left;}
+        th { background-color: #ccc ; }
+        .header-flex { display:flex; justify-content:space-between; align-items:center; width:80%; }
+        .msg { margin: 10px 0; color: green; font-weight: bold; }
+        .err { margin: 10px 0; color: red; font-weight: bold; }
+        input[type="number"], input[type="text"] { width: 140px; }
+        .btn-group { display:flex; gap:10px; margin-top: 10px; }
+        table.contract-table th {text-align: center; background-color: #3399FF;color: white;}
+        button {
+            padding: 10px 15px;
+            font-size: 18px;
+            margin: 5px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        button:hover { background-color: #0056b3; }
+        .search-label {
+            font-size: 18px;
+			margin-left: 0;
+			margin-right:auto;
+        }
+        .search-input {
+            font-size: 16px;
+            padding: 4px 6px;
+			margin-left: 0;
+			margin-right:auto;
+        }
+        .search-btn {
+            font-size: 16px;
+            padding: 6px 12px;
+			margin-left: 0;
+			margin-right:auto;
+        }
+        .back-btn {
+            background-color: #28a745;
+            padding: 8px 14px;
+            font-size: 16px;
+        }
+        .back-btn:hover {
+            background-color: #1e7e34;
+        }
+		.contract-table tr td:first-child {
+			font-weight: bold;
+			color: black;
+		}
+		@media (max-width: 768px) {
+		  table.contract-table {
+			font-size: 14px;
+			width: 100%;
+			margin-left: 0;
+		    margin-right: auto;
+		  }
+
+		  table.contract-table input[type="number"],
+		  table.contract-table input[type="text"] {
+			width: 100%;
+			font-size: 14px;
+			margin-left: 0;
+		    margin-right: auto;
+		  }
+		}
+
+		/* 統一所有契約表格輸入框 */
+		table.contract-table input[type="number"],
+		table.contract-table input[type="text"],
+		table.contract-table select {
+		  width: 100%;
+		  font-size: 12px;
+		  box-sizing: border-box;
+		  margin-left: 0;
+		  margin-right: auto;
+		}
+
+		/* 標題樣式 */
+		h3 {
+		  text-align: center;
+		  font-size: 20px;
+		}
+		.contract-table input[type="number"],
+		.contract-table input[type="text"] {
+		  width: 100%;
+		  margin-left: 0;
+		  margin-right: auto;
+		  height: 28px;
+		  padding: 2px 4px;
+		  font-size: 12px;
+		  border: 1px solid #ccc;
+		  border-radius: 4px;
+		  box-sizing: border-box;
+		  background-color: white;
+		  appearance: none; /* 移除瀏覽器預設樣式 */
+		}
+		form {
+		  text-align: left;
+		  margin-left: 0;
+		  margin-right: auto;
+		}
+
+    </style>
+</head>
+<body>
+    <div class="header-flex">
+        <h2>列印計費系統</h2>
+	</div>
+	
+	<div>
+	<!-- 查詢設備或客戶 -->
+	<form method="POST" style="margin-bottom: 12px;">
+		<input type="hidden" name="mode" value="query">
+		<label class="search-label;">設備編號 / 客戶名稱(概略):
+			<input type="text" name="device_id" required class="search-input">
+		</label>
+		<button type="submit" class="search-btn">查詢</button>
+	</form>
+	</div>
+
+    {% if message %}
+        <div class="{{ 'msg' if message.startswith('✅') else 'err' }}">{{ message }}</div>
+    {% endif %}
+
+	<!-- 若找到多筆相符的客戶 -->
+	{% if matches %}
+	  <div style="margin-top: 20px;">
+		<h3>🔍 找到多筆相符的客戶，請選擇：</h3>
+		<table border="1" cellspacing="0" cellpadding="6"
+			   style="border-collapse: collapse; width:100%; table-layout:fixed;">
+		  <thead style="color:white;">
+			<tr>
+			  <th>設備編號</th>
+			  <th>客戶名稱</th>
+			  <th>操作</th>
+			</tr>
+		  </thead>
+		  <tbody>
+			{% for m in matches %}
+			<tr>
+			  <td>
+				<a href="{{ url_for('billing.index') }}?device_id={{m.device_id}}" style="text-decoration: none; color: blue;">
+				  {{m.device_id}}
+				</a>
+			  </td>
+			  <td>{{m.customer_name}}</td>
+			  <td>
+				<!-- 刪除客戶按鈕 -->
+				<form method="post" action="{{ url_for('billing.index') }}" style="display:inline;">
+				  <input type="hidden" name="mode" value="delete_customer">
+				  <input type="hidden" name="device_id" value="{{ m.device_id }}">
+				  <button type="submit"
+						  style="background-color: #e74c3c; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer;"
+						  onclick="return confirm('確定要刪除 {{ m.customer_name }}（設備編號：{{ m.device_id }}）嗎？');">
+					🗑 刪除
+				  </button>
+				</form>
+			  </td>
+			</tr>
+			{% endfor %}
+		  </tbody>
+		</table>
+	  </div>
+	{% endif %}
+
+
+    {% if contract %}
+    <hr>
+
+<!-- 客戶資料區塊 -->
+	{% if customer %}
+	<h3 style="font-size:22px; text-align:left;">客戶資料</h3>
+	<form method="post" action="{{ url_for('billing.index') }}">
+		<table class="contract-table" style="width:100%; font-size: 12px; font-weight: bold; max-width:600px; margin-left: 0;; border-collapse: collapse;">
+		  <colgroup>
+			<col style="width: 25%;">
+			<col style="width: 75%;">
+		  </colgroup>
+			<input type="hidden" name="device_id" value="{{ customer.device_id }}">
+			<tr><th>項目</th><th>內容</th></tr>
+			<tr><td>客戶名稱</td><td><input type="text" name="customer_name" value="{{ customer.customer_name }}" style="width:100%; box-sizing:border-box;"></td></tr>
+			<tr><td>設備編號</td><td><input type="text" name="device_id_new" value="{{ customer.device_id }}" style="width:100%; box-sizing:border-box;"></td></tr>
+			<tr><td>機號</td><td><input type="text" name="device_number" value="{{ customer.device_number }}" style="width:100%; box-sizing:border-box;"></td></tr>
+			<tr><td>機型</td><td><input type="text" name="machine_model" value="{{ customer.machine_model }}" style="width:100%; box-sizing:border-box;"></td></tr>
+			<tr><td>統一編號</td><td><input type="text" name="tax_id" value="{{ customer.tax_id }}" style="width:100%; box-sizing:border-box;"></td></tr>
+			<tr><td>裝機地址</td><td><input type="text" name="install_address" value="{{ customer.install_address }}" style="width:100%; box-sizing:border-box;"></td></tr>
+			<tr><td>服務人員</td><td><input type="text" name="service_person" value="{{ customer.service_person }}" style="width:100%; box-sizing:border-box;"></td></tr>
+			<tr><td>契約編號</td><td><input type="text" name="contract_number" value="{{ customer.contract_number }}" style="width:100%; box-sizing:border-box;"></td></tr>
+			<tr><td>合約開始日</td><td><input type="text" name="contract_start" value="{{ customer.contract_start }}"></td></tr>
+			<tr><td>合約到期日</td><td><input type="text" name="contract_end" value="{{ customer.contract_end }}"></td></tr>
+		</table>
+
+		<div style="margin-top:10px; text-align:left;">
+			<button type="submit" name="mode" value="update_customer" class="btn btn-primary" style="font-size:16px;">💾 更新客戶資料</button>
+			<button type="submit" name="mode" value="new_customer" class="btn btn-success" style="font-size:16px; margin-left:10px;">🆕 新客戶建檔</button>
+		</div>
+	</form>
+	{% endif %}
+
+	<!-- 本月抄表表單 -->
+	<form method="POST" style="margin-top:20px;">
+		<input type="hidden" name="device_id" value="{{ contract.device_id }}">
+		<input type="hidden" name="mode" value="calculate">
+
+		<div class="header-flex" style="font-size:18px;width:80%; margin-top:20px;">
+			<h4>輸入當月抄表（寫入資料庫）</h4>
+		</div>
+
+		{% if related_devices and related_devices|length > 1 %}
+		  <p style="font-size:16px;margin-left: 0;">📦 合開群組（主機：{{ related_devices[0] }}），共 {{ related_devices|length }} 台</p>
+		  <table class="contract-table" style="margin-left: 0; ">
+			<tr>
+			  <th>設備編號</th>
+			  <th>本月彩色張數</th>
+			  <th>本月黑白張數</th>
+			</tr>
+			{% for dev in related_devices %}
+			  <tr>
+				<td style="font-weight:bold;">{{ dev }}</td>
+				<td><input type="number" name="curr_color_{{ dev }}" value="0" style="width:100%;"></td>
+				<td><input type="number" name="curr_bw_{{ dev }}" value="0" style="width:100%;"></td>
+			  </tr>
+			{% endfor %}
+		  </table>
+		{% else %}
+		  <div>
+			前次彩色張數: <input type="text" value="{{ last_color }}" readonly>
+			前次黑白張數: <input type="text" value="{{ last_bw }}" readonly>
+		  </div>
+		  <br>
+		  <div>
+			本月彩色張數: <input type="number" name="curr_color" required>
+			本月黑白張數: <input type="number" name="curr_bw" required>
+		  </div>
+		{% endif %}
+
+		<div style="margin-top:12px;">
+			<button type="submit">計算並儲存本月抄表</button>
+		</div>
+	</form>
+
+    {% if result %}
+    <hr>
+    <h3 style="font-size:22px;">計算結果</h3>
+    <table class="contract-table">
+        <tr><th>項目</th><th>數值</th></tr>
+        {% for k, v in result.items() %}
+        <tr {% if k in ["未稅小計", "稅額", "含稅總額"] %} style="background-color: #dfffd6;" {% endif %}>
+            <td>{{ k }}</td>
+            <td>{{ v }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% endif %}
+
+    <!-- 契約條件區塊 -->
+    <div class="header-flex" style="width:80%; margin-top:20px;">
+        <h3 style="font-size:22px;">契約條件</h3>
+    </div>
+	
+	{% if contra_text %}
+	<div style="width:80%; margin-top:10px;">
+		<div style="border: 1px solid #aaa; border-radius: 8px; padding: 10px; font-size: 15px; font-family: 'Microsoft JhengHei', sans-serif; white-space: pre-line; background-color:#f8f8f8;">
+			{{ contra_text }}
+		</div>
+	</div>
+	{% endif %}
+
+
+    <form method="POST" style="margin-top:8px;">
+        <input type="hidden" name="device_id" value="{{ contract.device_id }}">
+        <input type="hidden" name="mode" value="update_contract">
+
+        <table class="contract-table" style="width:100%; font-size: 12px; font-weight: bold; max-width:600px; margin-left: 0; border-collapse: collapse;">
+            <tr><th>項目</th><th>數值</th></tr>
+            <tr><td>月租金</td><td><input type="number" step="0.01" name="monthly_rent" value="{{ contract.monthly_rent }}"></td></tr>
+            <tr><td>彩色單價</td><td><input type="number" step="0.01" name="color_unit_price" value="{{ contract.color_unit_price }}"></td></tr>
+            <tr><td>黑白單價</td><td><input type="number" step="0.01" name="bw_unit_price" value="{{ contract.bw_unit_price }}"></td></tr>
+            <tr><td>彩色贈送張數</td><td><input type="number" name="color_giveaway" value="{{ contract.color_giveaway }}"></td></tr>
+            <tr><td>黑白贈送張數</td><td><input type="number" name="bw_giveaway" value="{{ contract.bw_giveaway }}"></td></tr>
+            <tr><td>彩色誤印率 (小數)</td><td><input type="number" step="0.0001" name="color_error_rate" value="{{ contract.color_error_rate }}"></td></tr>
+            <tr><td>黑白誤印率 (小數)</td><td><input type="number" step="0.0001" name="bw_error_rate" value="{{ contract.bw_error_rate }}"></td></tr>
+            <tr><td>彩色基本張數</td><td><input type="number" name="color_basic" value="{{ contract.color_basic }}"></td></tr>
+            <tr><td>黑白基本張數</td><td><input type="number" name="bw_basic" value="{{ contract.bw_basic }}"></td></tr>
+			<tr><td>前次彩色張數</td>
+			<td><input type="text" value="{{ last_color }}" readonly 
+					   style="width:100%; height:28px; padding:2px 4px; font-size:12px; box-sizing:border-box;"></td></tr>
+			<tr><td>前次黑白張數</td>
+			<td><input type="text" value="{{ last_bw }}" readonly
+					   style="width:100%; height:28px; padding:2px 4px; font-size:12px; box-sizing:border-box;"></td></tr>
+			<tr><td>合開設備編號（主要設備）</td>
+			  <td>
+				<input type="text" name="master_device_id"
+					   value="{{ contract.master_device_id if contract.master_device_id else '' }}"
+					   placeholder="若為主機留空，子機請填主機設備編號"
+					   style="width:100%; box-sizing:border-box;">
+			  </td>
+			</tr>
+
+			<tr><td>稅別</td>
+                <td>
+                    <select name="tax_type">
+                        <option value="未稅" {% if contract.tax_type == "未稅" %}selected{% endif %}>未稅</option>
+                        <option value="含稅" {% if contract.tax_type == "含稅" %}selected{% endif %}>含稅</option>
+                    </select>
+                </td>
+            </tr>
+        </table>
+
+        <div style="margin-top:12px;">
+            <button type="submit">更新契約條件</button>
+        </div>
+    </form>
+
+    {% endif %}
+</body>
+</html>
+{% endblock %}

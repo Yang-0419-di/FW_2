@@ -1,0 +1,80 @@
+{% extends "layout.html" %}
+
+{% block content %}
+    <!-- === 個人查詢頁 personal.html === -->
+
+    {% if show_top %}
+        <h2 id="season-title">{{ personal_page }} - 季保養進度</h2>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        {% for key in tables_top[0].keys() %}
+                            <th>{{ key }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in tables_top %}
+                        <tr {% if loop.index == 4 %}class="highlight-row"{% endif %}>
+                            {% for value in row.values() %}
+                                <td>{{ value }}</td>
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+
+    {% if show_project %}
+        <h2>專案進度</h2>
+        <div class="table-container">
+            <table>
+                <thead>
+                    {% if tables_project %}
+                        <tr>
+                            {% for key in tables_project[0].keys() %}
+                                <th>{{ key }}</th>
+                            {% endfor %}
+                        </tr>
+                    {% endif %}
+                </thead>
+                <tbody>
+                    {% for row in tables_project %}
+                        <tr>
+                            {% for value in row.values() %}
+                                <td>{{ value }}</td>
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+
+    <h2>門市資料</h2>
+    <div class="table-container">
+        <table>
+            <thead>
+                {% if tables_bottom %}
+                    <tr>
+                        {% for key in tables_bottom[0].keys() %}
+                            <th>{{ key }}</th>
+                        {% endfor %}
+                    </tr>
+                {% endif %}
+            </thead>
+            <tbody>
+                {% for row in tables_bottom %}
+                    <tr>
+                        {% for value in row.values() %}
+                            <td>{{ value }}</td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+{% endblock %}

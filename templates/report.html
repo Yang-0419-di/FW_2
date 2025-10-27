@@ -1,0 +1,119 @@
+{% extends "layout.html" %}
+
+{% block content %}
+    <!-- === 報修查詢頁 report.html === -->
+
+		<h2>報修查詢</h2>
+
+    <form method="get" class="search-form">
+        <input type="text" name="store_id" placeholder="門市編號" value="{{ store_id }}">
+        <select name="repair_item">
+            <option value="">-- 選擇報修類別 --</option>
+            {% for item in [
+                'HL-TM主機', 'HL-熱感發票機', 'HL-立式掃描器', 'HL-多卡機QP3000E', 'HL-CCD掃描器(TM)',
+                'HL-CCD掃描器(SC)', 'HL-SC主機', 'HL-SC螢幕', 'HL-HUB', 'HL-雷射印表機', 'HL-4G分享器',
+                'HL-PepLink負載平衡器', 'HL-LIFE-ET主機', 'HL-LIFE-ET熱感機T70II', 'HL-LIFE-ET印票機L90',
+                'LIFE-ET 標籤印表機', 'HL-LIFE-ET QRcode掃描器', 'HL-LIFE-ET IC晶片讀卡機', 'HL-LIFE-ET 標籤印表機'
+            ] %}
+                <option value="{{ item }}" {% if repair_item == item %}selected{% endif %}>{{ item }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit">搜尋</button>
+    </form>
+
+    {% if tables %}
+    <div class="table-container-NO">
+        <table>
+            <thead>
+                <tr>
+                    {% for key in tables[0].keys() %}
+                        <th>{{ key }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in tables %}
+                    <tr>
+                        {% for value in row.values() %}
+                            <td>{{ value }}</td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+        <p class="no-data">查無符合條件的報修資料。</p>
+    {% endif %}
+
+    <style>
+        h2 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .search-form {
+            margin-bottom: 15px;
+            text-align: left;
+        }
+
+        .search-form input, .search-form select {
+            padding: 8px 10px;
+            margin-right: 6px;
+            font-size: 15px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+
+        .search-form button {
+            padding: 8px 14px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .search-form button:hover {
+            background-color: #0056b3;
+        }
+
+        .table-container-NO {
+            overflow-y: visible;
+            max-height: none;
+            border: 1px solid #ccc;
+            margin-top: 10px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: white;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: center;
+            word-wrap: break-word;
+        }
+
+        th {
+            background-color: #007BFF;
+            color: white;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+
+        tr:hover {
+            background-color: #f9f9f9;
+        }
+
+        .no-data {
+            color: #777;
+            margin-top: 20px;
+            font-style: italic;
+        }
+    </style>
+{% endblock %}

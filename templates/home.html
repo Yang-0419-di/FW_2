@@ -1,0 +1,123 @@
+{% extends "layout.html" %}
+
+{% block content %}
+    <!-- === 首頁：部門總覽（原主框架中的 default 區塊） === -->
+
+		<h2>部門數量</h2>
+
+    <div class="table-container">
+        <table>
+            <thead>
+                {% if department_table %}
+                    <tr>{% for key in department_table[0].keys() %}<th>{{ key }}</th>{% endfor %}</tr>
+                {% endif %}
+            </thead>
+            <tbody>
+                {% for row in department_table %}
+                    <tr>{% for value in row.values() %}<td>{{ value }}</td>{% endfor %}</tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <h2>季保養進度</h2>
+    <div class="table-container">
+        <table>
+            <thead>
+                {% if seasons_table %}
+                    <tr>{% for key in seasons_table[0].keys() %}<th>{{ key }}</th>{% endfor %}</tr>
+                {% endif %}
+            </thead>
+            <tbody>
+                {% for row in seasons_table %}
+                    <tr>{% for value in row.values() %}<td>{{ value }}</td>{% endfor %}</tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <h2>
+        <button onclick="toggleSection('project1-content', event)" style="margin-right: 8px;">▶</button>
+        專案項目
+    </h2>
+    <div id="project1-content" style="display: block;" class="table-container">
+        <table>
+            <thead>
+                {% if project1_table %}
+                    <tr>{% for key in project1_table[0].keys() %}<th>{{ key }}</th>{% endfor %}</tr>
+                {% endif %}
+            </thead>
+            <tbody>
+                {% for row in project1_table %}
+                    <tr>{% for value in row.values() %}<td>{{ value }}</td>{% endfor %}</tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <h2>
+        <button onclick="toggleHUB()" style="margin-right: 8px;">▶</button>
+        HUB異常檢查
+    </h2>
+    <div id="HUB-content" style="display: none;" class="table-container">
+        <table>
+            <thead>
+                {% if HUB_table %}
+                    <tr>{% for key in HUB_table[0].keys() %}<th>{{ key }}</th>{% endfor %}</tr>
+                {% endif %}
+            </thead>
+            <tbody>
+                {% for row in HUB_table %}
+                    <tr>{% for value in row.values() %}<td>{{ value }}</td>{% endfor %}</tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <h2>門市資料</h2>
+    <div class="table-container">
+        <table>
+            <thead>
+                {% if tables %}
+                    <tr>{% for key in tables[0].keys() %}<th>{{ key }}</th>{% endfor %}</tr>
+                {% endif %}
+            </thead>
+            <tbody>
+                {% for row in tables %}
+                <tr {% if row['PMQ_檢核'] == 'PM' %} class="highlight-row" {% endif %}>
+                    {% for key, value in row.items() %}
+                        {% if key == 'PMQ_檢核' and value == 'PM' %}
+                            <td class="status-pm">{{ value }}</td>
+                        {% elif key == '專案檢核' and value == '已更換' %}
+                            <td class="status-replaced">{{ value }}</td>
+                        {% elif key == '專案檢核' and value == '未更換' %}
+                            <td class="status-not-replaced">{{ value }}</td>
+                        {% elif key == '完工檢核' and value in ['PEP未完工','TVV未完工','EDC未完工','HUB未完工'] %}
+                            <td class="status-repair">{{ value }}</td>
+                        {% else %}
+                            <td>{{ value }}</td>
+                        {% endif %}
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // 切換顯示/隱藏任意區塊（可重複使用）
+    function toggleSection(id, ev) {
+        ev && ev.preventDefault && ev.preventDefault();
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.style.display = (el.style.display === "none" || el.style.display === "") ? "block" : "none";
+    }
+
+    function toggleHUB() {
+        toggleSection('HUB-content');
+    }
+</script>
+{% endblock %}

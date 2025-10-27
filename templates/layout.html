@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>門市資料查詢</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 40px; background-color: #f7f7f7; }
+        h1 { text-align: center; color: #333; }
+        form, .buttons { text-align: center; margin-bottom: 20px; }
+        input[type="text"], select {
+            padding: 10px;
+            width: 160px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            margin: 5px;
+        }
+        button {
+            padding: 10px 15px;
+			font-size: 20px;
+            margin: 5px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+		button.button-1 {
+            padding: 10px 15px;
+			font-size: 20px;
+            margin: 5px;
+            background-color: #20B2AA;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+		button.button-2 {
+            padding: 10px 15px;
+			font-size: 20px;
+            margin: 5px;
+            background-color: #FFA500;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+		button.button-3 {
+            padding: 10px 15px;
+			font-size: 20px;
+            margin: 5px;
+            background-color: #000000;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+		.button-row {
+			display: flex;
+			flex-wrap: wrap; /* 自動換行（必要時） */
+			justify-content: flex-start; /* 或 center, space-between 等看你需求 */
+			gap: 10px; /* 按鈕之間的間距 */
+		}
+		.button a,
+		.button-1 a {
+			text-decoration: none;
+		}
+        .table-container {
+            overflow-y: auto;
+            max-height: 600px;
+            border: 1px solid #ccc;
+        }
+		.table-container-NO {
+            overflow-y: visible;  /* 🔹 取消滾軸，內容超出會直接撐開容器 */
+			max-height: none;     /* 🔹 取消高度限制 */
+			border: 1px solid #ccc;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: white;
+            table-layout: fixed;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: center;
+            word-wrap: break-word;
+        }
+        th {
+            background-color: #007BFF;
+            color: white;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+        tr:hover { background-color: #f1f1f1; }
+        .highlight-row td {
+            color: red;
+            font-weight: bold;
+            border-top: 2px solid black;
+        }
+        .status-pm { background-color: red; color: white; }
+        .status-replaced { color: green; }
+        .status-not-replaced { color: red; }
+        .status-repair {
+            color: black;
+            font-weight: bold;
+            background-color: #d8ecff;
+        }
+        #backToTop {
+            position: fixed;
+            bottom: 230px;
+            right: 30px;
+            z-index: 1000;
+            display: none;
+            padding: 10px 15px;
+            font-size: 16px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        #backToTop:hover {
+            background-color: #0056b3;
+        }
+        .version-info {
+            text-align: center;
+            color: gray;
+            font-size: 14px;
+            margin-top: -25px;
+            margin-bottom: 20px;
+        }
+		/* 特殊欄位背景色標記 */
+		.blue-bg { background-color: lightblue; }
+		.orange-bg { background-color: orange; }
+		.green-bg { background-color: lightgreen; }
+		/* 讓 style 表格寬度一致 */
+		.dataframe { width: 100% !important; border-collapse: collapse; }
+		.dataframe th, .dataframe td {
+			border: 1px solid #ccc;
+			padding: 10px;
+			text-align: center;
+			word-break: break-word;
+		}
+		.dataframe th {
+			background-color: #007BFF;
+			color: white;
+			position: sticky;
+			top: 0;
+			z-index: 1;
+		}
+
+    </style>
+
+</head>
+<body>
+    <div class="content-wrap">
+        <!-- 標題與版號 -->
+        <h1>
+			{{ page_header or (
+				"出勤時間統計" if time_page else
+				"報修查詢" if report_page else
+				("PMQ4 個人查詢: " ~ personal_page) if personal_page else
+				"部門排程" if calendar_page else
+				"TG客戶系統" if billing_page else
+				"PMQ4 部門總覽"
+			) }}
+        </h1>
+
+        {% if version %}
+        <div class="version-info">版本：{{ version }}</div>
+        {% endif %}
+
+        <!-- 搜尋欄位（子頁可透過 template 傳參數控制是否顯示） -->
+        <form method="get" style="text-align:center; margin-bottom:16px;">
+            {% if not report_page and not calendar_page and not time_page and not billing_page %}
+                <input type="text" name="keyword" placeholder="請輸入關鍵字查詢" value="{{ keyword|default('') }}">
+            {% endif %}
+            {% if report_page %}
+                <input type="text" name="store_id" placeholder="門市編號" value="{{ store_id|default('') }}">
+                <select name="repair_item">
+                    <option value="">-- 選擇報修類別 --</option>
+                    {% for item in [
+                        'HL-TM主機', 'HL-熱感發票機', 'HL-立式掃描器', 'HL-多卡機QP3000E', 'HL-CCD掃描器(TM)',
+                        'HL-CCD掃描器(SC)', 'HL-SC主機', 'HL-SC螢幕', 'HL-HUB', 'HL-雷射印表機', 'HL-4G分享器',
+                        'HL-PepLink負載平衡器', 'HL-LIFE-ET主機', 'HL-LIFE-ET熱感機T70II', 'HL-LIFE-ET印票機L90',
+                        'LIFE-ET 標籤印表機', 'HL-LIFE-ET QRcode掃描器', 'HL-LIFE-ET IC晶片讀卡機', 'HL-LIFE-ET 標籤印表機'
+                    ] %}
+                        <option value="{{ item }}" {% if repair_item == item %}selected{% endif %}>{{ item }}</option>
+                    {% endfor %}
+                </select>
+            {% endif %}
+            {% if not calendar_page and not time_page and not billing_page %}
+                <button type="submit" class="btn btn-primary">搜尋</button>
+            {% endif %}
+        </form>
+
+        <!-- 導覽按鈕列（語意正確的 a.btn） -->
+		{% if not billing_page %}
+        <div class="button-row" role="navigation" aria-label="主要功能選單">
+			<div class="button">
+                <a href="{{ url_for('personal', name='吳宗鴻') }}"><button class="button">吳宗鴻</button></a>
+                <a href="{{ url_for('personal', name='湯家瑋') }}"><button class="button">湯家瑋</button></a>
+                <a href="{{ url_for('personal', name='狄澤洋') }}"><button class="button">狄澤洋</button></a>
+			<div class="button-1">
+				<a href="/report"><button class="button-1">報修查詢</button></a>
+				<a href="https://bot.toshibatec.com.tw/hl0800/showjob31.php" target="_blank" rel="noopener noreferrer">
+					<button class="button-1">報修刊版</button></a>
+				<a href="https://imainte.toshibatec.com.tw/i_mainte_center2/login.cfm?CFID=258322&CFTOKEN=f58548bc0ee07d0d-A0165FB1-FFC4-BBD8-DC3EBB80DDEA857B" target="_blank" rel="noopener noreferrer">
+					<button class="button-2">iMainte</button></a>
+				<a href="http://eip.toshibatec.com.tw/Main.aspx" target="_blank" rel="noopener noreferrer">
+					<button class="button-2">EIP</button></a>
+				<a href="{{ url_for('time_page') }}"><button class="button-1">出勤時間統計</button></a>
+				<a href="{{ url_for('calendar_page') }}"><button class="button-2">排程表</button></a>
+				<a href="{{ url_for('mfp_parts') }}"><button class="button-1">MFP_零件表</button></a>
+				<a href="{{ url_for('billing.index') }}"><button class="button-1">TG客戶系統</button></a>
+		{% endif %}
+			{% if not home_page %}
+			<a href="/"><button class="button-3">回首頁</button></a>
+			{% endif %}
+			</div>	
+        </div>
+
+        <!-- ===== 子頁內容插入點 ===== -->
+        <main>
+            {% block content %}
+            <!-- 子頁會覆寫這塊 -->
+            <div class="table-container">
+                <p style="text-align:center; color:var(--muted); padding:20px 0;">請在子模板中填入內容。範例：{{ url_for('index') }}</p>
+            </div>
+            {% endblock %}
+        </main>
+
+        <!-- 回頂部按鈕（當需要可顯示） -->
+        <button id="backToTop" onclick="window.scrollTo({top:0, behavior:'smooth'});">回頂部</button>
+    </div>
+
+    <!-- ===== 全域腳本 ===== -->
+    <script>
+        // 簡單的回頂與顯示控制（子頁可覆寫或使用 extra_scripts block）
+        (function(){
+            const btn = document.getElementById('backToTop');
+            window.addEventListener('scroll', function(){
+                if(window.scrollY > 400){
+                    btn.style.display = 'block';
+                } else {
+                    btn.style.display = 'none';
+                }
+            });
+        })();
+    </script>
+
+    <!-- ===== 子頁專屬腳本插入點 ===== -->
+    {% block extra_scripts %}
+    {% endblock %}
+</body>
+</html>
