@@ -1,7 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 
-cd /d D:\flask
+cd /d D:\flask2
 
 :: -----------------------------
 :: 詢問是否直接開始 Git 操作
@@ -91,7 +91,7 @@ start /wait "" "save_excel.exe"
 if errorlevel 1 goto error
 
 echo [3/3] 進行 Git 操作...
-cd /d D:\flask
+cd /d D:\flask2
 git pull
 if errorlevel 1 goto error
 git add -A
@@ -109,7 +109,7 @@ exit /b
 :: -----------------------------
 :git_operation
 echo [Git] 進行 Git 操作...
-cd /d D:\flask
+cd /d D:\flask2
 git pull
 if errorlevel 1 goto error
 git add -A
