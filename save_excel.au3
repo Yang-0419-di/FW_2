@@ -3,7 +3,7 @@ Local $oExcel = ObjCreate("Excel.Application")
 $oExcel.Visible = True
 
 ; 開啟檔案
-Local $filePath = "D:\flask\data.xlsx"
+Local $filePath = "D:\flask2\data.xlsx"
 Local $oWorkbook = $oExcel.Workbooks.Open($filePath)
 
 ; 等待 2 秒（可視需要調整，讓使用者看到打開）
