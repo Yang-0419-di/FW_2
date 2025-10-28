@@ -14,7 +14,7 @@ from modules.billing import billing_bp   # ✅ 新增這一行
 
 # ====== 基本設定 ======
 app = Flask(__name__)
-GITHUB_XLSX_URL = 'https://raw.githubusercontent.com/Yang-0419-di/FW_2/main/data.xlsx'
+GITHUB_XLSX_URL = 'https://raw.githubusercontent.com/Yang-0419-di/FW_2/master/data.xlsx'
 cached_xls = None
 version_time = None
 
