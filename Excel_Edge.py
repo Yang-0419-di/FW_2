@@ -11,7 +11,7 @@ from datetime import datetime
 
 # 時間與檔名設定
 yyyymm = datetime.now().strftime("%Y%m")
-download_path = r"D:\flask\IM"
+download_path = r"D:\flask2\IM"
 pos_pattern = os.path.join(download_path, f"{yyyymm}_HL_Maintain_Report*.xlsx")
 mfp_pattern = os.path.join(download_path, f"{yyyymm}_Service_Count_Report*.xlsx")
 pos_final = os.path.join(download_path, f"{yyyymm}_HL_Maintain_Report.xlsx")
