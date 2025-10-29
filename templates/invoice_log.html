@@ -1,0 +1,54 @@
+{% extends "layout.html" %}
+{% block content %}
+<div style="padding:20px;">
+  <h2>📄 發票紀錄 — 設備：{{ device_id }}</h2>
+  <p>顯示 1 到 12 月，若某月無紀錄為空白。</p>
+  
+    <!-- 🔹 新增返回上一頁按鈕 -->
+	<div style="margin-bottom:10px;">
+	  <button type="button" onclick="history.back()" style="padding:10px 15px; font-size:20px;">← 返回上一頁</button>
+	</div>
+
+  <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse; width:100%; text-align:center;">
+    <thead>
+      <tr style="background:#f0f0f0;">
+        <th style="min-width:80px;">月份</th>
+        <th>抄表張數（彩色）</th>
+        <th>抄表張數（黑白）</th>
+        <th>當月使用（彩色）</th>
+        <th>當月使用（黑白）</th>
+        <th>當月收費張數（彩色）</th>
+        <th>當月收費張數（黑白）</th>
+        <th>彩色收費金額</th>
+        <th>黑白收費金額</th>
+        <th>月租金</th>
+        <th style="background:#d8f2d8; color:#000; font-weight:bold;">未稅小計</th>
+		<th style="background:#f8d8c8; color:#000; font-weight:bold;">稅額</th>
+		<th style="background:#d0f0f0; color:#000; font-weight:bold;">含稅總額</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in range(1,13) %}
+      <tr>
+        <td style="font-weight:bold;">{{ m }}月</td>
+        <td>{{ months[m].color_total }}</td>
+        <td>{{ months[m].bw_total }}</td>
+        <td>{{ months[m].color_usage }}</td>
+        <td>{{ months[m].bw_usage }}</td>
+        <td>{{ months[m].color_bill_usage }}</td>
+        <td>{{ months[m].bw_bill_usage }}</td>
+        <td>{{ months[m].color_amount }}</td>
+        <td>{{ months[m].bw_amount }}</td>
+        <td>{{ months[m].monthly_rent }}</td>
+        <td style="background:#f7fff0;">{{ months[m].untaxed_subtotal }}</td>
+        <td style="background:#fff7f0;">{{ months[m].tax_amount }}</td>
+        <td style="background:#f0fff7;">{{ months[m].total_with_tax }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+	<div style="margin-bottom:10px;">
+	  <button type="button" onclick="history.back()" style="padding:10px 15px; font-size:20px;">← 返回上一頁</button>
+	</div>
+{% endblock %}

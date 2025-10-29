@@ -164,7 +164,7 @@
 				"報修查詢" if report_page else
 				("PMQ4 個人查詢: " ~ personal_page) if personal_page else
 				"部門排程" if calendar_page else
-				"TG客戶系統" if billing_page else
+				"TG客戶系統" if billing_invoice_log else
 				"PMQ4 部門總覽"
 			) }}
         </h1>
@@ -175,7 +175,7 @@
 
         <!-- 搜尋欄位（子頁可透過 template 傳參數控制是否顯示） -->
         <form method="get" style="text-align:center; margin-bottom:16px;">
-            {% if not report_page and not calendar_page and not time_page and not billing_page %}
+            {% if not report_page and not calendar_page and not time_page and not billing_page and not billing_invoice_log%}
                 <input type="text" name="keyword" placeholder="請輸入關鍵字查詢" value="{{ keyword|default('') }}">
             {% endif %}
             {% if report_page %}
@@ -192,13 +192,13 @@
                     {% endfor %}
                 </select>
             {% endif %}
-            {% if not calendar_page and not time_page and not billing_page %}
+            {% if not calendar_page and not time_page and not billing_invoice_log %}
                 <button type="submit" class="btn btn-primary">搜尋</button>
             {% endif %}
         </form>
 
         <!-- 導覽按鈕列（語意正確的 a.btn） -->
-		{% if not billing_page %}
+		{% if not billing_page and not billing_invoice_log %}
         <div class="button-row" role="navigation" aria-label="主要功能選單">
 			<div class="button">
                 <a href="{{ url_for('personal', name='吳宗鴻') }}"><button class="button">吳宗鴻</button></a>
