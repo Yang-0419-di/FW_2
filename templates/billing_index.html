@@ -68,17 +68,18 @@
     </style>
 </head>
 <body>
-    <div class="header-flex">
-        <h2>列印計費系統</h2>
-			{% if not home_page %}
-			<a href="/"><button class="button-3">回首頁</button></a>
-			{% endif %}
-    </div>
+	<div class="header-flex" style="display:flex; flex-direction:column; align-items:flex-start;">
+		{% if not home_page %}
+		<a href="/"><button class="button-3">回首頁</button></a>
+		{% endif %}
+		<h2>列印計費系統</h2>
+	</div>
 
 	<!-- 查詢設備或客戶 -->
 	<form method="POST" style="margin-bottom: 12px;">
 		<input type="hidden" name="mode" value="query">
 		<label class="search-label">設備編號 / 客戶名稱(概略):
+		<br>
 			<input type="text" name="device_id" required class="search-input">
 		</label>
 		<button type="submit" class="search-btn">查詢</button>
@@ -165,7 +166,7 @@
 	  <input type="hidden" name="mode" value="calculate">
 
 	  <div class="header-flex" style="font-size:18px;width:80%; margin-top:20px;">
-		<h4>輸入當月抄表（寫入資料庫）</h4>
+		<h4>輸入當月抄表</h4>
 	  </div>
 
 	  {% if related_devices and related_devices|length > 1 %}
@@ -187,43 +188,40 @@
 	  {% else %}
 		<div>
 		  前次彩色張數: <input type="text" value="{{ last_color }}" readonly>
+		<br>
 		  前次黑白張數: <input type="text" value="{{ last_bw }}" readonly>
 		</div>
 		<br>
 		<div>
 		  本月彩色張數: <input type="number" name="curr_color" required>
+		<br>
 		  本月黑白張數: <input type="number" name="curr_bw" required>
 		</div>
 	  {% endif %}
+		<br>
 
-		<div style="margin-top:12px; display:flex; align-items:center; gap:6px;">
-		  <!-- 計算並儲存表單 -->
-			<!-- 原本有個內層 form，請移除它並把 select 與按鈕合併到外層 calculate form -->
-			<form method="POST" style="margin-top:20px; display:inline-block;">
-			  <input type="hidden" name="device_id" value="{{ contract.device_id }}">
-			  <input type="hidden" name="mode" value="calculate">
+	  <!-- 月份與按鈕 -->
+		<!-- 第一個表單：只處理抄表 -->
+		<form method="POST" style="margin-top:20px; display:inline-block;">
+		  <input type="hidden" name="device_id" value="{{ contract.device_id }}">
+		  <input type="hidden" name="mode" value="calculate">
 
-			  <label for="selected_month">抄表月份：</label>
-			  <select name="selected_month" id="selected_month" required>
-				{% for m in range(1,13) %}
-				  <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ m }} 月</option>
-				{% endfor %}
-			  </select>
+		  <label for="selected_month">抄表月份：</label>
+		  <select name="selected_month" id="selected_month" required>
+			{% for m in range(1,13) %}
+			  <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ m }} 月</option>
+			{% endfor %}
+		  </select>
+		<br>
+		  <button type="submit">計算並儲存抄表</button>
+		</form>
 
-			  <button type="submit">計算並儲存抄表</button>
-			</form>
-
-
-
-		  {% if contract %}
-		  <!-- 發票紀錄按鈕 -->
-		  <form action="{{ url_for('billing.invoice_log', device_id=contract.device_id) }}" method="get" style="display:inline;">
-			<button type="submit">發票紀錄</button>
-		  </form>
-		  {% endif %}
-		</div>
-
-
+		<!-- 第二個表單：發票紀錄獨立 -->
+		{% if contract %}
+		<form action="{{ url_for('billing.invoice_log', device_id=contract.device_id) }}" method="get" style="display:inline-block;">
+		  <button type="submit">發票紀錄</button>
+		</form>
+		{% endif %}
 	
     {% if result %}
     <hr>
