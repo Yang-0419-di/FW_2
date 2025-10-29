@@ -244,7 +244,7 @@ def calendar_events():
             if start_date < today:
                 color = "gray"
             events.append({"title": str(title_val), "start": start_date.strftime('%Y-%m-%d'), "color": color})
-    return jsonify(events),
+    return jsonify(events)
 
 # ====== 啟動 Flask ======
 if __name__ == '__main__':
