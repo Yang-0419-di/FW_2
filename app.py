@@ -84,6 +84,7 @@ def home():
         project1_table=df_project1.to_dict(orient='records'),
         HUB_table=df_HUB.to_dict(orient='records'),
         no_data_found=no_data_found,
+        billing_invoice_log=False,
         home_page=True
     )
 
@@ -112,6 +113,7 @@ def personal(name):
         tables_project=df_project.to_dict(orient="records"),
         tables_bottom=df_bottom.to_dict(orient="records"),
         version=version_time,
+        billing_invoice_log=False,
         home_page=False
     )
 
@@ -144,6 +146,7 @@ def report():
         store_id=store_id,
         repair_item=repair_item,
         no_data_found=(len(tables) == 0 and (keyword or store_id or repair_item)),
+        billing_invoice_log=False,
         home_page=False
     )
 
@@ -181,6 +184,7 @@ def time_page():
         plot_url=plot_url,
         df_summary=df_summary,
         time_page=True,
+        billing_invoice_log=False,
         home_page=False
     )
 
@@ -211,6 +215,7 @@ def mfp_parts():
         table_html=table_html,
         selected_model=model,
         selected_part=part,
+        billing_invoice_log=False,
         home_page=False
     )
 
@@ -239,7 +244,7 @@ def calendar_events():
             if start_date < today:
                 color = "gray"
             events.append({"title": str(title_val), "start": start_date.strftime('%Y-%m-%d'), "color": color})
-    return jsonify(events)
+    return jsonify(events),
 
 # ====== 啟動 Flask ======
 if __name__ == '__main__':

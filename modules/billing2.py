@@ -381,6 +381,8 @@ def index():
                     total_last_color += last_c
                     total_last_bw += last_b
 
+                    # 前端表單欄位名稱： curr_color_{device_id}
+                    # 若合開群組則表單應有每台的輸入；若沒有則前端單機 input 名稱為 curr_color / curr_bw
                     val_c = request.form.get(f"curr_color_{dev}")
                     val_b = request.form.get(f"curr_bw_{dev}")
                     if val_c is None or val_b is None:
@@ -390,14 +392,6 @@ def index():
                     else:
                         total_curr_color += int(val_c or 0)
                         total_curr_bw += int(val_b or 0)
-
-                # 讀取使用者選擇的月份（1..12），若無則使用當前月份
-                try:
-                    selected_month = int(request.form.get("selected_month") or 0)
-                    if not (1 <= selected_month <= 12):
-                        selected_month = datetime.now().month
-                except ValueError:
-                    selected_month = datetime.now().month
 
                 # 計算差異
                 delta_color = total_curr_color - total_last_color
@@ -418,14 +412,12 @@ def index():
                         curr_b = int(val_b or 0)
                     insert_usage(dev, curr_c, curr_b)
 
-                # ✅ 將本次計算結果存入 billing_summary（以表單選擇的月份為 key，若已有則覆蓋）
-                save_monthly_summary(device_id, selected_month, total_curr_color, total_curr_bw, total_last_color, total_last_bw, result)
+                # ✅ 將本次計算結果存入 billing_summary（以當前月份為 key，若已有則覆蓋）
+                now_month = datetime.now().month
+                save_monthly_summary(device_id, now_month, total_curr_color, total_curr_bw, total_last_color, total_last_bw, result)
 
-                # 訊息回饋
-                message = f"✅ {device_id} 的抄表與金額已儲存至 {selected_month} 月"
             else:
                 message = f"❌ 找不到設備 {device_id}"
-
 
 
         elif mode == "update_contract":
@@ -587,7 +579,7 @@ def index():
 def invoice_log(device_id):
     months = load_billing_summary(device_id)  # dict keyed by 1..12
     # 傳給模板：months 為 dict，模板會用 1..12 月遍歷
-    return render_template("invoice_log.html", device_id=device_id, billing_invoice_log=True, months=months)
+    return render_template("invoice_log.html", device_id=device_id, months=months)
 
 
 # ✅ 讓主程式 app.py 可以 import billing_bp
