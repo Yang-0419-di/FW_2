@@ -240,9 +240,9 @@ def calculate(contract, curr_color, curr_bw, last_color, last_bw):
         "彩色金額": round(color_amount, 2),
         "黑白金額": round(bw_amount, 2),
         "月租金": round(contract["monthly_rent"], 2),
-        "未稅小計": float(round(untaxed, 2)),
-        "稅額": float(round(tax, 2)),
-        "含稅總額": float(round(total, 2))
+        "未稅小計": round(untaxed),
+        "稅額": round(tax),
+        "含稅總額": round(total)
     }
 
 
