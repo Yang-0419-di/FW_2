@@ -1,5 +1,5 @@
 # === billing.py ===
-from flask import Blueprint, render_template, request, redirect, url_for
+from flask import Blueprint, render_template, request, redirect, url_for, abort
 import sqlite3
 from datetime import datetime
 
@@ -7,7 +7,7 @@ bp = Blueprint("billing", __name__, url_prefix="/billing")
 DB_FILE = "billing.db"
 
 
-# --- 初始化資料庫 ---
+# --- 初始化資料庫（完整，不略） ---
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -59,8 +59,33 @@ def init_db():
         )
     """)
 
+    # ✅ 發票/計費月結摘要表（每台每月一筆，若已有則覆蓋）
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS billing_summary (
+            device_id TEXT,
+            month INTEGER, -- 1~12
+            color_total INTEGER,     -- 本月抄表 彩色總張數（若合開則為合計）
+            bw_total INTEGER,        -- 本月抄表 黑白總張數
+            color_usage INTEGER,     -- 當月使用彩色 = 本月 - 上月 (delta)
+            bw_usage INTEGER,        -- 當月使用黑白 = 本月 - 上月 (delta)
+            color_bill_usage INTEGER,-- 彩色計費張數（扣贈送、誤印率、基本張數）
+            bw_bill_usage INTEGER,   -- 黑白計費張數
+            color_amount REAL,       -- 彩色金額
+            bw_amount REAL,          -- 黑白金額
+            monthly_rent REAL,       -- 月租金
+            untaxed_subtotal REAL,   -- 未稅小計（彩色金額+黑白金額+月租）
+            tax_amount REAL,         -- 稅額
+            total_with_tax REAL,     -- 含稅總額
+            PRIMARY KEY (device_id, month)
+        )
+    """)
+
     conn.commit()
     conn.close()
+
+
+# 呼叫初始化以確保資料表存在（可在應用啟動時呼叫一次）
+init_db()
 
 
 # --- 查詢契約 ---
@@ -89,16 +114,9 @@ def get_customer(device_id):
     c.execute("SELECT * FROM customers WHERE device_id=?", (device_id,))
     row = c.fetchone()
     conn.close()
-    
-    def fmt_date(val):
-        if not val:
-            return ""
-        try:
-            return datetime.strptime(val, "%Y-%m-%d %H:%M:%S").strftime("%Y/%m/%d")
-        except:
-            return val  # 若不是這種格式就原樣回傳
-    
+
     if row:
+        # row order matches CREATE TABLE
         return {
             "device_id": row[0],
             "customer_name": row[1],
@@ -136,8 +154,10 @@ def get_last_counts(device_id):
     row = c.fetchone()
     conn.close()
     if row:
+        # 若為 None，返回 0
         return row[0] or 0, row[1] or 0, row[2] or ""
     return 0, 0, ""
+
 
 # --- 合開群組查詢 ---
 def get_related_devices(device_id):
@@ -167,6 +187,7 @@ def get_related_devices(device_id):
 
     conn.close()
     return group
+
 
 # --- 紀錄使用量 ---
 def insert_usage(device_id, color_count, bw_count):
@@ -210,6 +231,7 @@ def calculate(contract, curr_color, curr_bw, last_color, last_bw):
         untaxed = subtotal / (1 + tax_rate)
         tax = total - untaxed
 
+    # 傳回詳細欄位（中文鍵名與之前一致）
     return {
         "彩色使用張數": used_color,
         "黑白使用張數": used_bw,
@@ -218,10 +240,97 @@ def calculate(contract, curr_color, curr_bw, last_color, last_bw):
         "彩色金額": round(color_amount, 2),
         "黑白金額": round(bw_amount, 2),
         "月租金": round(contract["monthly_rent"], 2),
-        "未稅小計": int(round(untaxed)),
-        "稅額": int(round(tax)),
-        "含稅總額": int(round(total))
+        "未稅小計": float(round(untaxed, 2)),
+        "稅額": float(round(tax, 2)),
+        "含稅總額": float(round(total, 2))
     }
+
+
+# --- 儲存當月發票紀錄（覆蓋當月） ---
+def save_monthly_summary(device_id, month_int, total_curr_color, total_curr_bw, last_color, last_bw, calc_result):
+    """
+    device_id: str
+    month_int: 1..12
+    total_curr_color/ curr_bw: 本月抄表（合開合計）
+    last_color/ last_bw: 上月合計
+    calc_result: calculate(...) 回傳的 dict
+    """
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+
+    color_usage = max(0, total_curr_color - last_color)
+    bw_usage = max(0, total_curr_bw - last_bw)
+
+    c.execute('''
+        INSERT OR REPLACE INTO billing_summary (
+            device_id, month, color_total, bw_total,
+            color_usage, bw_usage,
+            color_bill_usage, bw_bill_usage,
+            color_amount, bw_amount, monthly_rent,
+            untaxed_subtotal, tax_amount, total_with_tax
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        device_id,
+        month_int,
+        total_curr_color,
+        total_curr_bw,
+        color_usage,
+        bw_usage,
+        calc_result.get("彩色計費張數", 0),
+        calc_result.get("黑白計費張數", 0),
+        calc_result.get("彩色金額", 0),
+        calc_result.get("黑白金額", 0),
+        calc_result.get("月租金", 0),
+        calc_result.get("未稅小計", 0),
+        calc_result.get("稅額", 0),
+        calc_result.get("含稅總額", 0)
+    ))
+    conn.commit()
+    conn.close()
+
+
+# --- 讀取 billing_summary（回傳 1..12 月陣列） ---
+def load_billing_summary(device_id):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute('SELECT month, color_total, bw_total, color_usage, bw_usage, color_bill_usage, bw_bill_usage, color_amount, bw_amount, monthly_rent, untaxed_subtotal, tax_amount, total_with_tax FROM billing_summary WHERE device_id=?', (device_id,))
+    rows = c.fetchall()
+    conn.close()
+
+    # 初始化 12 個月的空值
+    months = {m: {
+        "color_total": "",
+        "bw_total": "",
+        "color_usage": "",
+        "bw_usage": "",
+        "color_bill_usage": "",
+        "bw_bill_usage": "",
+        "color_amount": "",
+        "bw_amount": "",
+        "monthly_rent": "",
+        "untaxed_subtotal": "",
+        "tax_amount": "",
+        "total_with_tax": ""
+    } for m in range(1, 13)}
+
+    for r in rows:
+        m = int(r[0])
+        months[m] = {
+            "color_total": r[1],
+            "bw_total": r[2],
+            "color_usage": r[3],
+            "bw_usage": r[4],
+            "color_bill_usage": r[5],
+            "bw_bill_usage": r[6],
+            "color_amount": r[7],
+            "bw_amount": r[8],
+            "monthly_rent": r[9],
+            "untaxed_subtotal": r[10],
+            "tax_amount": r[11],
+            "total_with_tax": r[12]
+        }
+
+    return months
 
 
 # --- 主頁面路由 ---
@@ -232,7 +341,7 @@ def index():
     contra_text = ""
     last_color, last_bw, last_time = 0, 0, ""
     matches = []
-    related_devices = []  # ⭐ 新增變數：預設空列表
+    related_devices = []
 
     if request.method == "POST":
         mode = request.form.get("mode")
@@ -250,21 +359,66 @@ def index():
                     message = f"❌ 找不到設備或客戶：{keyword}"
             else:
                 last_color, last_bw, last_time = get_last_counts(keyword)
-                related_devices = get_related_devices(keyword)  # ⭐ 加入合開群組查詢
+                related_devices = get_related_devices(keyword)
 
         elif mode == "calculate":
             device_id = keyword
             contract, contra_text = get_contract(device_id)
             customer = get_customer(device_id)
             if contract:
-                last_color, last_bw, last_time = get_last_counts(device_id)
-                related_devices = get_related_devices(device_id)  # ⭐ 同步查詢合開群組
-                curr_color = int(request.form.get("curr_color", "0"))
-                curr_bw = int(request.form.get("curr_bw", "0"))
-                result = calculate(contract, curr_color, curr_bw, last_color, last_bw)
-                insert_usage(device_id, curr_color, curr_bw)
+                # 合開群組
+                related_devices = get_related_devices(device_id)
+
+                # 合併所有設備的上次讀數 & 當前讀數
+                total_last_color = 0
+                total_last_bw = 0
+                total_curr_color = 0
+                total_curr_bw = 0
+
+                # 讀取群組上次/當月數據
+                for dev in related_devices:
+                    last_c, last_b, _ = get_last_counts(dev)
+                    total_last_color += last_c
+                    total_last_bw += last_b
+
+                    # 前端表單欄位名稱： curr_color_{device_id}
+                    # 若合開群組則表單應有每台的輸入；若沒有則前端單機 input 名稱為 curr_color / curr_bw
+                    val_c = request.form.get(f"curr_color_{dev}")
+                    val_b = request.form.get(f"curr_bw_{dev}")
+                    if val_c is None or val_b is None:
+                        # 兼容單機表單欄位
+                        total_curr_color += int(request.form.get("curr_color", "0"))
+                        total_curr_bw += int(request.form.get("curr_bw", "0"))
+                    else:
+                        total_curr_color += int(val_c or 0)
+                        total_curr_bw += int(val_b or 0)
+
+                # 計算差異
+                delta_color = total_curr_color - total_last_color
+                delta_bw = total_curr_bw - total_last_bw
+
+                # 套用主機的契約條件計算總金額（使用主機的 contract）
+                result = calculate(contract, total_curr_color, total_curr_bw, total_last_color, total_last_bw)
+
+                # 寫入每台機的抄表（保持原行為）
+                for dev in related_devices:
+                    val_c = request.form.get(f"curr_color_{dev}")
+                    val_b = request.form.get(f"curr_bw_{dev}")
+                    if val_c is None or val_b is None:
+                        curr_c = int(request.form.get("curr_color", "0"))
+                        curr_b = int(request.form.get("curr_bw", "0"))
+                    else:
+                        curr_c = int(val_c or 0)
+                        curr_b = int(val_b or 0)
+                    insert_usage(dev, curr_c, curr_b)
+
+                # ✅ 將本次計算結果存入 billing_summary（以當前月份為 key，若已有則覆蓋）
+                now_month = datetime.now().month
+                save_monthly_summary(device_id, now_month, total_curr_color, total_curr_bw, total_last_color, total_last_bw, result)
+
             else:
                 message = f"❌ 找不到設備 {device_id}"
+
 
         elif mode == "update_contract":
             device_id = keyword
@@ -292,7 +446,7 @@ def index():
             conn.commit()
             conn.close()
             return redirect(url_for("billing.index", device_id=device_id, message="✅ 契約條件已更新"))
-        
+
         elif mode == "update_customer":
             device_id = keyword
             fields = {
@@ -329,6 +483,8 @@ def index():
             c.execute("DELETE FROM contracts WHERE device_id=?", (device_id,))
             # （可選）刪除該客戶的抄表資料
             c.execute("DELETE FROM usage WHERE device_id=?", (device_id,))
+            # （可選）刪除該客戶的 billing_summary 紀錄
+            c.execute("DELETE FROM billing_summary WHERE device_id=?", (device_id,))
             conn.commit()
             conn.close()
             message = f"🗑 已刪除客戶（設備編號：{device_id}）"
@@ -399,7 +555,7 @@ def index():
         customer = get_customer(q_device)
         if contract:
             last_color, last_bw, last_time = get_last_counts(q_device)
-            related_devices = get_related_devices(q_device)  # ⭐ 同步查詢群組
+            related_devices = get_related_devices(q_device)
         else:
             message = f"❌ 找不到設備 {q_device}"
 
@@ -415,7 +571,16 @@ def index():
                            result=result,
                            matches=matches,
                            message=message,
-                           related_devices=related_devices)  # ⭐ 傳給前端
+                           related_devices=related_devices)
+
+
+# --- 顯示發票紀錄頁面（12 列） ---
+@bp.route("/invoice_log/<device_id>")
+def invoice_log(device_id):
+    months = load_billing_summary(device_id)  # dict keyed by 1..12
+    # 傳給模板：months 為 dict，模板會用 1..12 月遍歷
+    return render_template("invoice_log.html", device_id=device_id, months=months)
+
 
 # ✅ 讓主程式 app.py 可以 import billing_bp
 billing_bp = bp
