@@ -17,6 +17,7 @@ app = Flask(__name__)
 GITHUB_XLSX_URL = 'https://raw.githubusercontent.com/Yang-0419-di/FW_2/master/data.xlsx'
 cached_xls = None
 version_time = None
+app.config['VERSION_TIME'] = version_time
 
 # ====== 新增：註冊 billing 藍圖 ======
 app.register_blueprint(billing_bp)  # ✅ 新增這一行
@@ -26,15 +27,6 @@ matplotlib.rcParams['font.sans-serif'] = ['Microsoft JhengHei']
 matplotlib.rcParams['axes.unicode_minus'] = False
 font_path = "./fonts/NotoSansCJKtc-Regular.otf"
 font_prop = FontProperties(fname=font_path)
-
-# ====== 讀取版本號（首頁 G1） ======
-def get_version():
-    try:
-        df_home = pd.read_excel("data.xlsx", sheet_name="首頁", header=None)
-        version = str(df_home.iloc[0, 6])  # G1
-    except Exception:
-        version = "無版本資訊"
-    return version
 
 # ====== 載入 Excel（含版本號） ======
 def load_excel_from_github(url):
@@ -48,6 +40,7 @@ def load_excel_from_github(url):
             cached_xls = pd.ExcelFile(excel_bytes, engine='openpyxl')
             df_version = pd.read_excel(cached_xls, sheet_name='首頁', header=None, usecols="G", nrows=1)
             version_time = str(df_version.iat[0, 0]) if not pd.isna(df_version.iat[0, 0]) else "無版本資訊"
+            app.config['VERSION_TIME'] = version_time
             return cached_xls
     except Exception as e:
         print(f"❌ Excel 下載失敗: {e}")
@@ -61,7 +54,6 @@ def clean_df(df):
 @app.route('/')
 def home():
     xls = load_excel_from_github(GITHUB_XLSX_URL)
-    version_time = get_version()
     df_department = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:F", skiprows=4, nrows=1))
     df_seasons = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:D", skiprows=8, nrows=2))
     df_project1 = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:E", skiprows=12, nrows=3))
@@ -90,7 +82,7 @@ def home():
 
 @app.route('/personal/<name>')
 def personal(name):
-    version_time = get_version()
+    version=version_time,
     sheet_map = {'吳宗鴻': '吳宗鴻', '湯家瑋': '湯家瑋', '狄澤洋': '狄澤洋'}
     sheet_name = sheet_map.get(name)
     if not sheet_name:
@@ -120,7 +112,7 @@ def personal(name):
 @app.route('/report')
 def report():
     xls = load_excel_from_github(GITHUB_XLSX_URL)
-    version_time = get_version()
+    version=version_time,
     df = clean_df(pd.read_excel(xls, sheet_name='IM'))
     df = df[['案件類別', '門店編號', '門店名稱', '報修時間', '報修類別', '報修項目', '報修說明', '設備號碼', '服務人員', '工作內容']]
     keyword = request.args.get('keyword', '').strip()
@@ -153,7 +145,7 @@ def report():
 @app.route('/time')
 def time_page():
     xls = load_excel_from_github(GITHUB_XLSX_URL)
-    version_time = get_version()
+    version=version_time,
     df_summary = pd.read_excel(xls, sheet_name='出勤時間', usecols="A:E", nrows=2)
     detail_1 = pd.read_excel(xls, sheet_name='出勤時間', usecols="A:Q", skiprows=3, nrows=3)
     detail_2 = pd.read_excel(xls, sheet_name='出勤時間', usecols="A:Q", skiprows=7, nrows=3)
@@ -191,7 +183,7 @@ def time_page():
 @app.route('/mfp_parts', methods=['GET', 'POST'])
 def mfp_parts():
     xls = load_excel_from_github(GITHUB_XLSX_URL)
-    version_time = get_version()
+    version=version_time,
     df = pd.read_excel(xls, sheet_name='MFP_零件表')
     model = request.form.get('model', '')
     part = request.form.get('part', '')
@@ -221,8 +213,8 @@ def mfp_parts():
 
 @app.route('/calendar')
 def calendar_page():
-    version_time = get_version()
-    return render_template('calendar.html', version=version_time)
+    version=version_time,
+    return render_template('calendar.html', version=version_time,)
 
 @app.route('/calendar/events')
 def calendar_events():
