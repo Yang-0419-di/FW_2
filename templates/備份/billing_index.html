@@ -2,14 +2,28 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta charset="utf-8">
+	    <div class="content-wrap">
+        <!-- 標題與版號 -->
+        <h1>TG客戶系統</h1>
+
+        {% if version %}
+        <div class="version-info">版本：{{ version }}</div>
+        {% endif %}
     <title>列印計費系統</title>
     <style>
         body { font-family: Arial, "Microsoft JhengHei", sans-serif; padding: 20px; }
+		h1 { text-align: center; color: #333; }
         table { border-collapse: collapse; margin: 10px 0; width: 80%; }
         th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left;}
         th { background-color: #ccc !important; }
-        .header-flex { display:flex; justify-content:space-between; align-items:center; width:80%; }
+        .header-flex {
+			display: flex;
+			align-items: center;
+			justify-content: flex-start; /* 標題左，按鈕右（可改成flex-start讓都靠左） */
+			padding: 10px;
+		}
         .msg { margin: 10px 0; color: green; font-weight: bold; }
         .err { margin: 10px 0; color: red; font-weight: bold; }
         input[type="number"], input[type="text"] { width: 140px; }
@@ -40,25 +54,32 @@
         .back-btn {
             background-color: #28a745;
             padding: 8px 14px;
-            font-size: 16px;
-        }
-        .back-btn:hover {
-            background-color: #1e7e34;
-        }
+		button.button-3 {
+			padding: 10px 15px;
+			font-size: 20px;
+			margin: 5px;
+			background-color: #000000;
+			color: white;
+			border: none;
+			border-radius: 5px;
+			cursor: pointer;
+			align-self: flex-start; /* 在 flex 下可確保靠左 */
+		}
     </style>
 </head>
 <body>
-    <div class="header-flex">
-        <h2>列印計費系統</h2>
-        <a href="/" style="text-decoration:none;">
-            <button class="back-btn">🔙 回首頁</button>
-        </a>
-    </div>
+	<div class="header-flex" style="display:flex; flex-direction:column; align-items:flex-start;">
+		{% if not home_page %}
+		<a href="/"><button class="button-3">回首頁</button></a>
+		{% endif %}
+		<h2>列印計費系統</h2>
+	</div>
 
 	<!-- 查詢設備或客戶 -->
 	<form method="POST" style="margin-bottom: 12px;">
 		<input type="hidden" name="mode" value="query">
 		<label class="search-label">設備編號 / 客戶名稱(概略):
+		<br>
 			<input type="text" name="device_id" required class="search-input">
 		</label>
 		<button type="submit" class="search-btn">查詢</button>
@@ -72,7 +93,8 @@
 	{% if matches %}
 	  <div style="margin-top: 20px;">
 		<h3>🔍 找到多筆相符的客戶，請選擇：</h3>
-		<table border="1" cellspacing="0" cellpadding="6" style="border-collapse: collapse; width: 60%;">
+		<table border="1" cellspacing="0" cellpadding="6" 
+		style="border-collapse: collapse; width: 100%;">
 		  <thead style="background-color: #f2f2f2;">
 			<tr>
 			  <th>設備編號</th>
@@ -95,7 +117,7 @@
 				  <input type="hidden" name="mode" value="delete_customer">
 				  <input type="hidden" name="device_id" value="{{ m.device_id }}">
 				  <button type="submit"
-						  style="background-color: #e74c3c; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer;"
+						  style="background-color: #e74c3c; color: white; border: none; padding: 2px 10px; font-size: 15px; border-radius: 4px; cursor: pointer;"
 						  onclick="return confirm('確定要刪除 {{ m.customer_name }}（設備編號：{{ m.device_id }}）嗎？');">
 					🗑 刪除
 				  </button>
@@ -139,47 +161,68 @@
 	{% endif %}
 
 	<!-- 本月抄表表單 -->
-	<form method="POST" style="margin-top:20px;">
-		<input type="hidden" name="device_id" value="{{ contract.device_id }}">
-		<input type="hidden" name="mode" value="calculate">
+	<form method="POST" style="margin-top:20px; display:inline-block;">
+	  <input type="hidden" name="device_id" value="{{ contract.device_id }}">
+	  <input type="hidden" name="mode" value="calculate">
 
-		<div class="header-flex" style="font-size:18px;width:80%; margin-top:20px;">
-			<h4>輸入當月抄表（寫入資料庫）</h4>
+	  <div class="header-flex" style="font-size:18px;width:80%; margin-top:20px;">
+		<h4>輸入當月抄表</h4>
+	  </div>
+
+	  {% if related_devices and related_devices|length > 1 %}
+		<p style="font-size:16px;margin-left: 0;">📦 合開群組（主機：{{ related_devices[0] }}），共 {{ related_devices|length }} 台</p>
+		<table class="contract-table" style="margin-left: 0;">
+		  <tr>
+			<th>設備編號</th>
+			<th>本月彩色張數</th>
+			<th>本月黑白張數</th>
+		  </tr>
+		  {% for dev in related_devices %}
+			<tr>
+			  <td style="font-weight:bold;">{{ dev }}</td>
+			  <td><input type="number" name="curr_color_{{ dev }}" value="0" style="width:100%;"></td>
+			  <td><input type="number" name="curr_bw_{{ dev }}" value="0" style="width:100%;"></td>
+			</tr>
+		  {% endfor %}
+		</table>
+	  {% else %}
+		<div>
+		  前次彩色張數: <input type="text" value="{{ last_color }}" readonly style="width:100px;">
+		<br>
+		  前次黑白張數: <input type="text" value="{{ last_bw }}" readonly style="width:100px;">
 		</div>
+		<br>
+		<div>
+		  本月彩色張數: <input type="number" name="curr_color" required style="width:100px;">
+		<br>
+		  本月黑白張數: <input type="number" name="curr_bw" required style="width:100px;">
+		</div>
+	  {% endif %}
+		<br>
 
-		{% if related_devices and related_devices|length > 1 %}
-			<p style="font-size:16px;">📦 合開群組（主機：{{ related_devices[0] }}），共 {{ related_devices|length }} 台</p>
-			<table class="contract-table">
-				<tr>
-					<th>設備編號</th>
-					<th>本月彩色張數</th>
-					<th>本月黑白張數</th>
-				</tr>
-				{% for dev in related_devices %}
-				<tr>
-					<td>{{ dev }}</td>
-					<td><input type="number" name="curr_color_{{ dev }}" required></td>
-					<td><input type="number" name="curr_bw_{{ dev }}" required></td>
-				</tr>
-				{% endfor %}
-			</table>
-		{% else %}
-			<div>
-				前次彩色張數: <input type="text" value="{{ last_color }}" readonly>
-				前次黑白張數: <input type="text" value="{{ last_bw }}" readonly>
-			</div>
-			<br>
-			<div>
-				本月彩色張數: <input type="number" name="curr_color" required>
-				本月黑白張數: <input type="number" name="curr_bw" required>
-			</div>
+	  <!-- 月份與按鈕 -->
+		<!-- 第一個表單：只處理抄表 -->
+		<form method="POST" style="margin-top:20px; display:inline-block;">
+		  <input type="hidden" name="device_id" value="{{ contract.device_id }}">
+		  <input type="hidden" name="mode" value="calculate">
+
+		  <label for="selected_month">抄表月份：</label>
+		  <select name="selected_month" id="selected_month" required>
+			{% for m in range(1,13) %}
+			  <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ m }} 月</option>
+			{% endfor %}
+		  </select>
+		<br>
+		  <button type="submit">計算並儲存抄表</button>
+		</form>
+
+		<!-- 第二個表單：發票紀錄獨立 -->
+		{% if contract %}
+		<form action="{{ url_for('billing.invoice_log', device_id=contract.device_id) }}" method="get" style="display:inline-block;">
+		  <button type="submit">發票紀錄</button>
+		</form>
 		{% endif %}
-
-		<div style="margin-top:12px;">
-			<button type="submit">計算並儲存本月抄表</button>
-		</div>
-	</form>
-
+	
     {% if result %}
     <hr>
     <h3 style="font-size:22px;">計算結果</h3>

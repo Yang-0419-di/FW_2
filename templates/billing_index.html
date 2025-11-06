@@ -68,10 +68,12 @@
     </style>
 </head>
 <body>
-	<div class="header-flex" style="display:flex; flex-direction:column; align-items:flex-start;">
-		{% if not home_page %}
+	<div class="header-flex" style="display:flex; flex-direction:row; align-items:center; gap:10px;">
+		<a href="{{ url_for('billing.mfp_summary') }}"><button class="button-1">客戶總表</button></a>
 		<a href="/"><button class="button-3">回首頁</button></a>
-		{% endif %}
+	</div>
+	
+	<div>
 		<h2>列印計費系統</h2>
 	</div>
 
