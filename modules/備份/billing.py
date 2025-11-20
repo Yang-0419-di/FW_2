@@ -2,6 +2,9 @@
 from flask import Blueprint, render_template, request, redirect, url_for, abort
 import sqlite3
 from datetime import datetime
+from flask import Blueprint, render_template, request, current_app
+import pandas as pd
+
 
 bp = Blueprint("billing", __name__, url_prefix="/billing")
 DB_FILE = "billing.db"
@@ -589,6 +592,27 @@ def invoice_log(device_id):
     # 傳給模板：months 為 dict，模板會用 1..12 月遍歷
     return render_template("invoice_log.html", device_id=device_id, billing_invoice_log=True, months=months)
 
+@bp.route('/mfp_summary')
+def mfp_summary():
+    keyword = request.args.get("keyword", "").strip()
+
+    file_path = 'MFP/MFP.xlsx'
+    df = pd.read_excel(file_path, sheet_name='總表')
+
+    # keyword 搜尋（含任一欄位）
+    if keyword:
+        df = df[df.apply(lambda r: r.astype(str).str.contains(keyword, case=False).any(), axis=1)]
+
+    tables = df.to_dict(orient='records')
+    version = current_app.config['VERSION_TIME']
+
+    return render_template(
+        'billing_mfp_summary.html',
+        tables=tables,
+        version=version,
+        keyword=keyword,
+        billing_mfp_summary=True
+    )
 
 # ✅ 讓主程式 app.py 可以 import billing_bp
 billing_bp = bp

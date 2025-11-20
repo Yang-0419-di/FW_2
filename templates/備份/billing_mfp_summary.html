@@ -1,0 +1,35 @@
+{% extends 'layout.html' %}
+{% block content %}
+
+    <!-- 🔹 新增返回上一頁按鈕 -->
+	<div style="margin-bottom:10px;">
+	  <button type="button" onclick="history.back()" style="padding:10px 15px; font-size:20px;">← 返回上一頁</button>
+	  <a href="/"><button class="button-3">回首頁</button></a>
+	</div>
+	
+<h2>客戶總表</h2>
+
+<div class="table-container">
+    <table>
+        <thead>
+            {% if tables %}
+                <tr>
+                {% for key in tables[0].keys() %}
+                    <th>{{ key }}</th>
+                {% endfor %}
+                </tr>
+            {% endif %}
+        </thead>
+        <tbody>
+            {% for row in tables %}
+                <tr>
+                {% for val in row.values() %}
+                    <td>{{ val }}</td>
+                {% endfor %}
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% endblock %}

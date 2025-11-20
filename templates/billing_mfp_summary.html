@@ -6,6 +6,52 @@
 	  <button type="button" onclick="history.back()" style="padding:10px 15px; font-size:20px;">← 返回上一頁</button>
 	  <a href="/"><button class="button-3">回首頁</button></a>
 	</div>
+
+<h2>區域台數</h2>
+
+<div class="table-container">
+    <table>
+        <thead>
+            <tr>
+                {% for col in area_header %}
+                    <th>{{ col }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in area_body %}
+            <tr>
+                {% for cell in row %}
+                    <td>{{ cell }}</td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<h2>保養週期評估</h2>
+
+<div class="table-container">
+    <table>
+        <thead>
+            <tr>
+                {% for col in cycle_header %}
+                    <th>{{ col }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in cycle_body %}
+            <tr>
+                {% for cell in row %}
+                    <td>{{ cell }}</td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
 	
 <h2>客戶總表</h2>
 
