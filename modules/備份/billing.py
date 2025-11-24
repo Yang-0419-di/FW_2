@@ -597,18 +597,54 @@ def mfp_summary():
     keyword = request.args.get("keyword", "").strip()
 
     file_path = 'MFP/MFP.xlsx'
+
+    # ================================
+    # 讀取主要「總表」
+    # ================================
     df = pd.read_excel(file_path, sheet_name='總表')
 
-    # keyword 搜尋（含任一欄位）
+    # 若有關鍵字 → 任意欄位模糊搜尋
     if keyword:
         df = df[df.apply(lambda r: r.astype(str).str.contains(keyword, case=False).any(), axis=1)]
 
     tables = df.to_dict(orient='records')
+
+    # ================================
+    # 讀取「概況」分頁
+    # ================================
+    df_overview = pd.read_excel(file_path, sheet_name='概況', header=None)
+
+    # ---------------------------------------------------------
+    # 🔹 區域台數 A1:P4
+    #     A1 = 標題列
+    # ---------------------------------------------------------
+    area_raw = df_overview.iloc[0:4, 0:16].fillna("").values.tolist()
+    area_header = area_raw[0]      # 第一列為表頭
+    area_body = area_raw[1:]       # 其餘為內容
+
+    # ---------------------------------------------------------
+    # 🔹 保養週期評估 A6:P12
+    #     A6 = 標題列
+    # ---------------------------------------------------------
+    cycle_raw = df_overview.iloc[5:12, 0:16].fillna("").values.tolist()
+    cycle_header = cycle_raw[0]    # 第一列為表頭
+    cycle_body = cycle_raw[1:]     # 其餘為內容
+
+    # ================================
+    # 版本號（照你原本邏輯）
+    # ================================
     version = current_app.config['VERSION_TIME']
 
+    # ================================
+    # 回傳模板
+    # ================================
     return render_template(
         'billing_mfp_summary.html',
         tables=tables,
+        area_header=area_header,
+        area_body=area_body,
+        cycle_header=cycle_header,
+        cycle_body=cycle_body,
         version=version,
         keyword=keyword,
         billing_mfp_summary=True
