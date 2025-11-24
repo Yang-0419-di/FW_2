@@ -28,30 +28,37 @@ if /i "!skipDownload!"=="Y" (
 )
 
 :: -----------------------------
-:: [2/7] 複製 data.xlsx 到臨時備份
+:: [2/8] 複製 data.xlsx 到臨時備份
 :: -----------------------------
-echo [2/7] 複製 data.xlsx 到臨時備份資料夾...
+echo [2/8] 複製 data.xlsx 到臨時備份資料夾...
 copy /Y "data.xlsx" "臨時備份\自動備份\data.xlsx"
 if errorlevel 1 goto error
 
 :: -----------------------------
-:: [3/7] 執行 run_update2.py
+:: [3/8] 執行 run_update2.py
 :: -----------------------------
-echo [3/7] 執行 run_update2.py...
+echo [3/8] 執行 run_update2.py...
 python "run_update2.py"
 if errorlevel 1 goto error
 
 :: -----------------------------
-:: [4/7] 執行 run_MFP_update.py
+:: [4/8] 執行 run_MFP_update.py
 :: -----------------------------
-echo [4/7] 執行 run_MFP_update.py...
+echo [4/8] 執行 run_MFP_update.py...
 python "run_MFP_update.py"
 if errorlevel 1 goto error
 
 :: -----------------------------
-:: [5/7] 執行 add_ver.py（完整流程）
+:: [5/8] 執行 run_MFP2_update.py
 :: -----------------------------
-echo [5/7] 執行 add_ver.py（版本號可手動輸入，10 秒後自動填入）...
+echo [5/8] 執行 run_MFP2_update.py...
+python "run_MFP2_update.py"
+if errorlevel 1 goto error
+
+:: -----------------------------
+:: [6/8] 執行 add_ver.py（完整流程）
+:: -----------------------------
+echo [6/8] 執行 add_ver.py（版本號可手動輸入，10 秒後自動填入）...
 call python "add_ver.py"
 
 for /f %%a in ('python -c "import openpyxl;wb=openpyxl.load_workbook('data.xlsx');print(wb['首頁']['G1'].value)"') do set vernum=%%a
@@ -59,16 +66,16 @@ echo 使用版本號: %vernum%
 
 
 :: -----------------------------
-:: [6/7] 執行 data_updw.py
+:: [7/8] 執行 data_updw.py
 :: -----------------------------
-echo [6/7] 執行 data_updw.py...
+echo [7/8] 執行 data_updw.py...
 python "data_updw.py"
 if errorlevel 1 goto error
 
 :: -----------------------------
-:: [7/7] 執行 save_excel.exe
+:: [8/8] 執行 save_excel.exe
 :: -----------------------------
-echo [7/7] 啟動 save_excel.exe...
+echo [8/8] 啟動 save_excel.exe...
 start /wait "" "save_excel.exe"
 if errorlevel 1 goto error
 
