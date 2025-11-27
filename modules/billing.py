@@ -3,12 +3,48 @@ from flask import Blueprint, render_template, request, redirect, url_for, abort
 import sqlite3
 from datetime import datetime
 from flask import Blueprint, render_template, request, current_app
+import requests
+from io import BytesIO
 import pandas as pd
 
-
+GITHUB_XLSX_URL = 'https://raw.githubusercontent.com/Yang-0419-di/FW_2/master/MFP/MFP.xlsx'
+_cached_xls = None   # 快取避免多次下載
 bp = Blueprint("billing", __name__, url_prefix="/billing")
 DB_FILE = "billing.db"
 
+def load_github_excel():
+    """
+    安全下載 GitHub RAW EXCEL（含快取與 fallback）
+    """
+    global _cached_xls
+
+    if _cached_xls:
+        return _cached_xls
+
+    try:
+        resp = requests.get(GITHUB_XLSX_URL, timeout=10)
+
+        # 必須是 200 才算成功
+        if resp.status_code != 200:
+            raise Exception(f"HTTP {resp.status_code}")
+
+        excel_bytes = BytesIO(resp.content)
+
+        # 必須要能被 openpyxl 視為 zip（xlsx）
+        import zipfile
+        if not zipfile.is_zipfile(excel_bytes):
+            raise Exception("下載內容不是 Excel（不是 zip 格式）")
+
+        _cached_xls = pd.ExcelFile(excel_bytes, engine="openpyxl")
+        return _cached_xls
+
+    except Exception as e:
+        print("⚠ GitHub Excel 載入失敗，改用本地 MFP/MFP.xlsx，原因：", e)
+
+        local_path = "MFP/MFP.xlsx"
+
+        _cached_xls = pd.ExcelFile(local_path, engine="openpyxl")
+        return _cached_xls
 
 # --- 初始化資料庫（完整，不略） ---
 def init_db():
@@ -592,18 +628,24 @@ def invoice_log(device_id):
     # 傳給模板：months 為 dict，模板會用 1..12 月遍歷
     return render_template("invoice_log.html", device_id=device_id, billing_invoice_log=True, months=months)
 
+# ================================================================
+# 1️⃣ MFP 總表 + 概況（summary）
+# ================================================================
 @bp.route('/mfp_summary')
 def mfp_summary():
     keyword = request.args.get("keyword", "").strip()
 
-    file_path = 'MFP/MFP.xlsx'
+    xls = load_github_excel()
 
     # ================================
     # 讀取主要「總表」
     # ================================
-    df = pd.read_excel(file_path, sheet_name='總表')
+    df = pd.read_excel(
+        xls,
+        sheet_name='總表',
+        header=None
+    )
 
-    # 若有關鍵字 → 任意欄位模糊搜尋
     if keyword:
         df = df[df.apply(lambda r: r.astype(str).str.contains(keyword, case=False).any(), axis=1)]
 
@@ -612,32 +654,24 @@ def mfp_summary():
     # ================================
     # 讀取「概況」分頁
     # ================================
-    df_overview = pd.read_excel(file_path, sheet_name='概況', header=None)
+    df_overview = pd.read_excel(
+        xls,
+        sheet_name='概況',
+        header=None
+    )
 
-    # ---------------------------------------------------------
-    # 🔹 區域台數 A1:P4
-    #     A1 = 標題列
-    # ---------------------------------------------------------
+    # 🔹 區域台數：A1:P4
     area_raw = df_overview.iloc[0:4, 0:16].fillna("").values.tolist()
-    area_header = area_raw[0]      # 第一列為表頭
-    area_body = area_raw[1:]       # 其餘為內容
+    area_header = area_raw[0]
+    area_body = area_raw[1:]
 
-    # ---------------------------------------------------------
-    # 🔹 保養週期評估 A6:P12
-    #     A6 = 標題列
-    # ---------------------------------------------------------
+    # 🔹 保養週期評估：A6:P12
     cycle_raw = df_overview.iloc[5:12, 0:16].fillna("").values.tolist()
-    cycle_header = cycle_raw[0]    # 第一列為表頭
-    cycle_body = cycle_raw[1:]     # 其餘為內容
+    cycle_header = cycle_raw[0]
+    cycle_body = cycle_raw[1:]
 
-    # ================================
-    # 版本號（照你原本邏輯）
-    # ================================
     version = current_app.config['VERSION_TIME']
 
-    # ================================
-    # 回傳模板
-    # ================================
     return render_template(
         'billing_mfp_summary.html',
         tables=tables,
@@ -650,100 +684,117 @@ def mfp_summary():
         billing_mfp_summary=True
     )
 
+
+# ================================================================
+# 2️⃣ 人員個人資料頁（person）
+# ================================================================
 @bp.route("/person/<sheet>")
 def person_page(sheet):
-    import pandas as pd
 
-    path = "MFP/MFP.xlsx"
+    xls = load_github_excel()
 
     # 第一區塊：A1:P4
-    df1 = pd.read_excel(path, sheet_name=sheet, header=0, usecols="A:P", nrows=4)
+    df1 = pd.read_excel(
+        xls,
+        sheet_name=sheet,
+        header=0,
+        usecols="A:P",
+        nrows=4
+    )
 
     # 第二區塊：A6:P9
-    df2 = pd.read_excel(path, sheet_name=sheet, header=0, usecols="A:P", skiprows=5, nrows=4)
+    df2 = pd.read_excel(
+        xls,
+        sheet_name=sheet,
+        header=0,
+        usecols="A:P",
+        skiprows=5,
+        nrows=4
+    )
 
     # 第三區塊：A14 之後
-    df3 = pd.read_excel(path, sheet_name=sheet, header=13, usecols="A:L")
+    df3 = pd.read_excel(
+        xls,
+        sheet_name=sheet,
+        header=13,
+        usecols="A:L"
+    )
 
     return render_template(
-        "tjw.html",     # ★ 你仍然使用 tjw.html
+        "tjw.html",
         table1=df1.to_html(index=False, classes="table table-bordered"),
         table2=df2.to_html(index=False, classes="table table-bordered"),
         table3=df3.to_html(index=False, classes="table table-bordered"),
-        page_name=sheet,     # ★ 分頁名稱
-        billing_person=True  # ★ 給 layout.html 判斷
+        page_name=sheet,
+        billing_person=True
     )
 
+
+# ================================================================
+# 3️⃣ 工時計算頁（worktime）
+# ================================================================
 @bp.route("/worktime")
 def worktime():
-    import pandas as pd
 
-    path = "MFP/MFP.xlsx"
+    xls = load_github_excel()
 
-    # ================================
-    # 區塊 1：計算基礎、單位(min)
-    # A2:F3  → A2 是標題列
-    # ================================
+    # -----------------------------
+    # 區塊 1：A2:F3
+    # -----------------------------
     df_1 = pd.read_excel(
-        path,
+        xls,
         sheet_name="工時計算",
         header=None,
         usecols="A:F",
-        skiprows=1,     # 從 A2 開始
+        skiprows=1,
         nrows=2
     )
     block1_header = df_1.iloc[0].tolist()
     block1_body = df_1.iloc[1:].values.tolist()
 
-    # ================================
-    # 區塊 2：跑勤統計
-    # A5:H8 → A5 是標題列、A8:H8 是說明列（要可收合）
-    # ================================
+    # -----------------------------
+    # 區塊 2：A5:H8
+    # -----------------------------
     df_2 = pd.read_excel(
-        path,
+        xls,
         sheet_name="工時計算",
         header=None,
         usecols="A:H",
-        skiprows=4,   # 從 A5 開始
-        nrows=4       # A5～A8 共 4 列
+        skiprows=4,
+        nrows=4
     )
-
     block2_header = df_2.iloc[0].tolist()
-    block2_body = df_2.iloc[1:3].values.tolist()      # A6～A7
-    block2_note = df_2.iloc[3].tolist()               # A8 說明列
+    block2_body = df_2.iloc[1:3].values.tolist()
+    block2_note = df_2.iloc[3].tolist()
 
-    # ================================
-    # 區塊 3：維修統計
-    # A10:H12 → A10 標題列
-    # ================================
+    # -----------------------------
+    # 區塊 3：A10:H12
+    # -----------------------------
     df_3 = pd.read_excel(
-        path,
+        xls,
         sheet_name="工時計算",
         header=None,
         usecols="A:H",
-        skiprows=9,   # 從 A10 開始
+        skiprows=9,
         nrows=3
     )
-
     block3_header = df_3.iloc[0].tolist()
     block3_body = df_3.iloc[1:].values.tolist()
 
-    # ================================
-    # 區塊 4：工時計算
-    # A14:K16 → A16 說明列（要可收合）
-    # ================================
+    # -----------------------------
+    # 區塊 4：A14:K17
+    # -----------------------------
     df_4 = pd.read_excel(
-        path,
+        xls,
         sheet_name="工時計算",
         header=None,
         usecols="A:K",
-        skiprows=13,    # A14
-        nrows=4         # A14～A17
+        skiprows=13,
+        nrows=4
     )
-
     block4_header = df_4.iloc[0].tolist()
-    block4_body = df_4.iloc[1:3].values.tolist()     # A15
-    block4_note = df_4.iloc[3].tolist()              # A17 說明列
+    block4_body = df_4.iloc[1:3].values.tolist()
+    block4_note = df_4.iloc[3].tolist()
 
     return render_template(
         "worktime.html",
