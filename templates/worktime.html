@@ -1,0 +1,123 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<div class="header-flex" style="display:flex; flex-direction:row; align-items:center; gap:10px;">
+	<button type="button" onclick="history.back()" style="padding:10px 15px; font-size:20px;">← 返回上一頁</button>
+</div>
+
+<h2>工時統計</h2>
+
+<!-- 🔹 區塊 1 -->
+<h3>計算基礎、單位(min)</h3>
+<table>
+    <thead>
+        <tr>
+            {% for col in block1_header %}
+            <th>{{ col }}</th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in block1_body %}
+        <tr>
+            {% for cell in row %}
+            <td>{{ cell }}</td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+
+<!-- 🔹 區塊 2 -->
+<h3>跑勤統計</h3>
+<table>
+    <thead>
+        <tr>
+            {% for col in block2_header %}
+            <th>{{ col }}</th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in block2_body %}
+        <tr>
+            {% for cell in row %}
+            <td>{{ cell }}</td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+
+        <!-- 🔸 說明列（預設隱藏） -->
+        <tr id="note2" style="display:none; background:#f2f2f2;">
+            {% for cell in block2_note %}
+            <td>{{ cell }}</td>
+            {% endfor %}
+        </tr>
+    </tbody>
+</table>
+
+<button onclick="toggleNote('note2')">顯示/隱藏 說明</button>
+
+
+<!-- 🔹 區塊 3 -->
+<h3>維修統計</h3>
+<table>
+    <thead>
+        <tr>
+            {% for col in block3_header %}
+            <th>{{ col }}</th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in block3_body %}
+        <tr>
+            {% for cell in row %}
+            <td>{{ cell }}</td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+
+<!-- 🔹 區塊 4 -->
+<h3>工時計算</h3>
+<table>
+    <thead>
+        <tr>
+            {% for col in block4_header %}
+            <th>{{ col }}</th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in block4_body %}
+        <tr>
+            {% for cell in row %}
+            <td>{{ cell }}</td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+
+        <!-- 🔸 說明列（預設隱藏） -->
+        <tr id="note4" style="display:none; background:#f2f2f2;">
+            {% for cell in block4_note %}
+            <td>{{ cell }}</td>
+            {% endfor %}
+        </tr>
+    </tbody>
+</table>
+
+<button onclick="toggleNote('note4')">顯示/隱藏 說明</button>
+
+
+<script>
+function toggleNote(id) {
+    const row = document.getElementById(id);
+    row.style.display = (row.style.display === "none") ? "" : "none";
+}
+</script>
+
+{% endblock %}

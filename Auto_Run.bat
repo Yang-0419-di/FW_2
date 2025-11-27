@@ -16,9 +16,9 @@ if /i "!skipAll!"=="Y" (
 :: -----------------------------
 set /p skipDownload=是否跳過下載檔案 [Y/N]：
 if /i "!skipDownload!"=="Y" (
-    echo [1/7] 已選擇跳過下載檔案。
+    echo [1/9] 已選擇跳過下載檔案。
 ) else (
-    echo [1/7] 執行 Excel_Edge.py...
+    echo [1/9] 執行 Excel_Edge.py...
     python "Excel_Edge.py"
     if errorlevel 1 (
         echo 檔案下載異常
@@ -28,61 +28,73 @@ if /i "!skipDownload!"=="Y" (
 )
 
 :: -----------------------------
-:: [2/8] 複製 data.xlsx 到臨時備份
+:: [2/9] 複製 data.xlsx 到臨時備份
 :: -----------------------------
-echo [2/8] 複製 data.xlsx 到臨時備份資料夾...
+echo [2/9] 複製 data.xlsx 到臨時備份資料夾...
 copy /Y "data.xlsx" "臨時備份\自動備份\data.xlsx"
 if errorlevel 1 goto error
 
+echo [2/9] 複製 MFP.xlsx 到臨時備份資料夾...
+copy /Y "MFP\MFP.xlsx" "MFP\自動備份\MFP.xlsx"
+if errorlevel 1 goto error
+
 :: -----------------------------
-:: [3/8] 執行 run_update2.py
+:: [3/9] 執行 run_update.py
 :: -----------------------------
-echo [3/8] 執行 run_update2.py...
+echo [3/9] 執行 run_update.py...
+python "run_update.py"
+if errorlevel 1 goto error
+
+:: -----------------------------
+:: [4/9] 執行 run_update2.py
+:: -----------------------------
+echo [4/9] 執行 run_update2.py...
 python "run_update2.py"
 if errorlevel 1 goto error
 
 :: -----------------------------
-:: [4/8] 執行 run_MFP_update.py
+:: [5/9] 執行 run_MFP_update.py
 :: -----------------------------
-echo [4/8] 執行 run_MFP_update.py...
+echo [5/9] 執行 run_MFP_update.py...
 python "run_MFP_update.py"
 if errorlevel 1 goto error
 
 :: -----------------------------
-:: [5/8] 執行 run_MFP2_update.py
+:: [6/9] 執行 run_MFP2_update.py
 :: -----------------------------
-echo [5/8] 執行 run_MFP2_update.py...
+echo [6/9] 執行 run_MFP2_update.py...
 python "run_MFP2_update.py"
 if errorlevel 1 goto error
 
 :: -----------------------------
-:: [6/8] 執行 add_ver.py（完整流程）
+:: [7/9] 執行 add_ver.py（完整流程）
 :: -----------------------------
-echo [6/8] 執行 add_ver.py（版本號可手動輸入，10 秒後自動填入）...
+echo [7/9] 執行 add_ver.py（版本號可手動輸入，10 秒後自動填入）...
 call python "add_ver.py"
 
 for /f %%a in ('python -c "import openpyxl;wb=openpyxl.load_workbook('data.xlsx');print(wb['首頁']['G1'].value)"') do set vernum=%%a
 echo 使用版本號: %vernum%
 
-
 :: -----------------------------
-:: [7/8] 執行 data_updw.py
+:: [8/9] 執行 data_updw.py
 :: -----------------------------
-echo [7/8] 執行 data_updw.py...
+echo [8/9] 執行 data_updw.py...
 python "data_updw.py"
 if errorlevel 1 goto error
 
 :: -----------------------------
-:: [8/8] 執行 save_excel.exe
+:: [9/9] 執行 save_excel.exe
 :: -----------------------------
-echo [8/8] 啟動 save_excel.exe...
+echo [9/9] 啟動 save_excel.exe...
 start /wait "" "save_excel.exe"
 if errorlevel 1 goto error
+
 
 :: -----------------------------
 :: 執行 Git 操作
 :: -----------------------------
 goto git_operation
+
 
 :: -----------------------------
 :: Git-only 模式
@@ -111,6 +123,7 @@ echo 所有程序已完成！
 pause
 exit /b
 
+
 :: -----------------------------
 :: Git 操作子流程
 :: -----------------------------
@@ -128,6 +141,7 @@ if errorlevel 1 goto error
 echo 所有程序已完成！
 pause
 exit /b
+
 
 :: -----------------------------
 :: 錯誤處理
