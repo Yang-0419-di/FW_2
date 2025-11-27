@@ -650,6 +650,110 @@ def mfp_summary():
         billing_mfp_summary=True
     )
 
+@bp.route("/person/<sheet>")
+def person_page(sheet):
+    import pandas as pd
+
+    path = "MFP/MFP.xlsx"
+
+    # 第一區塊：A1:P4
+    df1 = pd.read_excel(path, sheet_name=sheet, header=0, usecols="A:P", nrows=4)
+
+    # 第二區塊：A6:P9
+    df2 = pd.read_excel(path, sheet_name=sheet, header=0, usecols="A:P", skiprows=5, nrows=4)
+
+    # 第三區塊：A14 之後
+    df3 = pd.read_excel(path, sheet_name=sheet, header=13, usecols="A:L")
+
+    return render_template(
+        "tjw.html",     # ★ 你仍然使用 tjw.html
+        table1=df1.to_html(index=False, classes="table table-bordered"),
+        table2=df2.to_html(index=False, classes="table table-bordered"),
+        table3=df3.to_html(index=False, classes="table table-bordered"),
+        page_name=sheet,     # ★ 分頁名稱
+        billing_person=True  # ★ 給 layout.html 判斷
+    )
+
+@bp.route("/worktime")
+def worktime():
+    import pandas as pd
+
+    path = "MFP/MFP.xlsx"
+
+    # ================================
+    # 區塊 1：計算基礎、單位(min)
+    # A2:F3  → A2 是標題列
+    # ================================
+    df_1 = pd.read_excel(
+        path,
+        sheet_name="工時計算",
+        header=None,
+        usecols="A:F",
+        skiprows=1,     # 從 A2 開始
+        nrows=2
+    )
+    block1_header = df_1.iloc[0].tolist()
+    block1_body = df_1.iloc[1:].values.tolist()
+
+    # ================================
+    # 區塊 2：跑勤統計
+    # A5:H8 → A5 是標題列、A8:H8 是說明列（要可收合）
+    # ================================
+    df_2 = pd.read_excel(
+        path,
+        sheet_name="工時計算",
+        header=None,
+        usecols="A:H",
+        skiprows=4,   # 從 A5 開始
+        nrows=4       # A5～A8 共 4 列
+    )
+
+    block2_header = df_2.iloc[0].tolist()
+    block2_body = df_2.iloc[1:3].values.tolist()      # A6～A7
+    block2_note = df_2.iloc[3].tolist()               # A8 說明列
+
+    # ================================
+    # 區塊 3：維修統計
+    # A10:H12 → A10 標題列
+    # ================================
+    df_3 = pd.read_excel(
+        path,
+        sheet_name="工時計算",
+        header=None,
+        usecols="A:H",
+        skiprows=9,   # 從 A10 開始
+        nrows=3
+    )
+
+    block3_header = df_3.iloc[0].tolist()
+    block3_body = df_3.iloc[1:].values.tolist()
+
+    # ================================
+    # 區塊 4：工時計算
+    # A14:K16 → A16 說明列（要可收合）
+    # ================================
+    df_4 = pd.read_excel(
+        path,
+        sheet_name="工時計算",
+        header=None,
+        usecols="A:K",
+        skiprows=13,    # A14
+        nrows=4         # A14～A17
+    )
+
+    block4_header = df_4.iloc[0].tolist()
+    block4_body = df_4.iloc[1:3].values.tolist()     # A15
+    block4_note = df_4.iloc[3].tolist()              # A17 說明列
+
+    return render_template(
+        "worktime.html",
+        block1_header=block1_header, block1_body=block1_body,
+        block2_header=block2_header, block2_body=block2_body, block2_note=block2_note,
+        block3_header=block3_header, block3_body=block3_body,
+        block4_header=block4_header, block4_body=block4_body, block4_note=block4_note,
+        billing_worktime=True
+    )
+
 
 # ✅ 讓主程式 app.py 可以 import billing_bp
 billing_bp = bp

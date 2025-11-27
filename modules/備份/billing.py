@@ -650,5 +650,30 @@ def mfp_summary():
         billing_mfp_summary=True
     )
 
+@bp.route("/person/<sheet>")
+def person_page(sheet):
+    import pandas as pd
+
+    path = "MFP/MFP.xlsx"
+
+    # 第一區塊：A1:P4
+    df1 = pd.read_excel(path, sheet_name=sheet, header=0, usecols="A:P", nrows=4)
+
+    # 第二區塊：A6:P9
+    df2 = pd.read_excel(path, sheet_name=sheet, header=0, usecols="A:P", skiprows=5, nrows=4)
+
+    # 第三區塊：A14 之後
+    df3 = pd.read_excel(path, sheet_name=sheet, header=13, usecols="A:L")
+
+    return render_template(
+        "tjw.html",     # ★ 你仍然使用 tjw.html
+        table1=df1.to_html(index=False, classes="table table-bordered"),
+        table2=df2.to_html(index=False, classes="table table-bordered"),
+        table3=df3.to_html(index=False, classes="table table-bordered"),
+        page_name=sheet,     # ★ 分頁名稱
+        billing_person=True  # ★ 給 layout.html 判斷
+    )
+
+
 # ✅ 讓主程式 app.py 可以 import billing_bp
 billing_bp = bp

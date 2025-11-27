@@ -166,6 +166,7 @@
 				"部門排程" if calendar_page else
 				"TG客戶系統" if billing_invoice_log else
 				"TG客戶系統" if billing_mfp_summary else
+				"TG客戶系統" if billing_person else
 				"PMQ4 部門總覽"
 			) }}
         </h1>
@@ -199,7 +200,7 @@
         </form>
 
         <!-- 導覽按鈕列（語意正確的 a.btn） -->
-		{% if not billing_page and not billing_invoice_log and not billing_mfp_summary %}
+		{% if not billing_page and not billing_invoice_log and not billing_mfp_summary and not billing_person %}
         <div class="button-row" role="navigation" aria-label="主要功能選單">
 			<div class="button">
                 <a href="{{ url_for('personal', name='吳宗鴻') }}"><button class="button">吳宗鴻</button></a>
@@ -218,7 +219,7 @@
 				<a href="{{ url_for('mfp_parts') }}"><button class="button-1">MFP_零件表</button></a>
 				<a href="{{ url_for('billing.index') }}"><button class="button-1">TG客戶系統</button></a>
 		{% endif %}
-			{% if not home_page and not billing_mfp_summary %}
+			{% if not home_page and not billing_mfp_summary and not billing_person%}
 			<a href="/"><button class="button-3">回首頁</button></a>
 			{% endif %}
 			</div>	
