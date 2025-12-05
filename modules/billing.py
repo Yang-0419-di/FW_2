@@ -643,7 +643,7 @@ def mfp_summary():
     df = pd.read_excel(
         xls,
         sheet_name='總表',
-        header=None
+        header=0 
     )
 
     if keyword:
@@ -684,7 +684,6 @@ def mfp_summary():
         billing_mfp_summary=True
     )
 
-
 # ================================================================
 # 2️⃣ 人員個人資料頁（person）
 # ================================================================
@@ -692,6 +691,9 @@ def mfp_summary():
 def person_page(sheet):
 
     xls = load_github_excel()
+    
+    # 取得搜尋字串
+    keyword = request.args.get("keyword", "").strip()
 
     # 第一區塊：A1:P4
     df1 = pd.read_excel(
@@ -712,7 +714,7 @@ def person_page(sheet):
         nrows=4
     )
 
-    # 第三區塊：A14 之後
+    # 第三區塊：A14 之後（客戶列表）
     df3 = pd.read_excel(
         xls,
         sheet_name=sheet,
@@ -720,14 +722,25 @@ def person_page(sheet):
         usecols="A:L"
     )
 
+    # ⭐⭐⭐ 搜尋必須放在 df3 讀取之後 ⭐⭐⭐
+    if keyword:
+        df3 = df3[
+            df3.apply(
+                lambda r: r.astype(str).str.contains(keyword, case=False, na=False).any(),
+                axis=1
+            )
+        ]
+
     return render_template(
         "tjw.html",
         table1=df1.to_html(index=False, classes="table table-bordered"),
         table2=df2.to_html(index=False, classes="table table-bordered"),
         table3=df3.to_html(index=False, classes="table table-bordered"),
         page_name=sheet,
+        keyword=keyword,
         billing_person=True
     )
+
 
 # ✅ 讓主程式 app.py 可以 import billing_bp
 billing_bp = bp
