@@ -1,0 +1,84 @@
+{% extends "layout.html" %}
+
+{% block content %}
+
+<h2>區域數量</h2>
+
+<button class="toggle-btn" onclick="toggleArea()">顯示 / 隱藏 區域數量</button>
+
+<div id="area-block" style="display:none;">
+
+    <!-- 區塊 1 -->
+    <table class="data-table">
+        <thead>
+            <tr>
+                {% for h in area1_header %}
+                <th>{{ h }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in area1_body %}
+            <tr>
+                {% for col in row %}
+                <td>{{ col }}</td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <br>
+
+    <!-- 區塊 2 -->
+    <table class="data-table">
+        <thead>
+            <tr>
+                {% for h in area2_header %}
+                <th>{{ h }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in area2_body %}
+            <tr>
+                {% for col in row %}
+                <td>{{ col }}</td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <br>
+
+    <!-- 區塊 3 -->
+    <table class="data-table">
+        <thead>
+            <tr>
+                {% for h in area3_header %}
+                <th>{{ h }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in area3_body %}
+            <tr>
+                {% for col in row %}
+                <td>{{ col }}</td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+</div>
+
+<script>
+function toggleArea() {
+    const block = document.getElementById('area-block');
+    block.style.display = (block.style.display === "none") ? "block" : "none";
+}
+</script>
+
+{% endblock %}
