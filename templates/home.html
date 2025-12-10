@@ -19,7 +19,87 @@
             </tbody>
         </table>
     </div>
+	
+	<h2>
+    <button onclick="toggleSection('area-content', event)" style="margin-right: 8px;">▶</button>
+		區域數量
+	</h2>
 
+	<div id="area-content" style="display: none;" class="table-container">
+
+		<!-- === 第一段：C2:H3 === -->
+		<table>
+			<thead>
+				{% if area_table_1 %}
+					<tr>
+						{% for key in area_table_1[0].keys() %}
+							<th>{{ key }}</th>
+						{% endfor %}
+					</tr>
+				{% endif %}
+			</thead>
+			<tbody>
+				{% for row in area_table_1 %}
+					<tr>
+						{% for value in row.values() %}
+							<td>{{ value }}</td>
+						{% endfor %}
+					</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+
+		<br>
+
+		<!-- === 第二段：J2:O3 === -->
+		<table>
+			<thead>
+				{% if area_table_2 %}
+					<tr>
+						{% for key in area_table_2[0].keys() %}
+							<th>{{ key }}</th>
+						{% endfor %}
+					</tr>
+				{% endif %}
+			</thead>
+			<tbody>
+				{% for row in area_table_2 %}
+					<tr>
+						{% for value in row.values() %}
+							<td>{{ value }}</td>
+						{% endfor %}
+					</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+
+		<br>
+
+		<!-- === 第三段：P2:Q3 === -->
+		<table>
+			<thead>
+				{% if area_table_3 %}
+					<tr>
+						{% for key in area_table_3[0].keys() %}
+							<th>{{ key }}</th>
+						{% endfor %}
+					</tr>
+				{% endif %}
+			</thead>
+			<tbody>
+				{% for row in area_table_3 %}
+					<tr>
+						{% for value in row.values() %}
+							<td>{{ value }}</td>
+						{% endfor %}
+					</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+
+	</div>
+
+	
     <h2>季保養進度</h2>
     <div class="table-container">
         <table>

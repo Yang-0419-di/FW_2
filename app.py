@@ -318,6 +318,28 @@ def worktime():
         billing_worktime=True
     )
 
+@app.route('/area')
+def area_page():
+    # 載入 Excel（你目前 data.xlsx 是本地檔案）
+    df = pd.read_excel('data.xlsx', sheet_name='門市主檔')
+
+    # 讀取三個區塊
+    block_1 = pd.read_excel('data.xlsx', sheet_name='門市主檔', usecols="C:H", skiprows=1, nrows=2)
+    block_2 = pd.read_excel('data.xlsx', sheet_name='門市主檔', usecols="J:O", skiprows=1, nrows=2)
+    block_3 = pd.read_excel('data.xlsx', sheet_name='門市主檔', usecols="P:Q", skiprows=1, nrows=2)
+
+    return render_template(
+        'area.html',
+        version=version_time,
+        block_1_table=block_1.to_html(index=False, classes='dataframe'),
+        block_2_table=block_2.to_html(index=False, classes='dataframe'),
+        block_3_table=block_3.to_html(index=False, classes='dataframe'),
+        area_page=True,
+        home_page=False,
+        billing_invoice_log=False
+    )
+
+
 # ====== 啟動 Flask ======
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
