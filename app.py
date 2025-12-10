@@ -54,31 +54,79 @@ def clean_df(df):
 @app.route('/')
 def home():
     xls = load_excel_from_github(GITHUB_XLSX_URL)
+
+    # ====== 原本首頁資料 ======
     df_department = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:F", skiprows=4, nrows=1))
     df_seasons = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:D", skiprows=8, nrows=2))
     df_project1 = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:E", skiprows=12, nrows=3))
+
     df_HUB = clean_df(pd.read_excel(xls, sheet_name='首頁', header=18, nrows=30, usecols="A:D"))
     df_HUB = df_HUB[['門市編號', '門市名稱', '異常原因', '完工確認']]
+
     df = clean_df(pd.read_excel(xls, sheet_name=0, header=21, nrows=250, usecols="A:O"))
     df = df[['門市編號', '門市名稱', 'PMQ_檢核', '專案檢核', 'HUB', '完工檢核']]
+
     keyword = request.args.get('keyword', '').strip()
     no_data_found = False
     if keyword:
         df = df[df.apply(lambda r: r.astype(str).str.contains(keyword, case=False).any(), axis=1)]
         no_data_found = df.empty
+
+    # ======================================================
+    #                 區域數量（新增）
+    # ======================================================
+
+    # === 第一段 C2:k3 ===
+    df1 = pd.read_excel(
+        xls,
+        sheet_name='門市主檔',
+        header=None,
+        usecols="C:k",
+        skiprows=1,
+        nrows=2
+    )
+    headers1 = df1.iloc[0].tolist()   # C2:k2
+    values1 = df1.iloc[1].tolist()    # C3:k3
+    area_table_1 = [dict(zip(headers1, values1))]
+
+    # === 第二段 l2:p3 ===
+    df2 = pd.read_excel(
+        xls,
+        sheet_name='門市主檔',
+        header=None,
+        usecols="l:p",
+        skiprows=1,
+        nrows=2
+    )
+    headers2 = df2.iloc[0].tolist()
+    values2 = df2.iloc[1].tolist()
+    area_table_2 = [dict(zip(headers2, values2))]
+
+    # ======================================================
+    #                 回傳到 home.html
+    # ======================================================
+
     return render_template(
         'home.html',
         version=version_time,
+
+        # 新增 - 區域數量三段資料
+        area_table_1=area_table_1,
+        area_table_2=area_table_2,
+
+        # 原本首頁資料
         keyword=keyword,
         tables=df.to_dict(orient='records'),
         department_table=df_department.to_dict(orient='records'),
         seasons_table=df_seasons.to_dict(orient='records'),
         project1_table=df_project1.to_dict(orient='records'),
         HUB_table=df_HUB.to_dict(orient='records'),
+
         no_data_found=no_data_found,
         billing_invoice_log=False,
         home_page=True
     )
+
 
 @app.route('/personal/<name>')
 def personal(name):
@@ -316,27 +364,6 @@ def worktime():
         block3_header=block3_header, block3_body=block3_body,
         block4_header=block4_header, block4_body=block4_body, block4_note=block4_note,
         billing_worktime=True
-    )
-
-@app.route('/area')
-def area_page():
-    # 載入 Excel（你目前 data.xlsx 是本地檔案）
-    df = pd.read_excel('data.xlsx', sheet_name='門市主檔')
-
-    # 讀取三個區塊
-    block_1 = pd.read_excel('data.xlsx', sheet_name='門市主檔', usecols="C:H", skiprows=1, nrows=2)
-    block_2 = pd.read_excel('data.xlsx', sheet_name='門市主檔', usecols="J:O", skiprows=1, nrows=2)
-    block_3 = pd.read_excel('data.xlsx', sheet_name='門市主檔', usecols="P:Q", skiprows=1, nrows=2)
-
-    return render_template(
-        'area.html',
-        version=version_time,
-        block_1_table=block_1.to_html(index=False, classes='dataframe'),
-        block_2_table=block_2.to_html(index=False, classes='dataframe'),
-        block_3_table=block_3.to_html(index=False, classes='dataframe'),
-        area_page=True,
-        home_page=False,
-        billing_invoice_log=False
     )
 
 
