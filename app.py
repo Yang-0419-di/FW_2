@@ -137,6 +137,7 @@ def personal(name):
         return f"找不到 {name} 的分頁", 404
     xls = load_excel_from_github(GITHUB_XLSX_URL)
     df_top = clean_df(pd.read_excel(xls, sheet_name=sheet_name, usecols="A:G", nrows=4))
+    df_area = clean_df(pd.read_excel(xls, sheet_name=sheet_name, usecols="w:ae", nrows=2))
     df_project = clean_df(pd.read_excel(xls, sheet_name=sheet_name, usecols="H:L", nrows=4))
     df_bottom = clean_df(pd.read_excel(xls, sheet_name=sheet_name, usecols="A:J", skiprows=5))
     keyword = request.args.get('keyword', '').strip()
@@ -148,6 +149,7 @@ def personal(name):
         "personal.html",
         personal_page=name,
         show_top=not df_top.empty,
+        show_area=not df_area.empty,
         show_project=not df_project.empty,
         tables_top=df_top.to_dict(orient="records"),
         tables_project=df_project.to_dict(orient="records"),
