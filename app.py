@@ -130,38 +130,63 @@ def home():
 
 @app.route('/personal/<name>')
 def personal(name):
-    version=version_time,
+    version = version_time,
     sheet_map = {'吳宗鴻': '吳宗鴻', '湯家瑋': '湯家瑋', '狄澤洋': '狄澤洋'}
     sheet_name = sheet_map.get(name)
     if not sheet_name:
         return f"找不到 {name} 的分頁", 404
+
     xls = load_excel_from_github(GITHUB_XLSX_URL)
+
+    # --- 其他表格 ---
     df_top = clean_df(pd.read_excel(xls, sheet_name=sheet_name, usecols="A:G", nrows=4))
-    df_area = clean_df(pd.read_excel(xls, sheet_name=sheet_name, usecols="w:ae", nrows=1))
     df_project = clean_df(pd.read_excel(xls, sheet_name=sheet_name, usecols="H:L", nrows=4))
     df_bottom = clean_df(pd.read_excel(xls, sheet_name=sheet_name, usecols="A:J", skiprows=5))
+
+    # --- 正確讀取區域數量 W1:AE2 ---
+    df_area = pd.read_excel(
+        xls,
+        sheet_name=sheet_name,
+        usecols="W:AE",
+        nrows=1,        # ← 標題 + 數值
+        header=0        # ← 第一列當標題
+    )
+
+    # ★★★★★ 強制還原 '-' 欄名 ★★★★★
+    df_area.columns = df_area.columns.map(
+        lambda x: "-" if str(x).strip().startswith("-") else str(x)
+    )
+
+    # ---- 搜尋功能 for 下方門市 ----
     keyword = request.args.get('keyword', '').strip()
     no_data_found = False
     if keyword:
-        df_bottom = df_bottom[df_bottom.apply(lambda r: r.astype(str).str.contains(keyword, case=False).any(), axis=1)]
+        df_bottom = df_bottom[
+            df_bottom.apply(lambda r: r.astype(str).str.contains(keyword, case=False).any(), axis=1)
+        ]
         no_data_found = df_bottom.empty
-        
+
     return render_template(
         "personal.html",
+
         personal_page=name,
         show_top=not df_top.empty,
         show_area=not df_area.empty,
         show_project=not df_project.empty,
 
         tables_top=df_top.to_dict(orient="records"),
-        tables_area=df_area.to_dict(orient="records"),       # ← 必加
         tables_project=df_project.to_dict(orient="records"),
         tables_bottom=df_bottom.to_dict(orient="records"),
+
+        # 區域數量（直接給 dataframe）
+        tables_area=df_area.to_dict(orient="records"),
 
         version=version_time,
         billing_invoice_log=False,
         home_page=False
     )
+
+
 
 @app.route('/report')
 def report():

@@ -28,28 +28,29 @@
     {% endif %}
 	
 	{% if show_area %}
-        <h2>區域數量</h2>
-        <div class="table-container">
-            <table>
-                <thead>
-                    <tr>
-                        {% for key in tables_area[0].keys() %}
-                            <th>{{ key }}</th>
-                        {% endfor %}
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in tables_area %}
-                        <tr {% if loop.index == 4 %}class="highlight-row"{% endif %}>
-                            {% for value in row.values() %}
-                                <td>{{ value }}</td>
-                            {% endfor %}
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    {% endif %}
+		<h2>區域數量</h2>
+		<div class="table-container">
+			<table>
+				<thead>
+					<tr>
+						{% for key in tables_area[0].keys() %}
+							<th>{{ key }}</th>
+						{% endfor %}
+					</tr>
+				</thead>
+				<tbody>
+					{% for row in tables_area %}
+						<tr>
+							{% for value in row.values() %}
+								<td>{{ value }}</td>
+							{% endfor %}
+						</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+	{% endif %}
+
 
     {% if show_project %}
         <h2>專案進度</h2>
