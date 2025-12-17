@@ -72,35 +72,58 @@ def home():
         df = df[df.apply(lambda r: r.astype(str).str.contains(keyword, case=False).any(), axis=1)]
         no_data_found = df.empty
 
+
     # ======================================================
-    #                 區域數量（新增）
+    #                 區域數量（三段）- 都在「首頁」
     # ======================================================
 
-    # === 第一段 C2:k3 ===
+    # === 第一段 A55:G55 標題，A56:G57 內容 ===
     df1 = pd.read_excel(
         xls,
-        sheet_name='門市主檔',
+        sheet_name='首頁',
         header=None,
-        usecols="C:k",
-        skiprows=1,
-        nrows=2
+        usecols="A:G",
+        skiprows=54,
+        nrows=3
     )
-    headers1 = df1.iloc[0].tolist()   # C2:k2
-    values1 = df1.iloc[1].tolist()    # C3:k3
-    area_table_1 = [dict(zip(headers1, values1))]
 
-    # === 第二段 l2:p3 ===
+    headers1 = df1.iloc[0].tolist()
+    area_table_1 = []
+    for i in range(1, 3):
+        area_table_1.append(dict(zip(headers1, df1.iloc[i].tolist())))
+
+
+    # === 第二段 A59:L59 標題，A60:L61 內容 ===
     df2 = pd.read_excel(
         xls,
-        sheet_name='門市主檔',
+        sheet_name='首頁',
         header=None,
-        usecols="l:p",
-        skiprows=1,
-        nrows=2
+        usecols="A:L",
+        skiprows=58,
+        nrows=3
     )
+
     headers2 = df2.iloc[0].tolist()
-    values2 = df2.iloc[1].tolist()
-    area_table_2 = [dict(zip(headers2, values2))]
+    area_table_2 = []
+    for i in range(1, 3):
+        area_table_2.append(dict(zip(headers2, df2.iloc[i].tolist())))
+
+
+    # === 第三段 A63:G63 標題，A64:G65 內容 ===
+    df3 = pd.read_excel(
+        xls,
+        sheet_name='首頁',
+        header=None,
+        usecols="A:G",
+        skiprows=62,
+        nrows=3
+    )
+
+    headers3 = df3.iloc[0].tolist()
+    area_table_3 = []
+    for i in range(1, 3):
+        area_table_3.append(dict(zip(headers3, df3.iloc[i].tolist())))
+
 
     # ======================================================
     #                 回傳到 home.html
@@ -110,11 +133,10 @@ def home():
         'home.html',
         version=version_time,
 
-        # 新增 - 區域數量三段資料
         area_table_1=area_table_1,
         area_table_2=area_table_2,
+        area_table_3=area_table_3,
 
-        # 原本首頁資料
         keyword=keyword,
         tables=df.to_dict(orient='records'),
         department_table=df_department.to_dict(orient='records'),
@@ -126,6 +148,8 @@ def home():
         billing_invoice_log=False,
         home_page=True
     )
+
+
 
 
 @app.route('/personal/<name>')
