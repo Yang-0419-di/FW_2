@@ -31,7 +31,13 @@
       <tr>
         {% for cell in row %}
         {% set col = df_summary.columns[loop.index0] %}
-        <td class="{% if col == '狄澤洋' %}blue-bg{% elif col == '湯家瑋' %}orange-bg{% elif col == '吳宗鴻' %}green-bg{% endif %}">
+        <td class="
+    {% if col == '狄澤洋' %}blue-bg
+    {% elif col == '湯家瑋' %}orange-bg
+    {% elif col == '吳宗鴻' %}green-bg
+    {% elif col == '劉柏均' %}skyblue-bg
+    {% endif %}
+">
           {{ cell }}
         </td>
         {% endfor %}
