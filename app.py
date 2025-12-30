@@ -401,7 +401,7 @@ def calendar_events():
         title_val = row.get('title', '')
         if pd.notna(date_val) and title_val:
             start_date = pd.to_datetime(date_val).date()
-            color_map = {"狄澤洋": "red", "V": "red", "湯家瑋": "green", "吳宗鴻": "orange", "吳宗鴻": "blue"}
+            color_map = {"狄澤洋": "red", "V": "red", "湯家瑋": "green", "吳宗鴻": "orange", "劉柏均": "skyblue"}
             color = color_map.get(row.get('屬性'), "blue")
             if start_date < today:
                 color = "gray"
