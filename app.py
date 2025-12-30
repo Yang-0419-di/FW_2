@@ -1,4 +1,3 @@
-
 from flask import Flask, render_template, request, jsonify, abort
 import pandas as pd
 import requests
@@ -156,7 +155,7 @@ def home():
 @app.route('/personal/<name>')
 def personal(name):
     version = version_time,
-    sheet_map = {'吳宗鴻': '吳宗鴻', '湯家瑋': '湯家瑋', '狄澤洋': '狄澤洋'}
+    sheet_map = {'吳宗鴻': '吳宗鴻', '湯家瑋': '湯家瑋', '狄澤洋': '狄澤洋','劉柏均': '劉柏均'}
     sheet_name = sheet_map.get(name)
     if not sheet_name:
         return f"找不到 {name} 的分頁", 404
@@ -249,40 +248,107 @@ def report():
 @app.route('/time')
 def time_page():
     xls = load_excel_from_github(GITHUB_XLSX_URL)
-    version=version_time,
-    df_summary = pd.read_excel(xls, sheet_name='出勤時間', usecols="A:E", nrows=2)
-    detail_1 = pd.read_excel(xls, sheet_name='出勤時間', usecols="A:Q", skiprows=3, nrows=3)
-    detail_2 = pd.read_excel(xls, sheet_name='出勤時間', usecols="A:Q", skiprows=7, nrows=3)
-    detail_3 = pd.read_excel(xls, sheet_name='出勤時間', usecols="A:Q", skiprows=11, nrows=3)
+
+    # ======================================================
+    # 區塊一：摘要 A1:F1 / A2:F2
+    # ======================================================
+    df_summary = pd.read_excel(
+        xls,
+        sheet_name='出勤時間',
+        usecols="A:F",
+        header=0,   # A1:F1
+        nrows=1     # A2:F2
+    )
+
+    # ======================================================
+    # 區塊二：A4:Q4 / A5:Q8
+    # ======================================================
+    detail_1 = pd.read_excel(
+        xls,
+        sheet_name='出勤時間',
+        usecols="A:Q",
+        header=3,   # A4:Q4
+        nrows=4     # A5:Q8
+    )
+
+    # ======================================================
+    # 區塊三：A9:Q9 / A10:Q13
+    # ======================================================
+    detail_2 = pd.read_excel(
+        xls,
+        sheet_name='出勤時間',
+        usecols="A:Q",
+        header=8,   # A9:Q9
+        nrows=4     # A10:Q13
+    )
+
+    # ======================================================
+    # 區塊四：A14:Q14 / A15:Q18
+    # ======================================================
+    detail_3 = pd.read_excel(
+        xls,
+        sheet_name='出勤時間',
+        usecols="A:Q",
+        header=13,  # A14:Q14
+        nrows=4     # A15:Q18
+    )
+
+    # ======================================================
+    # 圖表資料（4 人）
+    # ======================================================
     df_chart = pd.read_excel(xls, sheet_name='出勤時間', header=None)
-    x = [str(v) for v in df_chart.iloc[11, 1:16].tolist()]
-    names = df_chart.iloc[12:15, 0].tolist()
-    y_data = df_chart.iloc[12:15, 1:16].values.tolist()
+
+    # =============================
+    # X 軸：B14:P14
+    # =============================
+    x = [str(v) for v in df_chart.iloc[13, 1:16].tolist()]
+
+    # =============================
+    # Y 軸：B15:P18（4 個人）
+    # =============================
+    names = df_chart.iloc[14:18, 0].tolist()
+    y_data = df_chart.iloc[14:18, 1:16].values.tolist()
+
+    # =============================
+    # 畫圖
+    # =============================
     fig, ax = plt.subplots(figsize=(10, 5))
+
     for i, y in enumerate(y_data):
         ax.plot(x, y, marker='o', label=names[i])
+
+    ax.set_xlabel('日期')
+    ax.set_ylabel('時數')
+    ax.legend()
     plt.xticks(rotation=45)
-    plt.legend()
     plt.tight_layout()
+
     img = io.BytesIO()
     plt.savefig(img, format='png')
     img.seek(0)
     plot_url = base64.b64encode(img.read()).decode('utf-8')
     plt.close()
-    
+
+
+    # ======================================================
+    # 回傳頁面
+    # ======================================================
     return render_template(
         'time.html',
         version=version_time,
+
         summary_table=df_summary.to_html(index=False, classes='dataframe'),
         detail_table_1=detail_1.to_html(index=False, classes='dataframe'),
         detail_table_2=detail_2.to_html(index=False, classes='dataframe'),
         detail_table_3=detail_3.to_html(index=False, classes='dataframe'),
+
         plot_url=plot_url,
         df_summary=df_summary,
         time_page=True,
         billing_invoice_log=False,
         home_page=False
     )
+
 
 @app.route('/mfp_parts', methods=['GET', 'POST'])
 def mfp_parts():
@@ -335,7 +401,7 @@ def calendar_events():
         title_val = row.get('title', '')
         if pd.notna(date_val) and title_val:
             start_date = pd.to_datetime(date_val).date()
-            color_map = {"狄澤洋": "red", "V": "red", "湯家瑋": "green", "吳宗鴻": "orange"}
+            color_map = {"狄澤洋": "red", "V": "red", "湯家瑋": "green", "吳宗鴻": "orange", "吳宗鴻": "blue"}
             color = color_map.get(row.get('屬性'), "blue")
             if start_date < today:
                 color = "gray"
@@ -350,7 +416,7 @@ def worktime():
 
     # ================================
     # 區塊 1：計算基礎、單位(min)
-    # A2:F3  → A2 是標題列
+    # A2:F3 → A2 是標題列
     # ================================
     df_1 = pd.read_excel(
         path,
@@ -364,41 +430,41 @@ def worktime():
     block1_body = df_1.iloc[1:].values.tolist()
 
     # ================================
-    # 區塊 2：跑勤統計
-    # A5:H8 → A5 是標題列、A8:H8 是說明列（要可收合）
+    # 區塊 2：跑勤統計（多一列）
+    # A5:H9 → A5 標題、A9 說明
     # ================================
     df_2 = pd.read_excel(
         path,
         sheet_name="工時計算",
         header=None,
         usecols="A:H",
-        skiprows=4,   # 從 A5 開始
-        nrows=4       # A5～A8 共 4 列
+        skiprows=4,     # A5
+        nrows=5         # A5～A9（比原本多 1 列）
     )
 
     block2_header = df_2.iloc[0].tolist()
-    block2_body = df_2.iloc[1:3].values.tolist()      # A6～A7
-    block2_note = df_2.iloc[3].tolist()               # A8 說明列
+    block2_body = df_2.iloc[1:-1].values.tolist()   # A6～A8（3 列）
+    block2_note = df_2.iloc[-1].tolist()            # A9 說明列
 
     # ================================
-    # 區塊 3：維修統計
-    # A10:H12 → A10 標題列
+    # 區塊 3：維修統計（多一列）
+    # A10:H13 → A10 標題
     # ================================
     df_3 = pd.read_excel(
         path,
         sheet_name="工時計算",
         header=None,
         usecols="A:H",
-        skiprows=9,   # 從 A10 開始
-        nrows=3
+        skiprows=9,     # A10
+        nrows=4         # A10～A13（比原本多 1 列）
     )
 
     block3_header = df_3.iloc[0].tolist()
-    block3_body = df_3.iloc[1:].values.tolist()
+    block3_body = df_3.iloc[1:].values.tolist()     # A11～A13（3 列）
 
     # ================================
-    # 區塊 4：工時計算
-    # A14:K16 → A16 說明列（要可收合）
+    # 區塊 4：工時計算（多一列）
+    # A14:K18 → A18 說明列
     # ================================
     df_4 = pd.read_excel(
         path,
@@ -406,12 +472,12 @@ def worktime():
         header=None,
         usecols="A:K",
         skiprows=13,    # A14
-        nrows=4         # A14～A17
+        nrows=5         # A14～A18（比原本多 1 列）
     )
 
     block4_header = df_4.iloc[0].tolist()
-    block4_body = df_4.iloc[1:3].values.tolist()     # A15
-    block4_note = df_4.iloc[3].tolist()              # A17 說明列
+    block4_body = df_4.iloc[1:-1].values.tolist()   # A15～A17（3 列）
+    block4_note = df_4.iloc[-1].tolist()            # A18 說明列
 
     return render_template(
         "worktime.html",
@@ -421,6 +487,7 @@ def worktime():
         block4_header=block4_header, block4_body=block4_body, block4_note=block4_note,
         billing_worktime=True
     )
+
 
 
 # ====== 啟動 Flask ======

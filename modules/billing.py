@@ -661,12 +661,12 @@ def mfp_summary():
     )
 
     # 🔹 區域台數：A1:P4
-    area_raw = df_overview.iloc[0:4, 0:16].fillna("").values.tolist()
+    area_raw = df_overview.iloc[0:4, 0:20].fillna("").values.tolist()
     area_header = area_raw[0]
     area_body = area_raw[1:]
 
     # 🔹 保養週期評估：A6:P12
-    cycle_raw = df_overview.iloc[5:12, 0:16].fillna("").values.tolist()
+    cycle_raw = df_overview.iloc[5:12, 0:20].fillna("").values.tolist()
     cycle_header = cycle_raw[0]
     cycle_body = cycle_raw[1:]
 
@@ -700,7 +700,7 @@ def person_page(sheet):
         xls,
         sheet_name=sheet,
         header=0,
-        usecols="A:P",
+        usecols="A:R",
         nrows=4
     )
 
@@ -709,7 +709,7 @@ def person_page(sheet):
         xls,
         sheet_name=sheet,
         header=0,
-        usecols="A:P",
+        usecols="A:R",
         skiprows=5,
         nrows=4
     )
@@ -719,7 +719,7 @@ def person_page(sheet):
         xls,
         sheet_name=sheet,
         header=13,
-        usecols="A:L"
+        usecols="A:M"
     )
 
     # ⭐⭐⭐ 搜尋必須放在 df3 讀取之後 ⭐⭐⭐
