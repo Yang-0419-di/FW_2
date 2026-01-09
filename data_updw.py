@@ -29,6 +29,7 @@ try:
     sort_sheet(workbook.Sheets("門市主檔"), "A23:AC", "J15:J", 1, "門市主檔（J15 從最舊到最新）")
     sort_sheet(workbook.Sheets("吳宗鴻"), "A7:Z", "F7:F", 2, "吳宗鴻（F7 從 Z 到 A）")
     sort_sheet(workbook.Sheets("湯家瑋"), "A7:Z", "F7:F", 2, "湯家瑋（F7 從 Z 到 A）")
+    sort_sheet(workbook.Sheets("劉柏均"), "A7:Z", "F7:F", 2, "劉柏均（F7 從 Z 到 A）")
     sort_sheet(workbook.Sheets("狄澤洋"), "A7:Z", "F7:F", 2, "狄澤洋（F7 從 Z 到 A）")
 
     workbook.Save()
