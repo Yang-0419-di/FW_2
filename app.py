@@ -150,6 +150,12 @@ def home():
     )
 
 
+@app.route('/countpass')
+def countpass():
+    return render_template('countpass.html', 
+                           version=version_time, 
+                           home_page=False, 
+                           billing_invoice_log=False)
 
 
 @app.route('/personal/<name>')
