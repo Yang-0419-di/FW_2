@@ -82,7 +82,7 @@ def home():
         xls,
         sheet_name='首頁',
         header=None,
-        usecols="A:G",
+        usecols="E:K",
         skiprows=54,
         nrows=3
     )
@@ -98,7 +98,7 @@ def home():
         xls,
         sheet_name='首頁',
         header=None,
-        usecols="A:L",
+        usecols="E:P",
         skiprows=58,
         nrows=3
     )
@@ -114,7 +114,7 @@ def home():
         xls,
         sheet_name='首頁',
         header=None,
-        usecols="A:G",
+        usecols="E:L",
         skiprows=62,
         nrows=3
     )
