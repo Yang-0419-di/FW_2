@@ -1,0 +1,44 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div style="max-width: 400px; margin: 40px auto; padding: 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+    <h2 style="text-align:center; margin-bottom:20px;">HL店長密碼</h2>
+
+    <div style="text-align:center; margin-bottom: 20px;">
+        <input type="number" id="inputNumber" placeholder="輸入數字" style="padding:10px; width:180px; border-radius:5px; border:1px solid #ccc;">
+    </div>
+
+    <div style="text-align:center; margin-bottom: 20px;">
+        <button onclick="calculatePassword()" style="padding:10px 20px; font-size:18px; border:none; border-radius:5px; background-color:#20B2AA; color:white; cursor:pointer;">計算</button>
+    </div>
+
+    <div style="text-align:center; font-size:20px; font-weight:bold; color:#007BFF;">
+        <span id="result">結果將顯示於此</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function calculatePassword() {
+    const inputVal = parseInt(document.getElementById('inputNumber').value);
+    if (isNaN(inputVal)) {
+        alert("請輸入有效數字");
+        return;
+    }
+
+    // 取得今天日期
+    const today = new Date();
+    const taiwanYear = today.getFullYear() - 1911; // 民國年
+    const month = today.getMonth() + 1; // JS 月份 0~11
+
+    // 計算公式
+    let result = (inputVal * 1997) + 8800 + (taiwanYear * month);
+
+    // 取最後四碼
+    const last4 = ("0000" + (result % 10000)).slice(-4);
+
+    document.getElementById('result').textContent = last4;
+}
+</script>
+{% endblock %}
