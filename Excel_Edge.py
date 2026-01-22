@@ -9,15 +9,33 @@ import shutil
 import glob
 from datetime import datetime
 
-# 時間與檔名設定
+# ===============================
+# 時間與資料夾設定
+# ===============================
 yyyymm = datetime.now().strftime("%Y%m")
+
+# Edge 實際下載位置（IM 保留）
 download_path = r"D:\flask2\IM"
+
+# Synology 同步位置（複製一份）
+synology_im_path = r"D:\SynologyDrive\TOSHIBA\HL\保養\IM"
+
+os.makedirs(download_path, exist_ok=True)
+os.makedirs(synology_im_path, exist_ok=True)
+
+# 檔案樣式
 pos_pattern = os.path.join(download_path, f"{yyyymm}_HL_Maintain_Report*.xlsx")
 mfp_pattern = os.path.join(download_path, f"{yyyymm}_Service_Count_Report*.xlsx")
+
 pos_final = os.path.join(download_path, f"{yyyymm}_HL_Maintain_Report.xlsx")
 mfp_final = os.path.join(download_path, f"{yyyymm}_Service_Count_Report.xlsx")
 
+pos_synology = os.path.join(synology_im_path, f"{yyyymm}_HL_Maintain_Report.xlsx")
+mfp_synology = os.path.join(synology_im_path, f"{yyyymm}_Service_Count_Report.xlsx")
+
+# ===============================
 # Edge 選項
+# ===============================
 options = webdriver.EdgeOptions()
 options.use_chromium = True
 options.add_experimental_option("prefs", {
@@ -31,24 +49,29 @@ try:
     driver = webdriver.Edge(options=options)
     wait = WebDriverWait(driver, 30)
 
+    # ===============================
     # 登入
+    # ===============================
     driver.get("http://eip.toshibatec.com.tw/Main.aspx")
     wait.until(EC.presence_of_element_located((By.NAME, "AccountID"))).send_keys("yang.di")
     driver.find_element(By.NAME, "PassWord").send_keys("foxdie789")
     driver.find_element(By.NAME, "login_SubmitBtn").click()
 
-    # 點擊內部系統
+    # ===============================
+    # 進入系統
+    # ===============================
     wait.until(EC.element_to_be_clickable((By.XPATH, '//td[text()="內部系統"]'))).click()
     time.sleep(1)
     wait.until(EC.element_to_be_clickable((By.XPATH, '//td[contains(text(),"EIP 分析系統")]'))).click()
     time.sleep(3)
 
-    # 切換到新開視窗
     driver.switch_to.window(driver.window_handles[-1])
     driver.refresh()
     wait.until(EC.title_contains("台芝技術服務分析系統"))
 
-    ### === POS服務工作統計表 === ###
+    # ==================================================
+    # POS 服務工作統計表
+    # ==================================================
     driver.switch_to.default_content()
     wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "服務資料查詢"))).click()
     time.sleep(1)
@@ -56,30 +79,18 @@ try:
     driver.switch_to.frame("iframe")
     time.sleep(2)
 
-    try:
-        # 檢查是否有 Warning: mysql
-        if "Warning: mysql" in driver.page_source:
-            print("❌ 偵測到 Warning: mysql，流程中止。")
-            raise Exception("Warning: mysql detected")
+    if "Warning: mysql" in driver.page_source:
+        raise Exception("Warning: mysql detected")
 
-        # 嘗試點擊「萊爾富」
-        customer_option = wait.until(EC.element_to_be_clickable(
-            (By.XPATH, '//option[contains(text(),"萊爾富")]')))
-        customer_option.click()
-        time.sleep(0.5)
+    wait.until(EC.element_to_be_clickable(
+        (By.XPATH, '//option[contains(text(),"萊爾富")]'))).click()
+    time.sleep(0.5)
+    wait.until(EC.element_to_be_clickable(
+        (By.XPATH, '//option[contains(text(),"新北勤務一部")]'))).click()
 
-        # 嘗試點擊「新北勤務一部」
-        dept_option = wait.until(EC.element_to_be_clickable(
-            (By.XPATH, '//option[contains(text(),"新北勤務一部")]')))
-        dept_option.click()
-
-    except TimeoutException:
-        print("❌ 找不到『萊爾富』或『新北勤務一部』，流程中止。")
-        raise
-
-    # 查詢並匯出
     driver.find_element(By.XPATH, '//input[@type="submit" and @value="查詢"]').click()
-    wait.until(EC.presence_of_element_located((By.XPATH, '//input[@type="submit" and @value="匯出成EXCEL"]')))
+    wait.until(EC.presence_of_element_located(
+        (By.XPATH, '//input[@type="submit" and @value="匯出成EXCEL"]')))
 
     # 刪除舊檔
     for f in glob.glob(pos_pattern):
@@ -95,18 +106,25 @@ try:
             break
         time.sleep(1)
 
-    if downloaded_pos and os.path.exists(downloaded_pos):
+    if downloaded_pos:
         shutil.move(downloaded_pos, pos_final)
-        print(f"✅ POS報表下載完成：{os.path.basename(pos_final)}")
-    else:
-        print("❌ POS報表未下載完成")
+        try:
+            shutil.copy2(pos_final, pos_synology)
+        except Exception as e:
+            print(f"⚠️ POS 複製至 Synology 失敗：{e}")
 
-    # 回上頁
-    back_btn = wait.until(EC.element_to_be_clickable((By.ID, "back")))
-    back_btn.click()
+        print("✅ POS 報表完成")
+        print(f"   IM：{pos_final}")
+        print(f"   Synology：{pos_synology}")
+    else:
+        print("❌ POS 報表未下載完成")
+
+    wait.until(EC.element_to_be_clickable((By.ID, "back"))).click()
     time.sleep(2)
 
-    ### === MFP服務工作統計表 === ###
+    # ==================================================
+    # MFP 勤務工作統計表
+    # ==================================================
     driver.switch_to.default_content()
     wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "服務資料查詢"))).click()
     time.sleep(1)
@@ -114,26 +132,16 @@ try:
     driver.switch_to.frame("iframe")
     time.sleep(2)
 
-    try:
-        # 檢查是否有 Warning: mysql
-        if "Warning: mysql" in driver.page_source:
-            print("❌ 偵測到 Warning: mysql，流程中止。")
-            raise Exception("Warning: mysql detected")
+    if "Warning: mysql" in driver.page_source:
+        raise Exception("Warning: mysql detected")
 
-        # 嘗試點擊「新北勤務一部」
-        customer_option = wait.until(EC.element_to_be_clickable(
-            (By.XPATH, '//option[contains(text(),"新北勤務一部")]')))
-        customer_option.click()
-        time.sleep(0.5)
-
-    except TimeoutException:
-        print("❌『新北勤務一部』，流程中止。")
-        raise
+    wait.until(EC.element_to_be_clickable(
+        (By.XPATH, '//option[contains(text(),"新北勤務一部")]'))).click()
 
     driver.find_element(By.XPATH, '//input[@type="submit" and @value="查詢"]').click()
-    wait.until(EC.presence_of_element_located((By.XPATH, '//input[@type="submit" and @value="匯出成EXCEL"]')))
+    wait.until(EC.presence_of_element_located(
+        (By.XPATH, '//input[@type="submit" and @value="匯出成EXCEL"]')))
 
-    # 刪除舊檔
     for f in glob.glob(mfp_pattern):
         os.remove(f)
 
@@ -147,11 +155,18 @@ try:
             break
         time.sleep(1)
 
-    if downloaded_mfp and os.path.exists(downloaded_mfp):
+    if downloaded_mfp:
         shutil.move(downloaded_mfp, mfp_final)
-        print(f"✅ MFP報表下載完成：{os.path.basename(mfp_final)}")
+        try:
+            shutil.copy2(mfp_final, mfp_synology)
+        except Exception as e:
+            print(f"⚠️ MFP 複製至 Synology 失敗：{e}")
+
+        print("✅ MFP 報表完成")
+        print(f"   IM：{mfp_final}")
+        print(f"   Synology：{mfp_synology}")
     else:
-        print("❌ MFP報表未下載完成")
+        print("❌ MFP 報表未下載完成")
 
     driver.quit()
 
