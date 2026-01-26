@@ -154,7 +154,7 @@
     "報修查詢" if report_page else
     ("PMQ1 個人查詢: " ~ personal_page) if personal_page else
     "部門排程" if calendar_page else
-    "TG客戶系統"
+    ( "新北一部門網頁" if home_page else "TG客戶系統" )
 ) }}
 </h1>
 
@@ -181,7 +181,7 @@
     <a href="/"><button class="button-3">回首頁</button></a>
     {% endif %}
 </div>
-
+<hr>
 <!-- ======================
      第二列：POS / MFP（同一列）
 ====================== -->
@@ -189,7 +189,7 @@
 
 	<!-- POS -->
 	<div class="accordion">
-		<button class="nav-outline-btn">POS相關</button>
+		<button class="nav-outline-btn">POS 相關</button>
 		<div class="accordion-content">
 			<a href="/report"><button class="button-1">報修紀錄查詢</button></a>
 			<a href="https://bot.toshibatec.com.tw/hl0800/showjob31.php" target="_blank">
@@ -201,7 +201,7 @@
 
 	<!-- MFP -->
 	<div class="accordion">
-		<button class="nav-outline-btn">MFP相關</button>
+		<button class="nav-outline-btn">MFP 相關</button>
 		<div class="accordion-content">
 			<a href="{{ url_for('mfp_parts') }}"><button class="button-1">MFP_零件表</button></a>
 			<a href="{{ url_for('billing.index') }}"><button class="button-1">TG客戶系統</button></a>
@@ -218,6 +218,10 @@
 
 			<a href="http://eip.toshibatec.com.tw/Main.aspx" target="_blank">
 				<button class="button-2">EIP</button>
+			</a>
+			
+			<a href="https://drive.google.com/drive/folders/1AA1vj047xTfcaTuUO3SVPS1GN48xKN6I?usp=drive_link" target="_blank">
+				<button class="button-2">雲端驅動下載</button>
 			</a>
 		</div>
 	</div>
@@ -241,7 +245,15 @@
 <script>
 document.querySelectorAll('.nav-outline-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-        btn.nextElementSibling.classList.toggle('show');
+        const content = btn.nextElementSibling;
+
+        // ✅ 先關閉其他 accordion
+        document.querySelectorAll('.accordion-content').forEach(c => {
+            if(c !== content) c.classList.remove('show');
+        });
+
+        // 切換當前 accordion
+        content.classList.toggle('show');
     });
 });
 
