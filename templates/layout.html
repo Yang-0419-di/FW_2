@@ -131,9 +131,9 @@
 			padding: 6px 14px;
 			font-size: 18px;
 			font-weight: normal;          /* ✅ 取消粗體 */
-			border: 2px solid #81C0C0;    /* ✅ 藍色外框 */
+			border: 2px solid  #00AEAE;    /* ✅ 藍色外框 */
 			background-color: transparent;
-			color: 	#007979;               /* ✅ 藍色文字 */
+			color: 	#00AEAE;               /* ✅ 藍色文字 */
 			border-radius: 6px;
 			cursor: pointer;
 			transition: all 0.2s ease;
@@ -142,6 +142,9 @@
 		.nav-outline-btn:hover {
 			background-color: #20B2AA;    /* hover 填滿藍色 */
 			color: white;
+		}
+		.section-hidden {
+			display: none !important;
 		}
     </style>
 </head>
@@ -182,35 +185,31 @@
     {% endif %}
 </div>
 <hr>
-<!-- ======================
-     第二列：POS / MFP（同一列）
-====================== -->
-<div class="button-row">
 
-	<!-- POS -->
-	<div class="accordion">
-		<button class="nav-outline-btn">POS 相關</button>
-		<div class="accordion-content">
-			<a href="/report"><button class="button-2">報修紀錄查詢</button></a>
-			<a href="https://bot.toshibatec.com.tw/hl0800/showjob31.php" target="_blank">
-				<button class="button-2">報修刊版</button>
-			</a>
-			<a href="{{ url_for('countpass') }}"><button class="button-2">店長密碼</button></a>
-		</div>
-	</div>
+	<!-- 第二列：POS / MFP -->
+	<div class="button-row accordion-nav">
 
-	<!-- MFP -->
-	<div class="accordion">
-		<button class="nav-outline-btn">MFP 相關</button>
-		<div class="accordion-content">
-			<a href="{{ url_for('mfp_parts') }}"><button class="button-2">MFP_零件表</button></a>
-			<a href="{{ url_for('billing.index') }}"><button class="button-2">TG客戶系統</button></a>
+		<div class="accordion">
+			<button class="nav-outline-btn">POS 相關</button>
+			<div class="accordion-content">
+				<a href="/report"><button class="button-2">報修紀錄查詢</button></a>
+				<a href="https://bot.toshibatec.com.tw/hl0800/showjob31.php" target="_blank">
+					<button class="button-2">報修刊版</button>
+				</a>
+				<a href="{{ url_for('countpass') }}"><button class="button-2">店長密碼</button></a>
+			</div>
 		</div>
-	</div>
-	
-	<!-- 常用連結 -->
-	<div class="accordion">
-		<button class="nav-outline-btn">常用連結</button>
+
+		<div class="accordion">
+			<button class="nav-outline-btn">MFP 相關</button>
+			<div class="accordion-content">
+				<a href="{{ url_for('mfp_parts') }}"><button class="button-2">MFP_零件表</button></a>
+				<a href="{{ url_for('billing.index') }}"><button class="button-2">TG客戶系統</button></a>
+			</div>
+		</div>
+
+		<div class="accordion">
+			<button class="nav-outline-btn">常用連結</button>
 		<div class="accordion-content">
 			<a href="https://imainte.toshibatec.com.tw/i_mainte_center2/login.cfm" target="_blank">
 				<button class="button-2">iMainte</button>
@@ -243,16 +242,15 @@
 <button id="backToTop" onclick="window.scrollTo({top:0, behavior:'smooth'})">回頂部</button>
 
 <script>
-document.querySelectorAll('.nav-outline-btn').forEach(btn => {
+document.querySelectorAll('.accordion-nav .nav-outline-btn').forEach(btn => {
     btn.addEventListener('click', () => {
+        const accordionNav = btn.closest('.accordion-nav');
         const content = btn.nextElementSibling;
 
-        // ✅ 先關閉其他 accordion
-        document.querySelectorAll('.accordion-content').forEach(c => {
-            if(c !== content) c.classList.remove('show');
+        accordionNav.querySelectorAll('.accordion-content').forEach(c => {
+            if (c !== content) c.classList.remove('show');
         });
 
-        // 切換當前 accordion
         content.classList.toggle('show');
     });
 });
@@ -263,5 +261,6 @@ window.addEventListener('scroll', () => {
 });
 </script>
 
+{% block extra_scripts %}{% endblock %}
 </body>
 </html>

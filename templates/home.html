@@ -25,7 +25,7 @@
 		區域數量
 	</h2>
 
-	<div id="area-content" style="display: none;" class="table-container">
+	<div id="area-content" class="table-container section-hidden">
 
 		<!-- === 第一段：C2:H3 === -->
 		<table>
@@ -139,7 +139,7 @@
         <button onclick="toggleHUB()" style="margin-right: 8px;">▶</button>
         HUB異常檢查
     </h2>
-    <div id="HUB-content" style="display: none;" class="table-container">
+    <div id="HUB-content" class="table-container section-hidden">
         <table>
             <thead>
                 {% if HUB_table %}
@@ -189,15 +189,15 @@
 {% block extra_scripts %}
 <script>
     // 切換顯示/隱藏任意區塊（可重複使用）
-    function toggleSection(id, ev) {
-        ev && ev.preventDefault && ev.preventDefault();
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.style.display = (el.style.display === "none" || el.style.display === "") ? "block" : "none";
-    }
+	function toggleSection(id, ev) {
+		ev && ev.preventDefault && ev.preventDefault();
+		const el = document.getElementById(id);
+		if (!el) return;
+		el.classList.toggle('section-hidden');
+	}
 
-    function toggleHUB() {
-        toggleSection('HUB-content');
-    }
+	function toggleHUB() {
+		toggleSection('HUB-content');
+	}
 </script>
 {% endblock %}
