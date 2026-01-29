@@ -51,22 +51,43 @@
     text-align: center;
 }
 
-/* Accordion 樣式 */
+/* ======================
+   Accordion（Outline 風格）
+   對齊 nav-outline-btn
+====================== */
+
 .accordion-header {
+    padding: 6px 14px;
+    font-size: 18px;
+    font-weight: normal;          /* 取消粗體 */
+    border: 2px solid #007bff;    /* 外框 */
+    background-color: transparent;
+    color: #007bff;
+    border-radius: 6px;
     cursor: pointer;
-    padding: 10px;
-    background-color: #007bff;
-	color: white;               /* 白色文字 */
-    font-weight: bold;           /* 粗體 */
-    margin-top: 10px;
-    border-radius: 5px;
+    transition: all 0.2s ease;
     user-select: none;
+	margin: 10px 0; /* ✅ 上下間距 10px */
 }
 
+/* Hover 效果 */
+.accordion-header:hover {
+    background-color: #007bff;
+    color: white;
+}
+
+/* Accordion 內容 */
 .accordion-content {
     display: none;
-    margin-bottom: 10px;
+    margin: 8px 0 12px 10px;  /* 跟按鈕錯開一點 */
 }
+
+
+.accordion-header.dept-total {
+    background-color: #007bff;  /* 你要的顏色 */
+	color: white
+}
+
 </style>
 
 <h1>部門硬碟統計</h1>
@@ -134,6 +155,23 @@
     <!-- 右側顯示表格 -->
     <div class="right-panel">
         <h2>人員填單結果</h2>
+		{% if total %}
+		<div class="person-block">
+			<div class="accordion-header dept-total">部門總計</div>
+			<div class="accordion-content">
+				<table>
+					<tr><th>項目</th><th>新</th><th>舊</th></tr>
+					<tr><td>SC-128G</td><td>{{ total.sc_128_new }}</td><td>{{ total.sc_128_old }}</td></tr>
+					<tr><td>SC-240G</td><td>{{ total.sc_240_new }}</td><td>{{ total.sc_240_old }}</td></tr>
+					<tr><td>SC-256G</td><td>{{ total.sc_256_new }}</td><td>{{ total.sc_256_old }}</td></tr>
+					<tr><td>SC-500G</td><td>{{ total.sc_500_new }}</td><td>{{ total.sc_500_old }}</td></tr>
+					<tr><td>SC-1T</td><td>{{ total.sc_1t_new }}</td><td>{{ total.sc_1t_old }}</td></tr>
+					<tr><td>TM-128G</td><td>{{ total.tm_128_new }}</td><td>{{ total.tm_128_old }}</td></tr>
+					<tr><td>TM-256G</td><td>{{ total.tm_256_new }}</td><td>{{ total.tm_256_old }}</td></tr>
+				</table>
+			</div>
+		</div>
+		{% endif %}
 
         {% if rows %}
             {% for row in rows %}

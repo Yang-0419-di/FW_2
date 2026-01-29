@@ -10,6 +10,8 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.font_manager import FontProperties
 from flask import redirect, url_for
+import gspread
+from google.oauth2.service_account import Credentials
 
 # ====== 新增：引入 billing 模組 ======
 from modules.billing import billing_bp   # ✅ 新增這一行
@@ -21,34 +23,25 @@ cached_xls = None
 version_time = None
 app.config['VERSION_TIME'] = version_time
 
-# ====== SQL基本設定 ======
-DB_PATH = "flask2.db"
 
-# 建表（啟動時執行一次）
-def init_db():
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("""
-        CREATE TABLE IF NOT EXISTS disk_inventory (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user TEXT NOT NULL,
-            sc_128_new INTEGER DEFAULT 0,
-            sc_128_old INTEGER DEFAULT 0,
-            sc_240_new INTEGER DEFAULT 0,
-            sc_240_old INTEGER DEFAULT 0,
-            sc_256_new INTEGER DEFAULT 0,
-            sc_256_old INTEGER DEFAULT 0,
-            sc_500_new INTEGER DEFAULT 0,
-            sc_500_old INTEGER DEFAULT 0,
-            sc_1t_new INTEGER DEFAULT 0,
-            sc_1t_old INTEGER DEFAULT 0,
-            tm_128_new INTEGER DEFAULT 0,
-            tm_128_old INTEGER DEFAULT 0,
-            tm_256_new INTEGER DEFAULT 0,
-            tm_256_old INTEGER DEFAULT 0,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-        """)
-init_db()
+# ====== googlesheet設定 ======
+# JSON 金鑰路徑
+SERVICE_ACCOUNT_FILE = 'disk-485810-82346bf9389a.json'
+
+# 權限範圍
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+
+# 認證
+creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+client = gspread.authorize(creds)
+
+# Google Sheet ID
+SHEET_ID = '1cFPw7C97a_xoqodcmvlWKPZJ2aBFvSBPqoE_PGPmxw0'  # ← 換成你的 ID
+
+# 開啟工作表
+sheet = client.open_by_key(SHEET_ID).sheet1  # 預設第一個工作表
+
+
 
 # ====== 新增：註冊 billing 藍圖 ======
 app.register_blueprint(billing_bp)  # ✅ 新增這一行
@@ -184,61 +177,69 @@ from flask import redirect, url_for
 
 @app.route("/disk", methods=["GET"])
 def disk_page():
-    with sqlite3.connect(DB_PATH) as conn:
-        # 只取每個人最新一筆資料
-        cursor = conn.execute("""
-            SELECT *
-            FROM disk_inventory
-            WHERE id IN (
-                SELECT MAX(id)
-                FROM disk_inventory
-                GROUP BY user
-            )
-            ORDER BY created_at DESC
-        """)
-        rows = [dict(zip([c[0] for c in cursor.description], r)) for r in cursor.fetchall()]
-    return render_template("disk.html", rows=rows)
+    # 讀取所有資料
+    all_rows = sheet.get_all_records()  # list of dict
+
+    # 只取每個 user 最新一筆資料
+    latest_data = {}
+    for row in all_rows:
+        user = row.get('user')
+        if user:
+            latest_data[user] = row  # 後面會覆蓋前面，保留最後一筆
+
+    rows = list(latest_data.values())
+
+    # 計算總計
+    total_keys = ['sc_128_new','sc_128_old','sc_240_new','sc_240_old',
+                  'sc_256_new','sc_256_old','sc_500_new','sc_500_old',
+                  'sc_1t_new','sc_1t_old','tm_128_new','tm_128_old','tm_256_new','tm_256_old']
+    total = {k: sum(int(r.get(k) or 0) for r in rows) for k in total_keys}
+
+    return render_template("disk.html", page_header="POS 相關", rows=rows, total=total)
 
 
 @app.route("/disk/save", methods=["POST"])
 def disk_save():
     data = {
         "user": request.form.get("user"),
-        "sc_128_new": int(request.form.get("sc_128_new") or 0),
-        "sc_128_old": int(request.form.get("sc_128_old") or 0),
-        "sc_240_new": int(request.form.get("sc_240_new") or 0),
-        "sc_240_old": int(request.form.get("sc_240_old") or 0),
-        "sc_256_new": int(request.form.get("sc_256_new") or 0),
-        "sc_256_old": int(request.form.get("sc_256_old") or 0),
-        "sc_500_new": int(request.form.get("sc_500_new") or 0),
-        "sc_500_old": int(request.form.get("sc_500_old") or 0),
-        "sc_1t_new": int(request.form.get("sc_1t_new") or 0),
-        "sc_1t_old": int(request.form.get("sc_1t_old") or 0),
-        "tm_128_new": int(request.form.get("tm_128_new") or 0),
-        "tm_128_old": int(request.form.get("tm_128_old") or 0),
-        "tm_256_new": int(request.form.get("tm_256_new") or 0),
-        "tm_256_old": int(request.form.get("tm_256_old") or 0)
+        "sc_128_new": request.form.get("sc_128_new") or "0",
+        "sc_128_old": request.form.get("sc_128_old") or "0",
+        "sc_240_new": request.form.get("sc_240_new") or "0",
+        "sc_240_old": request.form.get("sc_240_old") or "0",
+        "sc_256_new": request.form.get("sc_256_new") or "0",
+        "sc_256_old": request.form.get("sc_256_old") or "0",
+        "sc_500_new": request.form.get("sc_500_new") or "0",
+        "sc_500_old": request.form.get("sc_500_old") or "0",
+        "sc_1t_new": request.form.get("sc_1t_new") or "0",
+        "sc_1t_old": request.form.get("sc_1t_old") or "0",
+        "tm_128_new": request.form.get("tm_128_new") or "0",
+        "tm_128_old": request.form.get("tm_128_old") or "0",
+        "tm_256_new": request.form.get("tm_256_new") or "0",
+        "tm_256_old": request.form.get("tm_256_old") or "0"
     }
 
     if not data['user']:
         return "⚠️ 必須選擇使用者", 400
 
-    with sqlite3.connect(DB_PATH) as conn:
-        sql = """
-        INSERT INTO disk_inventory
-        (user, sc_128_new, sc_128_old, sc_240_new, sc_240_old, sc_256_new, sc_256_old, 
-         sc_500_new, sc_500_old, sc_1t_new, sc_1t_old, tm_128_new, tm_128_old, tm_256_new, tm_256_old)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """
-        conn.execute(sql, tuple(data.values()))
+    # 寫入 Google Sheet（直接 append 一列）
+    row = [
+        data["user"], data["sc_128_new"], data["sc_128_old"],
+        data["sc_240_new"], data["sc_240_old"],
+        data["sc_256_new"], data["sc_256_old"],
+        data["sc_500_new"], data["sc_500_old"],
+        data["sc_1t_new"], data["sc_1t_old"],
+        data["tm_128_new"], data["tm_128_old"],
+        data["tm_256_new"], data["tm_256_old"]
+    ]
+    sheet.append_row(row)
 
-    # 儲存完成後導回填單頁面
     return redirect(url_for('disk_page'))
 
 
 @app.route('/countpass')
 def countpass():
     return render_template('countpass.html', 
+                           page_header="POS 相關",
                            version=version_time, 
                            home_page=False, 
                            billing_invoice_log=False)
@@ -328,6 +329,7 @@ def report():
         
     return render_template(
         'report.html',
+        page_header="POS 相關",
         version=version_time,
         tables=tables,
         keyword=keyword,
@@ -465,6 +467,7 @@ def mfp_parts():
                 table_html = filtered[['零件名稱', '料號', '型號']].to_html(classes="data-table", index=False, border=0)
     return render_template(
         'mfp_parts.html',
+        page_header="MFP 相關",
         version=version_time,
         message=message,
         table_html=table_html,

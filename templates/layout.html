@@ -31,7 +31,7 @@
         }
 
         button.button-1 { background-color: #20B2AA; }
-        button.button-2 { background-color: #FFA042; }
+        button.button-2 { background-color: #FFAF60; }
         button.button-3 { background-color: #000000; }
 
         /* ======================
@@ -48,34 +48,42 @@
             text-decoration: none;
         }
 
-        /* ======================
-           Accordion（收合）
-        ====================== */
-        .accordion {
-            display: inline-flex;
-            flex-direction: column;
-        }
+		/* ======================
+		   Accordion（收合）
+		====================== */
 
-        .accordion-button {
-            padding: 10px 15px;
-            font-size: 20px;
-            background-color: #20B2AA;
-            color: white;
-            border-radius: 5px;
-            cursor: pointer;
-            border: none;
-        }
+		/* 主按鈕（POS / MFP / 常用連結）→ 改成 Outline 風格 */
+		.accordion-button {
+			padding: 6px 14px;
+			font-size: 18px;
+			font-weight: normal;
+			border: 2px solid #00AEAE;
+			background-color: transparent;
+			color: #00AEAE;
+			border-radius: 6px;
+			cursor: pointer;
+			text-align: left;
+			transition: all 0.2s ease;
+		}
 
-        .accordion-content {
-            display: none;
-            padding-left: 10px;
-            flex-wrap: wrap;
-            gap: 5px;
-        }
+		.accordion-button:hover {
+			background-color: #20B2AA;
+			color: white;
+		}
 
-        .accordion-content.show {
-            display: flex;
-        }
+		/* 子選單容器（一定要留） */
+		.accordion-content {
+			display: none;           /* 預設隱藏 */
+			flex-direction: column;  /* 垂直排列 */
+			gap: 5px;
+			padding-left: 10px;
+		}
+
+		/* 展開狀態 */
+		.accordion-content.show {
+			display: flex;
+		}
+
 
         /* ======================
            表格與其他
@@ -123,29 +131,30 @@
             font-size: 14px;
             margin-bottom: 20px;
         }
-		/* ======================
-		   POS / MFP 專用 Outline 風格
-		   參考「登記 / 編輯」
-		====================== */
-		.nav-outline-btn {
-			padding: 6px 14px;
-			font-size: 18px;
-			font-weight: normal;          /* ✅ 取消粗體 */
-			border: 2px solid  #00AEAE;    /* ✅ 藍色外框 */
-			background-color: transparent;
-			color: 	#00AEAE;               /* ✅ 藍色文字 */
-			border-radius: 6px;
-			cursor: pointer;
-			transition: all 0.2s ease;
-		}
 
-		.nav-outline-btn:hover {
-			background-color: #20B2AA;    /* hover 填滿藍色 */
-			color: white;
-		}
-		.section-hidden {
-			display: none !important;
-		}
+        /* ======================
+           POS / MFP 專用 Outline 風格
+        ====================== */
+        .nav-outline-btn {
+            padding: 6px 14px;
+            font-size: 18px;
+            font-weight: normal;
+            border: 2px solid  #00AEAE;
+            background-color: transparent;
+            color:  #00AEAE;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .nav-outline-btn:hover {
+            background-color: #20B2AA;
+            color: white;
+        }
+
+        .section-hidden {
+            display: none !important;
+        }
     </style>
 </head>
 
@@ -187,47 +196,35 @@
 <hr>
 
 	<!-- 第二列：POS / MFP -->
-	<div class="button-row accordion-nav">
+<!-- 第二列：POS / MFP / 常用連結 -->
+<div class="button-row accordion-nav">
 
-		<div class="accordion">
-			<button class="nav-outline-btn">POS 相關</button>
-			<div class="accordion-content">
-				<a href="/report"><button class="button-2">報修紀錄查詢</button></a>
-				<a href="https://bot.toshibatec.com.tw/hl0800/showjob31.php" target="_blank">
-					<button class="button-2">報修刊版</button>
-				</a>
-				<a href="{{ url_for('countpass') }}"><button class="button-2">店長密碼</button></a>
-				<a href="{{ url_for('disk_page') }}"><button class="button-2">硬碟數量統計表</button></a>
-			</div>
-		</div>
+    <!-- POS Accordion -->
+    <button class="accordion-button">POS 相關功能</button>
+    <div class="accordion-content">
+        <a href="{{ url_for('report') }}" data-section="POS 相關"><button class="button-2">報修紀錄查詢</button></a>
+        <a href="https://bot.toshibatec.com.tw/hl0800/showjob31.php" target="_blank" data-section="POS 相關"><button class="button-2">報修刊版</button></a>
+        <a href="{{ url_for('countpass') }}" data-section="POS 相關"><button class="button-2">店長密碼</button></a>
+        <a href="{{ url_for('disk_page') }}" data-section="POS 相關"><button class="button-2">硬碟數量統計表</button></a>
+    </div>
 
-		<div class="accordion">
-			<button class="nav-outline-btn">MFP 相關</button>
-			<div class="accordion-content">
-				<a href="{{ url_for('mfp_parts') }}"><button class="button-2">MFP_零件表</button></a>
-				<a href="{{ url_for('billing.index') }}"><button class="button-2">TG客戶系統</button></a>
-			</div>
-		</div>
+    <!-- MFP Accordion -->
+    <button class="accordion-button">MFP 相關功能</button>
+    <div class="accordion-content">
+        <a href="{{ url_for('mfp_parts') }}" data-section="MFP 相關"><button class="button-2">MFP_零件表</button></a>
+        <a href="{{ url_for('billing.index') }}" data-section="MFP 相關"><button class="button-2">TG客戶系統</button></a>
+    </div>
 
-		<div class="accordion">
-			<button class="nav-outline-btn">常用連結</button>
-		<div class="accordion-content">
-			<a href="https://imainte.toshibatec.com.tw/i_mainte_center2/login.cfm" target="_blank">
-				<button class="button-2">iMainte</button>
-			</a>
-
-			<a href="http://eip.toshibatec.com.tw/Main.aspx" target="_blank">
-				<button class="button-2">EIP</button>
-			</a>
-			
-			<a href="https://drive.google.com/drive/folders/1AA1vj047xTfcaTuUO3SVPS1GN48xKN6I?usp=drive_link" target="_blank">
-				<button class="button-2">雲端驅動下載</button>
-			</a>
-
-		</div>
-	</div>
+    <!-- 常用連結 Accordion -->
+    <button class="accordion-button">常用連結</button>
+    <div class="accordion-content">
+        <a href="https://imainte.toshibatec.com.tw/i_mainte_center2/login.cfm" target="_blank" data-section="常用連結"><button class="button-2">iMainte</button></a>
+        <a href="http://eip.toshibatec.com.tw/Main.aspx" target="_blank" data-section="常用連結"><button class="button-2">EIP</button></a>
+        <a href="https://drive.google.com/drive/folders/1AA1vj047xTfcaTuUO3SVPS1GN48xKN6I?usp=drive_link" target="_blank" data-section="常用連結"><button class="button-2">雲端驅動下載</button></a>
+    </div>
 
 </div>
+
 {% endif %}
 
 <!-- ======================
@@ -244,22 +241,19 @@
 <button id="backToTop" onclick="window.scrollTo({top:0, behavior:'smooth'})">回頂部</button>
 
 <script>
-document.querySelectorAll('.accordion-nav .nav-outline-btn').forEach(btn => {
+// Accordion 展開/收合
+document.querySelectorAll('.accordion-nav .accordion-button').forEach(btn => {
     btn.addEventListener('click', () => {
-        const accordionNav = btn.closest('.accordion-nav');
-        const content = btn.nextElementSibling;
+        const content = btn.nextElementSibling; // 緊跟的 accordion-content
 
-        accordionNav.querySelectorAll('.accordion-content').forEach(c => {
+        // 收起其他內容
+        btn.closest('.accordion-nav').querySelectorAll('.accordion-content').forEach(c => {
             if (c !== content) c.classList.remove('show');
         });
 
+        // 切換目前內容
         content.classList.toggle('show');
     });
-});
-
-window.addEventListener('scroll', () => {
-    document.getElementById('backToTop').style.display =
-        window.scrollY > 400 ? 'block' : 'none';
 });
 </script>
 
