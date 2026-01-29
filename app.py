@@ -185,7 +185,17 @@ from flask import redirect, url_for
 @app.route("/disk", methods=["GET"])
 def disk_page():
     with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.execute("SELECT * FROM disk_inventory ORDER BY created_at DESC")
+        # 只取每個人最新一筆資料
+        cursor = conn.execute("""
+            SELECT *
+            FROM disk_inventory
+            WHERE id IN (
+                SELECT MAX(id)
+                FROM disk_inventory
+                GROUP BY user
+            )
+            ORDER BY created_at DESC
+        """)
         rows = [dict(zip([c[0] for c in cursor.description], r)) for r in cursor.fetchall()]
     return render_template("disk.html", rows=rows)
 
@@ -222,8 +232,9 @@ def disk_save():
         """
         conn.execute(sql, tuple(data.values()))
 
-    # ✅ 儲存完成後導回填單頁面
+    # 儲存完成後導回填單頁面
     return redirect(url_for('disk_page'))
+
 
 @app.route('/countpass')
 def countpass():
@@ -231,6 +242,7 @@ def countpass():
                            version=version_time, 
                            home_page=False, 
                            billing_invoice_log=False)
+
 
 
 @app.route('/personal/<name>')
