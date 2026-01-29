@@ -26,7 +26,7 @@ app.config['VERSION_TIME'] = version_time
 
 # ====== googlesheet設定 ======
 # JSON 金鑰路徑
-SERVICE_ACCOUNT_FILE = 'disk-485810-82346bf9389a.json'
+SERVICE_ACCOUNT_FILE = '/etc/secrets/disk-485810-82346bf9389a.json'
 
 # 權限範圍
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
