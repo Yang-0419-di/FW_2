@@ -22,8 +22,6 @@
     background-color: #ffffff;
     padding: 20px;
     border-radius: 8px;
-    max-height: 80vh;
-    overflow-y: auto;
 }
 
 /* 每行間距 */
@@ -53,9 +51,21 @@
     text-align: center;
 }
 
-.right-panel h3 {
-    margin-top: 15px;
-    margin-bottom: 5px;
+/* Accordion 樣式 */
+.accordion-header {
+    cursor: pointer;
+    padding: 10px;
+    background-color: #007bff;
+	color: white;               /* 白色文字 */
+    font-weight: bold;           /* 粗體 */
+    margin-top: 10px;
+    border-radius: 5px;
+    user-select: none;
+}
+
+.accordion-content {
+    display: none;
+    margin-bottom: 10px;
 }
 </style>
 
@@ -74,7 +84,7 @@
                 <label>人員：</label>
                 <select name="user" required>
                     <option value="">請選擇</option>
-					<option value="蔡欣璇">蔡欣璇</option>
+                    <option value="蔡欣璇">蔡欣璇</option>
                     <option value="狄澤洋">狄澤洋</option>
                     <option value="湯家瑋">湯家瑋</option>
                     <option value="劉柏均">劉柏均</option>
@@ -128,17 +138,19 @@
         {% if rows %}
             {% for row in rows %}
             <div class="person-block">
-                <h3>{{ row['user'] }}</h3>
-                <table>
-                    <tr><th>項目</th><th>新</th><th>舊</th></tr>
-                    <tr><td>SC-128G</td><td>{{ row['sc_128_new'] }}</td><td>{{ row['sc_128_old'] }}</td></tr>
-                    <tr><td>SC-240G</td><td>{{ row['sc_240_new'] }}</td><td>{{ row['sc_240_old'] }}</td></tr>
-                    <tr><td>SC-256G</td><td>{{ row['sc_256_new'] }}</td><td>{{ row['sc_256_old'] }}</td></tr>
-                    <tr><td>SC-500G</td><td>{{ row['sc_500_new'] }}</td><td>{{ row['sc_500_old'] }}</td></tr>
-                    <tr><td>SC-1T</td><td>{{ row['sc_1t_new'] }}</td><td>{{ row['sc_1t_old'] }}</td></tr>
-                    <tr><td>TM-128G</td><td>{{ row['tm_128_new'] }}</td><td>{{ row['tm_128_old'] }}</td></tr>
-                    <tr><td>TM-256G</td><td>{{ row['tm_256_new'] }}</td><td>{{ row['tm_256_old'] }}</td></tr>
-                </table>
+                <div class="accordion-header">{{ row['user'] }}</div>
+                <div class="accordion-content">
+                    <table>
+                        <tr><th>項目</th><th>新</th><th>舊</th></tr>
+                        <tr><td>SC-128G</td><td>{{ row['sc_128_new'] }}</td><td>{{ row['sc_128_old'] }}</td></tr>
+                        <tr><td>SC-240G</td><td>{{ row['sc_240_new'] }}</td><td>{{ row['sc_240_old'] }}</td></tr>
+                        <tr><td>SC-256G</td><td>{{ row['sc_256_new'] }}</td><td>{{ row['sc_256_old'] }}</td></tr>
+                        <tr><td>SC-500G</td><td>{{ row['sc_500_new'] }}</td><td>{{ row['sc_500_old'] }}</td></tr>
+                        <tr><td>SC-1T</td><td>{{ row['sc_1t_new'] }}</td><td>{{ row['sc_1t_old'] }}</td></tr>
+                        <tr><td>TM-128G</td><td>{{ row['tm_128_new'] }}</td><td>{{ row['tm_128_old'] }}</td></tr>
+                        <tr><td>TM-256G</td><td>{{ row['tm_256_new'] }}</td><td>{{ row['tm_256_old'] }}</td></tr>
+                    </table>
+                </div>
             </div>
             {% endfor %}
         {% else %}
@@ -148,5 +160,22 @@
     </div>
 
 </div>
+
+<script>
+// 讓 accordion 可收合
+document.addEventListener("DOMContentLoaded", function() {
+    const headers = document.querySelectorAll(".accordion-header");
+    headers.forEach(header => {
+        header.addEventListener("click", function() {
+            const content = this.nextElementSibling;
+            if (content.style.display === "block") {
+                content.style.display = "none";
+            } else {
+                content.style.display = "block";
+            }
+        });
+    });
+});
+</script>
 
 {% endblock %}
