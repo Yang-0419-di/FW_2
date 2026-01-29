@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, jsonify, abort
 import pandas as pd
 import requests
+import sqlite3
 from io import BytesIO
 import os, io, base64
 from datetime import datetime
@@ -8,6 +9,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.font_manager import FontProperties
+from flask import redirect, url_for
 
 # ====== 新增：引入 billing 模組 ======
 from modules.billing import billing_bp   # ✅ 新增這一行
@@ -18,6 +20,35 @@ GITHUB_XLSX_URL = 'https://raw.githubusercontent.com/Yang-0419-di/FW_2/master/da
 cached_xls = None
 version_time = None
 app.config['VERSION_TIME'] = version_time
+
+# ====== SQL基本設定 ======
+DB_PATH = "flask2.db"
+
+# 建表（啟動時執行一次）
+def init_db():
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS disk_inventory (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user TEXT NOT NULL,
+            sc_128_new INTEGER DEFAULT 0,
+            sc_128_old INTEGER DEFAULT 0,
+            sc_240_new INTEGER DEFAULT 0,
+            sc_240_old INTEGER DEFAULT 0,
+            sc_256_new INTEGER DEFAULT 0,
+            sc_256_old INTEGER DEFAULT 0,
+            sc_500_new INTEGER DEFAULT 0,
+            sc_500_old INTEGER DEFAULT 0,
+            sc_1t_new INTEGER DEFAULT 0,
+            sc_1t_old INTEGER DEFAULT 0,
+            tm_128_new INTEGER DEFAULT 0,
+            tm_128_old INTEGER DEFAULT 0,
+            tm_256_new INTEGER DEFAULT 0,
+            tm_256_old INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+init_db()
 
 # ====== 新增：註冊 billing 藍圖 ======
 app.register_blueprint(billing_bp)  # ✅ 新增這一行
@@ -149,6 +180,50 @@ def home():
         home_page=True
     )
 
+from flask import redirect, url_for
+
+@app.route("/disk", methods=["GET"])
+def disk_page():
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.execute("SELECT * FROM disk_inventory ORDER BY created_at DESC")
+        rows = [dict(zip([c[0] for c in cursor.description], r)) for r in cursor.fetchall()]
+    return render_template("disk.html", rows=rows)
+
+
+@app.route("/disk/save", methods=["POST"])
+def disk_save():
+    data = {
+        "user": request.form.get("user"),
+        "sc_128_new": int(request.form.get("sc_128_new") or 0),
+        "sc_128_old": int(request.form.get("sc_128_old") or 0),
+        "sc_240_new": int(request.form.get("sc_240_new") or 0),
+        "sc_240_old": int(request.form.get("sc_240_old") or 0),
+        "sc_256_new": int(request.form.get("sc_256_new") or 0),
+        "sc_256_old": int(request.form.get("sc_256_old") or 0),
+        "sc_500_new": int(request.form.get("sc_500_new") or 0),
+        "sc_500_old": int(request.form.get("sc_500_old") or 0),
+        "sc_1t_new": int(request.form.get("sc_1t_new") or 0),
+        "sc_1t_old": int(request.form.get("sc_1t_old") or 0),
+        "tm_128_new": int(request.form.get("tm_128_new") or 0),
+        "tm_128_old": int(request.form.get("tm_128_old") or 0),
+        "tm_256_new": int(request.form.get("tm_256_new") or 0),
+        "tm_256_old": int(request.form.get("tm_256_old") or 0)
+    }
+
+    if not data['user']:
+        return "⚠️ 必須選擇使用者", 400
+
+    with sqlite3.connect(DB_PATH) as conn:
+        sql = """
+        INSERT INTO disk_inventory
+        (user, sc_128_new, sc_128_old, sc_240_new, sc_240_old, sc_256_new, sc_256_old, 
+         sc_500_new, sc_500_old, sc_1t_new, sc_1t_old, tm_128_new, tm_128_old, tm_256_new, tm_256_old)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        conn.execute(sql, tuple(data.values()))
+
+    # ✅ 儲存完成後導回填單頁面
+    return redirect(url_for('disk_page'))
 
 @app.route('/countpass')
 def countpass():
