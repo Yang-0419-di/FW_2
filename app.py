@@ -24,16 +24,26 @@ version_time = None
 app.config['VERSION_TIME'] = version_time
 
 
-# ====== googlesheet設定 ======
-# JSON 金鑰路徑
-SERVICE_ACCOUNT_FILE = '/etc/secrets/disk-485810-82346bf9389a.json'
-
-# 權限範圍
+# ====== Google Sheet 認證（環境變數唯一來源） ======
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
-# 認證
-creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-client = gspread.authorize(creds)
+DEFAULT_RENDER_SECRET = '/etc/secrets/disk-485810-82346bf9389a.json'
+
+def get_google_client():
+    secret_path = os.getenv('GOOGLE_SERVICE_ACCOUNT_FILE', DEFAULT_RENDER_SECRET)
+
+    if not os.path.exists(secret_path):
+        raise FileNotFoundError(
+            f'❌ 找不到 Google Service Account JSON：{secret_path}'
+        )
+
+    print(f'🔐 使用 Service Account：{secret_path}')
+    creds = Credentials.from_service_account_file(secret_path, scopes=SCOPES)
+    return gspread.authorize(creds)
+
+client = get_google_client()
+
+# ====== googlesheet設定 ======
 
 # Google Sheet ID
 SHEET_ID = '1cFPw7C97a_xoqodcmvlWKPZJ2aBFvSBPqoE_PGPmxw0'  # ← 換成你的 ID
@@ -89,11 +99,11 @@ def home():
             xls,
             sheet_name='首頁',
             header=18,      # 第 19 列當欄位名稱
-            usecols="A:D"   # 只抓 A~D
+            usecols="A:E"   # 只抓 A~D
         )
     )
-
-    df_HUB = df_HUB[['門市編號', '門市名稱', '異常原因', '完工確認']]
+    df_HUB = df_HUB[df_HUB['門市編號'].astype(str).str.strip() != '']
+    df_HUB = df_HUB[['門市編號', '門市名稱', 'HUB規格', '異常原因', '完工確認']]
 
 
     df = clean_df(pd.read_excel(xls, sheet_name=0, header=21, nrows=500, usecols="A:O"))
