@@ -103,6 +103,7 @@ def home():
         )
     )
     df_HUB = df_HUB[df_HUB['門市編號'].astype(str).str.strip() != '']
+    df_HUB['門市編號'] = df_HUB['門市編號'].astype(str).str.replace(r'\.0$', '', regex=True)
     df_HUB = df_HUB[['門市編號', '門市名稱', 'HUB規格', '異常原因', '完工確認']]
 
 

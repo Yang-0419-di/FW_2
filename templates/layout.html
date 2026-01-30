@@ -23,7 +23,6 @@
             padding: 10px 15px;
             font-size: 20px;
             margin: 5px;
-            background-color: #007BFF;
             color: white;
             border: none;
             border-radius: 5px;
@@ -31,8 +30,8 @@
         }
 
         button.button-1 { background-color: #20B2AA; }
-        button.button-2 { background-color: #FFAF60; }
-        button.button-3 { background-color: #000000; }
+        button.button-2 { background: linear-gradient(135deg, #f9a826, #fbc687);}
+        button.button-3 { background-color: #007BFF; }
 
         /* ======================
            導覽列
@@ -67,7 +66,7 @@
 		}
 
 		.accordion-button:hover {
-			background-color: #20B2AA;
+			background: linear-gradient(135deg, #00AEAE, #3BC6C6);
 			color: white;
 		}
 
@@ -181,10 +180,18 @@
 ====================== -->
 <div class="button-row" role="navigation">
 
-    <a href="{{ url_for('personal', name='吳宗鴻') }}"><button>吳宗鴻</button></a>
-    <a href="{{ url_for('personal', name='湯家瑋') }}"><button>湯家瑋</button></a>
-    <a href="{{ url_for('personal', name='劉柏均') }}"><button>劉柏均</button></a>
-    <a href="{{ url_for('personal', name='狄澤洋') }}"><button>狄澤洋</button></a>
+    <a href="{{ url_for('personal', name='吳宗鴻') }}">
+    <button class="button-3">吳宗鴻</button>
+	</a>
+	<a href="{{ url_for('personal', name='湯家瑋') }}">
+		<button class="button-3">湯家瑋</button>
+	</a>
+	<a href="{{ url_for('personal', name='劉柏均') }}">
+		<button class="button-3">劉柏均</button>
+	</a>
+	<a href="{{ url_for('personal', name='狄澤洋') }}">
+		<button class="button-3">狄澤洋</button>
+	</a>
 
     <a href="{{ url_for('time_page') }}"><button class="button-1">出勤時間統計</button></a>
     <a href="{{ url_for('calendar_page') }}"><button class="button-2">排程表</button></a>
