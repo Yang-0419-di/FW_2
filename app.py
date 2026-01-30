@@ -84,8 +84,17 @@ def home():
     df_seasons = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:D", skiprows=8, nrows=2))
     df_project1 = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:E", skiprows=12, nrows=3))
 
-    df_HUB = clean_df(pd.read_excel(xls, sheet_name='首頁', header=18, nrows=30, usecols="A:D"))
+    df_HUB = clean_df(
+        pd.read_excel(
+            xls,
+            sheet_name='首頁',
+            header=18,      # 第 19 列當欄位名稱
+            usecols="A:D"   # 只抓 A~D
+        )
+    )
+
     df_HUB = df_HUB[['門市編號', '門市名稱', '異常原因', '完工確認']]
+
 
     df = clean_df(pd.read_excel(xls, sheet_name=0, header=21, nrows=500, usecols="A:O"))
     df = df[['門市編號', '門市名稱', 'PMQ_檢核', '專案檢核', 'HUB', '完工檢核']]
