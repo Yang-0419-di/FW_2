@@ -12,6 +12,8 @@ from matplotlib.font_manager import FontProperties
 from flask import redirect, url_for
 import gspread
 from google.oauth2.service_account import Credentials
+from modules.gsheet import client, SHEET_ID
+
 
 # ====== 新增：引入 billing 模組 ======
 from modules.billing import billing_bp   # ✅ 新增這一行
@@ -165,8 +167,16 @@ def home():
 
 from flask import redirect, url_for
 
+
 @app.route("/disk", methods=["GET"])
 def disk_page():
+    # 讀取 Google Sheet
+    try:
+        sh = client.open_by_key(SHEET_ID)
+        sheet = sh.worksheet("硬碟統計")  # ← 指定硬碟統計分頁
+    except gspread.exceptions.APIError as e:
+        return f"⚠️ 無法讀取 Google Sheet: {e}", 500
+
     # 讀取所有資料
     all_rows = sheet.get_all_records()  # list of dict
 
@@ -180,14 +190,17 @@ def disk_page():
     rows = list(latest_data.values())
 
     # 計算總計
-    total_keys = ['sc_128_new','sc_128_old','sc_240_new','sc_240_old',
-                  'sc_256_new','sc_256_old','sc_500_new','sc_500_old',
-                  'sc_1t_new','sc_1t_old','tm_128_new','tm_128_old','tm_256_new','tm_256_old']
+    total_keys = [
+        'sc_128_new','sc_128_old','sc_240_new','sc_240_old',
+        'sc_256_new','sc_256_old','sc_500_new','sc_500_old',
+        'sc_1t_new','sc_1t_old','tm_128_new','tm_128_old','tm_256_new','tm_256_old'
+    ]
     total = {k: sum(int(r.get(k) or 0) for r in rows) for k in total_keys}
 
     return render_template("disk.html", page_header="POS 相關", rows=rows, total=total)
 
 
+# ====== /disk/save 儲存 ======
 @app.route("/disk/save", methods=["POST"])
 def disk_save():
     data = {
@@ -211,17 +224,22 @@ def disk_save():
     if not data['user']:
         return "⚠️ 必須選擇使用者", 400
 
-    # 寫入 Google Sheet（直接 append 一列）
-    row = [
-        data["user"], data["sc_128_new"], data["sc_128_old"],
-        data["sc_240_new"], data["sc_240_old"],
-        data["sc_256_new"], data["sc_256_old"],
-        data["sc_500_new"], data["sc_500_old"],
-        data["sc_1t_new"], data["sc_1t_old"],
-        data["tm_128_new"], data["tm_128_old"],
-        data["tm_256_new"], data["tm_256_old"]
-    ]
-    sheet.append_row(row)
+    # 直接 append 一列到硬碟統計分頁
+    try:
+        sh = client.open_by_key(SHEET_ID)
+        sheet = sh.worksheet("硬碟統計")  # ← 指定硬碟統計分頁
+        row = [
+            data["user"], data["sc_128_new"], data["sc_128_old"],
+            data["sc_240_new"], data["sc_240_old"],
+            data["sc_256_new"], data["sc_256_old"],
+            data["sc_500_new"], data["sc_500_old"],
+            data["sc_1t_new"], data["sc_1t_old"],
+            data["tm_128_new"], data["tm_128_old"],
+            data["tm_256_new"], data["tm_256_old"]
+        ]
+        sheet.append_row(row)
+    except gspread.exceptions.APIError as e:
+        return f"⚠️ 無法寫入 Google Sheet: {e}", 500
 
     return redirect(url_for('disk_page'))
 
