@@ -770,6 +770,10 @@ def person_page(sheet):
     col_remark = df3.columns[2]  # 第3欄
     col_method = df3.columns[5]  # 第6欄
 
+    # --- 轉成 object 型別，避免寫入文字時出錯 ---
+    df3[col_remark] = df3[col_remark].astype(object)
+    df3[col_method] = df3[col_method].astype(object)
+    
     # --- 合併 Google Sheet 資料 ---
     for idx, row in df3.iterrows():
         dev_id = str(row["設備代號"]).strip()
