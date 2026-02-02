@@ -6,6 +6,8 @@ from flask import Blueprint, render_template, request, current_app
 import requests
 from io import BytesIO
 import pandas as pd
+from modules.gsheet import get_person_worksheet 
+
 
 GITHUB_XLSX_URL = 'https://raw.githubusercontent.com/Yang-0419-di/FW_2/master/MFP/MFP.xlsx'
 _cached_xls = None   # 快取避免多次下載
@@ -684,6 +686,65 @@ def mfp_summary():
         billing_mfp_summary=True
     )
 
+
+
+# ================================================================
+# 讀取備註（person_page 用）
+# ================================================================
+def load_person_remarks(sheet_name):
+    ws = get_person_worksheet(sheet_name)
+    rows = ws.get_all_records()
+
+    return {
+        r["設備代號"]: {
+            "remark": r.get("備註", ""),
+            "method": r.get("抄表方式", "")
+        }
+        for r in rows
+    }
+    
+    
+# ================================================================
+# 寫回備註（AJAX API 用）
+# ================================================================
+def upsert_person_field(sheet_name, device_id, field, value):
+    ws = get_person_worksheet(sheet_name)
+    header = ws.row_values(1)
+
+    device_col = header.index("設備代號") + 1
+    target_col = {
+        "remark": header.index("備註") + 1,
+        "method": header.index("抄表方式") + 1
+    }[field]
+
+    records = ws.get_all_records()
+
+    for idx, r in enumerate(records, start=2):
+        if str(r.get("設備代號")).strip() == str(device_id):
+            ws.update_cell(idx, target_col, value)
+            return
+
+    ws.append_row([
+        device_id,
+        value if field == "remark" else "",
+        value if field == "method" else ""
+    ])
+    
+    
+# ================================================================
+# 新增 API
+# ================================================================
+@bp.route("/save_person_field", methods=["POST"])
+def save_person_field():
+    data = request.json
+    upsert_person_field(
+        sheet_name=data["sheet"],
+        device_id=data["device_id"],
+        field=data["field"],
+        value=data["value"]
+    )
+    return {"ok": True}
+
 # ================================================================
 # 2️⃣ 人員個人資料頁（person）
 # ================================================================
@@ -691,11 +752,9 @@ def mfp_summary():
 def person_page(sheet):
 
     xls = load_github_excel()
-    
-    # 取得搜尋字串
+
     keyword = request.args.get("keyword", "").strip()
 
-    # 第一區塊：A1:P4
     df1 = pd.read_excel(
         xls,
         sheet_name=sheet,
@@ -704,7 +763,6 @@ def person_page(sheet):
         nrows=4
     )
 
-    # 第二區塊：A6:P9
     df2 = pd.read_excel(
         xls,
         sheet_name=sheet,
@@ -714,15 +772,13 @@ def person_page(sheet):
         nrows=4
     )
 
-    # 第三區塊：A14 之後（客戶列表）
     df3 = pd.read_excel(
         xls,
         sheet_name=sheet,
         header=13,
-        usecols="A:M"
+        usecols="A:F"
     )
 
-    # ⭐⭐⭐ 搜尋必須放在 df3 讀取之後 ⭐⭐⭐
     if keyword:
         df3 = df3[
             df3.apply(
@@ -731,15 +787,18 @@ def person_page(sheet):
             )
         ]
 
+    # ✅ 注意：return 一定要在 function 裡面
     return render_template(
         "tjw.html",
         table1=df1.to_html(index=False, classes="table table-bordered"),
         table2=df2.to_html(index=False, classes="table table-bordered"),
-        table3=df3.to_html(index=False, classes="table table-bordered"),
+        df3=df3,                    # ← 這行很重要
         page_name=sheet,
         keyword=keyword,
         billing_person=True
     )
+
+
 
 
 # ✅ 讓主程式 app.py 可以 import billing_bp

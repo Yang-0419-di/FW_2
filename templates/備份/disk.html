@@ -1,0 +1,219 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<style>
+.main-layout {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+/* 左側填單區 */
+.left-panel {
+    flex: 0 0 400px;   /* 固定寬度 400px */
+    background-color: #f2f2f2;
+    padding: 20px;
+    border-radius: 8px;
+}
+
+/* 右側表格區 */
+.right-panel {
+    flex: 1;           /* 自動撐滿剩餘空間 */
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 8px;
+}
+
+/* 每行間距 */
+.row {
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* input 欄位統一寬度，數字靠右 */
+.left-panel input[type="text"] {
+    width: 60px;
+    text-align: right;
+}
+
+/* 表格樣式 */
+.right-panel table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+}
+
+.right-panel th, .right-panel td {
+    border: 1px solid #ccc;
+    padding: 5px 10px;
+    text-align: center;
+}
+
+/* ======================
+   Accordion（Outline 風格）
+   對齊 nav-outline-btn
+====================== */
+
+.accordion-header {
+    padding: 6px 14px;
+    font-size: 18px;
+    font-weight: normal;          /* 取消粗體 */
+    border: 2px solid #007bff;    /* 外框 */
+    background-color: transparent;
+    color: #007bff;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+	margin: 10px 0; /* ✅ 上下間距 10px */
+}
+
+/* Hover 效果 */
+.accordion-header:hover {
+    background-color: #007bff;
+    color: white;
+}
+
+/* Accordion 內容 */
+.accordion-content {
+    display: none;
+    margin: 8px 0 12px 10px;  /* 跟按鈕錯開一點 */
+}
+
+
+.accordion-header.dept-total {
+    background-color: #007bff;  /* 你要的顏色 */
+	color: white
+}
+
+</style>
+
+<h1>部門硬碟統計</h1>
+
+<div class="main-layout">
+
+    <!-- 左側表單 -->
+    <div class="left-panel">
+
+        <h2>隨身數量填寫</h2>
+
+        <form action="{{ url_for('disk_save') }}" method="POST">
+
+            <div class="row">
+                <label>人員：</label>
+                <select name="user" required>
+                    <option value="">請選擇</option>
+                    <option value="蔡欣璇">蔡欣璇</option>
+                    <option value="狄澤洋">狄澤洋</option>
+                    <option value="湯家瑋">湯家瑋</option>
+                    <option value="劉柏均">劉柏均</option>
+                    <option value="吳宗鴻">吳宗鴻</option>
+                </select>
+            </div>
+
+            <h3>SC - 第一顆硬碟</h3>
+            <div class="row">
+                <span>128G</span> 新 <input type="text" name="sc_128_new" value="0">
+                舊 <input type="text" name="sc_128_old" value="0">
+            </div>
+            <div class="row">
+                <span>240G</span> 新 <input type="text" name="sc_240_new" value="0">
+                舊 <input type="text" name="sc_240_old" value="0">
+            </div>
+            <div class="row">
+                <span>256G</span> 新 <input type="text" name="sc_256_new" value="0">
+                舊 <input type="text" name="sc_256_old" value="0">
+            </div>
+
+            <h3>SC - 第二顆硬碟</h3>
+            <div class="row">
+                <span>500G</span> 新 <input type="text" name="sc_500_new" value="0">
+                舊 <input type="text" name="sc_500_old" value="0">
+            </div>
+            <div class="row">
+                <span>1T</span> 新 <input type="text" name="sc_1t_new" value="0">
+                舊 <input type="text" name="sc_1t_old" value="0">
+            </div>
+
+            <h3>TM - 硬碟</h3>
+            <div class="row">
+                <span>128G</span> 新 <input type="text" name="tm_128_new" value="0">
+                舊 <input type="text" name="tm_128_old" value="0">
+            </div>
+            <div class="row">
+                <span>256G</span> 新 <input type="text" name="tm_256_new" value="0">
+                舊 <input type="text" name="tm_256_old" value="0">
+            </div>
+
+            <button type="submit">儲存</button>
+        </form>
+
+    </div>
+
+    <!-- 右側顯示表格 -->
+    <div class="right-panel">
+        <h2>人員填單結果</h2>
+		{% if total %}
+		<div class="person-block">
+			<div class="accordion-header dept-total">部門總計</div>
+			<div class="accordion-content">
+				<table>
+					<tr><th>項目</th><th>新</th><th>舊</th></tr>
+					<tr><td>SC-128G</td><td>{{ total.sc_128_new }}</td><td>{{ total.sc_128_old }}</td></tr>
+					<tr><td>SC-240G</td><td>{{ total.sc_240_new }}</td><td>{{ total.sc_240_old }}</td></tr>
+					<tr><td>SC-256G</td><td>{{ total.sc_256_new }}</td><td>{{ total.sc_256_old }}</td></tr>
+					<tr><td>SC-500G</td><td>{{ total.sc_500_new }}</td><td>{{ total.sc_500_old }}</td></tr>
+					<tr><td>SC-1T</td><td>{{ total.sc_1t_new }}</td><td>{{ total.sc_1t_old }}</td></tr>
+					<tr><td>TM-128G</td><td>{{ total.tm_128_new }}</td><td>{{ total.tm_128_old }}</td></tr>
+					<tr><td>TM-256G</td><td>{{ total.tm_256_new }}</td><td>{{ total.tm_256_old }}</td></tr>
+				</table>
+			</div>
+		</div>
+		{% endif %}
+
+        {% if rows %}
+            {% for row in rows %}
+            <div class="person-block">
+                <div class="accordion-header">{{ row['user'] }}</div>
+                <div class="accordion-content">
+                    <table>
+                        <tr><th>項目</th><th>新</th><th>舊</th></tr>
+                        <tr><td>SC-128G</td><td>{{ row['sc_128_new'] }}</td><td>{{ row['sc_128_old'] }}</td></tr>
+                        <tr><td>SC-240G</td><td>{{ row['sc_240_new'] }}</td><td>{{ row['sc_240_old'] }}</td></tr>
+                        <tr><td>SC-256G</td><td>{{ row['sc_256_new'] }}</td><td>{{ row['sc_256_old'] }}</td></tr>
+                        <tr><td>SC-500G</td><td>{{ row['sc_500_new'] }}</td><td>{{ row['sc_500_old'] }}</td></tr>
+                        <tr><td>SC-1T</td><td>{{ row['sc_1t_new'] }}</td><td>{{ row['sc_1t_old'] }}</td></tr>
+                        <tr><td>TM-128G</td><td>{{ row['tm_128_new'] }}</td><td>{{ row['tm_128_old'] }}</td></tr>
+                        <tr><td>TM-256G</td><td>{{ row['tm_256_new'] }}</td><td>{{ row['tm_256_old'] }}</td></tr>
+                    </table>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p>尚無資料</p>
+        {% endif %}
+
+    </div>
+
+</div>
+
+<script>
+// 讓 accordion 可收合
+document.addEventListener("DOMContentLoaded", function() {
+    const headers = document.querySelectorAll(".accordion-header");
+    headers.forEach(header => {
+        header.addEventListener("click", function() {
+            const content = this.nextElementSibling;
+            if (content.style.display === "block") {
+                content.style.display = "none";
+            } else {
+                content.style.display = "block";
+            }
+        });
+    });
+});
+</script>
+
+{% endblock %}

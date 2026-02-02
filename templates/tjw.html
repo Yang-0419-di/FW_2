@@ -1,38 +1,93 @@
 {% extends "layout.html" %}
-
 {% block content %}
 
-<!-- 🔹 新增返回上一頁按鈕 -->
+<!-- 🔹 導覽按鈕 -->
 <div style="margin-bottom:10px;">
-	  <a href="{{ url_for('billing.index') }}"><button class="button-1">TG客戶系統</button></a>
-	  <a href="{{ url_for('billing.mfp_summary') }}"><button class="button-1">客戶總表</button></a>
-	  <a href="{{ url_for('billing.person_page', sheet='湯家瑋') }}"><button>湯家瑋</button></a>
-	  <a href="{{ url_for('billing.person_page', sheet='吳宗鴻') }}"><button>吳宗鴻</button></a>
-	  <a href="{{ url_for('billing.person_page', sheet='劉柏均') }}"><button>劉柏均</button></a>
-  <button type="button" onclick="history.back()" style="padding:10px 15px; font-size:20px;">← 返回上一頁</button>
-  <a href="/"><button class="button-3">回首頁</button></a>
+    <a href="{{ url_for('billing.index') }}"><button class="button-1">TG客戶系統</button></a>
+    <a href="{{ url_for('billing.mfp_summary') }}"><button class="button-1">客戶總表</button></a>
+    <a href="{{ url_for('billing.person_page', sheet='湯家瑋') }}"><button>湯家瑋</button></a>
+    <a href="{{ url_for('billing.person_page', sheet='吳宗鴻') }}"><button>吳宗鴻</button></a>
+    <a href="{{ url_for('billing.person_page', sheet='劉柏均') }}"><button>劉柏均</button></a>
+    <button type="button" onclick="history.back()">← 返回上一頁</button>
+    <a href="/"><button class="button-3">回首頁</button></a>
 </div>
 
 <h2 style="text-align:center; margin-top:20px;">
     {{ page_name }} — 客戶資料分析
 </h2>
 
-<!-- 第一區塊：客戶數量 -->
-<h3 style="margin-top:30px; color:#333; font-size:20px;">客戶數量</h3>
+<!-- 第一區塊 -->
+<h3>客戶數量</h3>
 <div class="table-container-NO">
     {{ table1 | safe }}
 </div>
 
-<!-- 第二區塊：保養週期 -->
-<h3 style="margin-top:30px; color:#333; font-size:20px;">保養週期</h3>
+<!-- 第二區塊 -->
+<h3>保養週期</h3>
 <div class="table-container-NO">
     {{ table2 | safe }}
 </div>
 
-<!-- 第三區塊：客戶明細 -->
-<h3 style="margin-top:30px; color:#333; font-size:20px;">跑勤檢核</h3>
-<div class="table-container-NO">
-    {{ table3 | safe }}
-</div>
+<!-- 第三區塊 -->
+<h3>跑勤檢核</h3>
+
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            {% for col in df3.columns %}
+                <th>{{ col }}</th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for _, row in df3.iterrows() %}
+        <tr>
+            {% for col in df3.columns %}
+                {% if col == "備註" %}
+                    <td>
+                        <input type="text"
+                               value="{{ row[col] }}"
+                               data-device="{{ row['設備代號'] }}"
+                               data-field="remark"
+                               class="gs-input"
+                               style="width:100%;">
+                    </td>
+
+                {% elif col == "抄表方式" %}
+                    <td>
+                        <input type="text"
+                               value="{{ row[col] }}"
+                               data-device="{{ row['設備代號'] }}"
+                               data-field="method"
+                               class="gs-input"
+                               style="width:100%;">
+                    </td>
+
+                {% else %}
+                    <td>{{ row[col] }}</td>
+                {% endif %}
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<!-- 🔹 自動儲存 JS -->
+<script>
+document.querySelectorAll('.gs-input').forEach(el => {
+    el.addEventListener('change', () => {
+        fetch('{{ url_for("billing.save_person_field") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                sheet: "{{ page_name }}",
+                device_id: el.dataset.device,
+                field: el.dataset.field,
+                value: el.value
+            })
+        });
+    });
+});
+</script>
 
 {% endblock %}

@@ -3,9 +3,60 @@
 
     <!-- 🔹 新增返回上一頁按鈕 -->
 	<div style="margin-bottom:10px;">
-	  <button type="button" onclick="history.back()" style="padding:10px 15px; font-size:20px;">← 返回上一頁</button>
+	  <a href="{{ url_for('billing.index') }}" class="button button-1">TG客戶系統</a>
+		<a href="{{ url_for('billing.mfp_summary') }}" class="button button-1">客戶總表</a>
+		<a href="{{ url_for('billing.person_page', sheet='湯家瑋') }}" class="button button-3">湯家瑋</a>
+		<a href="{{ url_for('billing.person_page', sheet='吳宗鴻') }}" class="button button-3">吳宗鴻</a>
+		<a href="{{ url_for('billing.person_page', sheet='劉柏均') }}" class="button button-3">劉柏均</a>
+		<button type="button" onclick="history.back()" class="button">← 返回上一頁</button>
 	  <a href="/"><button class="button-3">回首頁</button></a>
 	</div>
+
+<h2>區域台數</h2>
+
+<div class="table-container">
+    <table>
+        <thead>
+            <tr>
+                {% for col in area_header %}
+                    <th>{{ col }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in area_body %}
+            <tr>
+                {% for cell in row %}
+                    <td>{{ cell }}</td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<h2>保養週期評估</h2>
+
+<div class="table-container">
+    <table>
+        <thead>
+            <tr>
+                {% for col in cycle_header %}
+                    <th>{{ col }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in cycle_body %}
+            <tr>
+                {% for cell in row %}
+                    <td>{{ cell }}</td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
 	
 <h2>客戶總表</h2>
 

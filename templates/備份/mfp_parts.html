@@ -1,0 +1,85 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<!-- === MFP 零件表頁 mfp_parts.html === -->
+
+<form method="POST" action="/mfp_parts" class="mfp-form">
+    <label>選擇機型:</label>
+    <select name="model" required>
+        <option value="">--請選擇--</option>
+        <option value="08、18A" {% if selected_model=="08、18A" %}selected{% endif %}>08、18A</option>
+        <option value="28A" {% if selected_model=="28A" %}selected{% endif %}>28A</option>
+        <option value="00、10AC" {% if selected_model=="00、10AC" %}selected{% endif %}>00、10AC</option>
+        <option value="05AC" {% if selected_model=="05AC" %}selected{% endif %}>05AC</option>
+        <option value="15AC" {% if selected_model=="15AC" %}selected{% endif %}>15AC</option>
+        <option value="25AC" {% if selected_model=="25AC" %}selected{% endif %}>25AC</option>
+    </select>
+
+    <label>選擇部件:</label>
+    <select name="part">
+        <option value="">--全部--</option>
+        <option value="滾筒組" {% if selected_part=="滾筒組" %}selected{% endif %}>滾筒組</option>
+        <option value="顯像組" {% if selected_part=="顯像組" %}selected{% endif %}>顯像組</option>
+        <option value="定著組" {% if selected_part=="定著組" %}selected{% endif %}>定著組</option>
+        <option value="取紙組" {% if selected_part=="取紙組" %}selected{% endif %}>取紙組</option>
+        <option value="轉寫組" {% if selected_part=="轉寫組" %}selected{% endif %}>轉寫組</option>
+    </select>
+
+    <button type="submit">搜尋</button>
+</form>
+
+{% if message %}
+<div class="message">{{ message }}</div>
+{% endif %}
+
+{% if table_html %}
+<div class="table-container">
+    {{ table_html|safe }}
+</div>
+{% endif %}
+
+<style>
+.mfp-form {
+    margin-bottom: 15px;
+    text-align: left;
+}
+
+.mfp-form label {
+    margin-right: 6px;
+    font-weight: bold;
+}
+
+.mfp-form select {
+    padding: 8px 10px;
+    margin-right: 8px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+}
+
+.mfp-form button {
+    padding: 8px 14px;
+    background-color: #007BFF;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.mfp-form button:hover {
+    background-color: #0056b3;
+}
+
+.message {
+    margin-top: 10px;
+    color: #555;
+    font-style: italic;
+}
+
+.table-container {
+    margin-top: 15px;
+    overflow-x: auto;
+    border: 1px solid #ccc;
+    background-color: white;
+}
+</style>
+{% endblock %}
