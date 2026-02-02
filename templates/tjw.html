@@ -13,24 +13,27 @@
 </div>
 
 <h2 style="text-align:center; margin-top:20px;">
-    {{ page_name }} — 客戶資料分析
+    {{ page_name }} — 個人客戶資料
 </h2>
 
-<!-- 第一區塊 -->
-<h3>客戶數量</h3>
-<div class="table-container-NO">
-    {{ table1 | safe }}
+<!-- ===== 第一區塊 Accordion（客戶數量） ===== -->
+<button class="accordion-button">客戶數量</button>
+<div class="accordion-content">
+    <div class="table-container-NO">
+        {{ table1 | safe }}
+    </div>
 </div>
 
-<!-- 第二區塊 -->
-<h3>保養週期</h3>
-<div class="table-container-NO">
-    {{ table2 | safe }}
+<!-- ===== 第二區塊 Accordion（保養週期） ===== -->
+<button class="accordion-button">保養週期</button>
+<div class="accordion-content">
+    <div class="table-container-NO">
+        {{ table2 | safe }}
+    </div>
 </div>
 
-<!-- 第三區塊 -->
+<!-- 第三區塊（客戶資訊表格） -->
 <h3>客戶資訊</h3>
-
 <table class="table table-bordered">
     <thead>
         <tr>
@@ -52,7 +55,6 @@
                                class="gs-input"
                                style="width:100%;">
                     </td>
-
                 {% elif col == "抄表方式" %}
                     <td>
                         <input type="text"
@@ -62,7 +64,6 @@
                                class="gs-input"
                                style="width:100%;">
                     </td>
-
                 {% else %}
                     <td>{{ row[col] }}</td>
                 {% endif %}
@@ -88,6 +89,54 @@ document.querySelectorAll('.gs-input').forEach(el => {
         });
     });
 });
+
+// Accordion 展開/收合 JS（套用你提供樣式）
+document.querySelectorAll('.accordion-button').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const content = btn.nextElementSibling;
+
+        // 收起其他內容
+        document.querySelectorAll('.accordion-content').forEach(c => {
+            if (c !== content) c.classList.remove('show');
+        });
+
+        // 切換目前內容
+        content.classList.toggle('show');
+    });
+});
 </script>
+
+<!-- Accordion CSS（套用你提供樣式） -->
+<style>
+.accordion-button {
+    padding: 6px 14px;
+    font-size: 18px;
+    font-weight: normal;
+    border: 2px solid #00AEAE;
+    background-color: transparent;
+    color: #00AEAE;
+    border-radius: 6px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.2s ease;
+    margin-top: 10px;
+}
+
+.accordion-button:hover {
+    background: linear-gradient(135deg, #00AEAE, #3BC6C6);
+    color: white;
+}
+
+.accordion-content {
+    display: none;           /* 預設收起 */
+    flex-direction: column;
+    gap: 5px;
+    padding: 10px 0;
+}
+
+.accordion-content.show {
+    display: flex;
+}
+</style>
 
 {% endblock %}
