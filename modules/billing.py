@@ -751,52 +751,65 @@ def save_person_field():
 # ================================================================
 @bp.route("/person/<sheet>")
 def person_page(sheet):
-    xls = load_github_excel()
     keyword = request.args.get("keyword", "").strip()
 
-    # --- 讀 GitHub Excel ---
+    # --- 讀 GitHub Excel 保留前兩區塊（Accordion） ---
+    xls = load_github_excel()
     df1 = pd.read_excel(xls, sheet_name=sheet, header=0, usecols="A:R", nrows=4)
     df2 = pd.read_excel(xls, sheet_name=sheet, header=0, usecols="A:R", skiprows=5, nrows=4)
-    df3 = pd.read_excel(xls, sheet_name=sheet, header=13, usecols="A:F")
 
-    # --- 從 Google Sheet 讀取備註（C/F欄） ---
+    # --- 從 SQLite 讀取客戶資料 ---
+    conn = sqlite3.connect(DB_FILE)
+    query = "SELECT customer_name, pm, device_id FROM customers WHERE service_person = ?"
+    df3 = pd.read_sql_query(query, conn, params=(sheet,))
+    conn.close()
+
+    # --- 從 Google Sheet 讀取備註與抄表方式 ---
     gs_data = load_person_remarks(sheet)  # dict keyed by 設備代號
 
-    # 確認 df3 有欄位名稱
-    if "設備代號" not in df3.columns:
-        return "df3 欄位錯誤，沒有設備代號", 500
+    # 新增欄位 備註 / 抄表方式
+    df3["備註"] = ""
+    df3["抄表方式"] = ""
 
-    # C欄 = 備註, F欄 = 抄表方式
-    col_remark = df3.columns[2]  # 第3欄
-    col_method = df3.columns[5]  # 第6欄
-
-    # --- 轉成 object 型別，避免寫入文字時出錯 ---
-    df3[col_remark] = df3[col_remark].astype(object)
-    df3[col_method] = df3[col_method].astype(object)
-    
     # --- 合併 Google Sheet 資料 ---
     for idx, row in df3.iterrows():
-        dev_id = str(row["設備代號"]).strip()
+        dev_id = str(row["device_id"]).strip()
         if dev_id in gs_data:
-            df3.at[idx, col_remark] = gs_data[dev_id].get("remark", "")
-            df3.at[idx, col_method] = gs_data[dev_id].get("method", "")
-            
+            df3.at[idx, "備註"] = gs_data[dev_id].get("remark", "")
+            df3.at[idx, "抄表方式"] = gs_data[dev_id].get("method", "")
+
     # ✅ 將所有 NaN 轉成空字串
-        df3 = df3.fillna("")
+    df3 = df3.fillna("")
+
+    # --- 加上「項次」欄位 ---
+    df3.insert(0, "項次", range(1, len(df3) + 1))
+
+    # --- 調整欄位順序 ---
+    df3 = df3[["項次", "customer_name", "備註", "pm", "device_id", "抄表方式"]]
+
+    # --- 表頭重新命名 ---
+    df3 = df3.rename(columns={
+        "customer_name": "客戶名稱",
+        "pm": "保養週期",
+        "device_id": "設備代號"
+    })
 
     # --- 關鍵字過濾 ---
     if keyword:
         df3 = df3[df3.apply(lambda r: r.astype(str).str.contains(keyword, case=False, na=False).any(), axis=1)]
 
+    # --- 傳給模板 ---
     return render_template(
         "tjw.html",
         table1=df1.to_html(index=False, classes="table table-bordered"),
         table2=df2.to_html(index=False, classes="table table-bordered"),
-        df3=df3,  # ← Google Sheet 與 GitHub Excel 已混合
+        df3=df3,  # ← SQLite + Google Sheet 資料
         page_name=sheet,
         keyword=keyword,
         billing_person=True
     )
+
+
 
 
 # ✅ 讓主程式 app.py 可以 import billing_bp
