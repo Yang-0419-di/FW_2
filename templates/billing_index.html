@@ -136,30 +136,33 @@ button:hover { background-color: #0056b3; }
     {% endif %}
 
     <!-- 客戶資料區塊 -->
-    {% if customer %}
-    <h3 style="font-size:22px;">客戶資料</h3>
-    <form method="post" action="{{ url_for('billing.index') }}">
-      <table class="contract-table">
-        <input type="hidden" name="device_id" value="{{ customer.device_id }}">
-        <tr><th>項目</th><th>內容</th></tr>
-        <tr><td>客戶名稱</td><td><input type="text" name="customer_name" value="{{ customer.customer_name }}" style="width:98%;"></td></tr>
-        <tr><td>設備編號</td><td><input type="text" name="device_id_new" value="{{ customer.device_id }}" style="width:98%;"></td></tr>
-        <tr><td>機號</td><td><input type="text" name="device_number" value="{{ customer.device_number }}" style="width:98%;"></td></tr>
-        <tr><td>機型</td><td><input type="text" name="machine_model" value="{{ customer.machine_model }}" style="width:98%;"></td></tr>
-        <tr><td>統一編號</td><td><input type="text" name="tax_id" value="{{ customer.tax_id }}" style="width:98%;"></td></tr>
-        <tr><td>裝機地址</td><td><input type="text" name="install_address" value="{{ customer.install_address }}" style="width:98%;"></td></tr>
-        <tr><td>服務人員</td><td><input type="text" name="service_person" value="{{ customer.service_person }}" style="width:98%;"></td></tr>
-        <tr><td>契約編號</td><td><input type="text" name="contract_number" value="{{ customer.contract_number }}" style="width:98%;"></td></tr>
-        <tr><td>合約開始日</td><td><input type="text" name="contract_start" value="{{ customer.contract_start }}"></td></tr>
-        <tr><td>合約到期日</td><td><input type="text" name="contract_end" value="{{ customer.contract_end }}"></td></tr>
-      </table>
+	{% if customer %}
+	<h3 style="font-size:22px;">客戶資料</h3>
+	<form method="post" action="{{ url_for('billing.index') }}">
+	  <table class="contract-table">
+		<input type="hidden" name="device_id" value="{{ customer.device_id }}">
+		<tr><th>項目</th><th>內容</th></tr>
 
-      <div style="margin-top:10px; text-align:left;">
-        <button type="submit" name="mode" value="update_customer">💾 更新客戶資料</button>
-        <button type="submit" name="mode" value="new_customer" style="margin-left:10px;">🆕 新客戶建檔</button>
-      </div>
-    </form>
-    {% endif %}
+		<tr><td>設備編號</td><td><input type="text" name="device_id" value="{{ customer.device_id }}" style="width:98%;"></td></tr>
+		<tr><td>客戶名稱</td><td><input type="text" name="customer_name" value="{{ customer.customer_name }}" style="width:98%;"></td></tr>
+		<tr><td>保養週期</td><td><input type="text" name="pm" value="{{ customer.pm }}" style="width:98%;"></td></tr>
+		<tr><td>設備機號</td><td><input type="text" name="device_number" value="{{ customer.device_number }}" style="width:98%;"></td></tr>
+		<tr><td>機型</td><td><input type="text" name="machine_model" value="{{ customer.machine_model }}" style="width:98%;"></td></tr>
+		<tr><td>統一編號</td><td><input type="text" name="tax_id" value="{{ customer.tax_id }}" style="width:98%;"></td></tr>
+		<tr><td>裝機地址</td><td><input type="text" name="install_address" value="{{ customer.install_address }}" style="width:98%;"></td></tr>
+		<tr><td>服務人員</td><td><input type="text" name="service_person" value="{{ customer.service_person }}" style="width:98%;"></td></tr>
+		<tr><td>契約編號</td><td><input type="text" name="contract_number" value="{{ customer.contract_number }}" style="width:98%;"></td></tr>
+		<tr><td>合約開始日</td><td><input type="text" name="contract_start" value="{{ customer.contract_start }}"></td></tr>
+		<tr><td>合約到期日</td><td><input type="text" name="contract_end" value="{{ customer.contract_end }}"></td></tr>
+	  </table>
+
+	  <div style="margin-top:10px; text-align:left;">
+		<button type="submit" name="mode" value="update_customer">💾 更新客戶資料</button>
+		<button type="submit" name="mode" value="new_customer" style="margin-left:10px;">🆕 新客戶建檔</button>
+	  </div>
+	</form>
+	{% endif %}
+
 
     <!-- 本月抄表 -->
     {% if contract %}

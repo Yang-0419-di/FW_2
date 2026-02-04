@@ -156,21 +156,36 @@ def get_customer(device_id):
     row = c.fetchone()
     conn.close()
 
-    if row:
-        # row order matches CREATE TABLE
-        return {
-            "device_id": row[0],
-            "customer_name": row[1],
-            "device_number": row[2],
-            "machine_model": row[3],
-            "tax_id": row[4],
-            "install_address": row[5],
-            "service_person": row[6],
-            "contract_number": row[7],
-            "contract_start": row[8],
-            "contract_end": row[9]
-        }
-    return None
+    if not row:
+        return None
+
+    # 先把資料存到 customer dict
+    customer = {
+        "device_id": row[0],
+        "customer_name": row[1],
+        "pm": row[2],              # 保養週期
+        "device_number": row[3],
+        "machine_model": row[4],
+        "tax_id": row[5],
+        "install_address": row[6],
+        "service_person": row[7],
+        "contract_number": row[8],
+        "contract_start": row[9],
+        "contract_end": row[10]
+    }
+
+    # 格式化日期欄位 YYYY/MM/DD
+    for key in ["contract_start", "contract_end"]:
+        val = customer.get(key)
+        if val:
+            try:
+                dt = pd.to_datetime(val)
+                customer[key] = dt.strftime("%Y/%m/%d")
+            except:
+                pass  # 轉換失敗就保留原值
+
+    return customer
+
 
 
 # --- 模糊搜尋客戶名稱 ---
