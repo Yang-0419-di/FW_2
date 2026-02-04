@@ -631,31 +631,89 @@ def invoice_log(device_id):
     return render_template("invoice_log.html", device_id=device_id, billing_invoice_log=True, months=months)
 
 # ================================================================
-# 1️⃣ MFP 總表 + 概況（summary）
+# 客戶總表 + 概況（summary）
 # ================================================================
 @bp.route('/mfp_summary')
 def mfp_summary():
     keyword = request.args.get("keyword", "").strip()
 
+    # =====================================
+    # ① 改為讀取 SQLITE：billing.db
+    # =====================================
+    conn = sqlite3.connect("billing.db")
+    conn.row_factory = sqlite3.Row
+
+    sql = """
+        SELECT
+            device_id,
+            customer_name,
+            pm,
+            device_number,
+            machine_model,
+            tax_id,
+            install_address,
+            service_person,
+            contract_number,
+            contract_start,
+            contract_end
+        FROM customers
+    """
+
+    rows = conn.execute(sql).fetchall()
+    conn.close()
+
+    tables = [dict(row) for row in rows]
+
+    # 🔹 將數字欄位轉整數，避免 round 報錯
+    numeric_fields = ['pm', 'device_number', 'tax_id']
+    for row in tables:
+        for key in numeric_fields:
+            val = row.get(key)
+            if val is not None:
+                try:
+                    row[key] = int(float(val))
+                except:
+                    row[key] = val  # 若無法轉型保持原值
+
+    # 🔹 日期欄位格式化 YYYY/MM/DD
+    for row in tables:
+        for key in ['contract_start', 'contract_end']:
+            val = row.get(key)
+            if val:
+                try:
+                    # SQLite 可能回傳字串或 datetime
+                    dt = pd.to_datetime(val)
+                    row[key] = dt.strftime("%Y/%m/%d")
+                except:
+                    row[key] = val
+
+    # 🔹 合約結束距今天小於三個月加標記
+    today = pd.Timestamp.today()
+    for row in tables:
+        val = row.get('contract_end')
+        if val:
+            try:
+                end_date = pd.to_datetime(val)
+                delta = (end_date - today).days
+                row['_contract_end_alert'] = delta < 90  # True 則淡紅
+            except:
+                row['_contract_end_alert'] = False
+        else:
+            row['_contract_end_alert'] = False
+
+    # 🔍 關鍵字搜尋
+    if keyword:
+        keyword_lower = keyword.lower()
+        tables = [
+            r for r in tables
+            if any(keyword_lower in str(v).lower() for v in r.values())
+        ]
+
+    # =====================================
+    # ② 以下 Excel 區塊完全保留
+    # =====================================
     xls = load_github_excel()
 
-    # ================================
-    # 讀取主要「總表」
-    # ================================
-    df = pd.read_excel(
-        xls,
-        sheet_name='總表',
-        header=0 
-    )
-
-    if keyword:
-        df = df[df.apply(lambda r: r.astype(str).str.contains(keyword, case=False).any(), axis=1)]
-
-    tables = df.to_dict(orient='records')
-
-    # ================================
-    # 讀取「概況」分頁
-    # ================================
     df_overview = pd.read_excel(
         xls,
         sheet_name='概況',
@@ -685,6 +743,7 @@ def mfp_summary():
         keyword=keyword,
         billing_mfp_summary=True
     )
+
 
 
 
