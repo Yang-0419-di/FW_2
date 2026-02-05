@@ -34,6 +34,20 @@
 
 <!-- 第三區塊（客戶資訊表格） -->
 <h3>客戶資訊</h3>
+
+<!-- 搜尋功能 -->
+<input
+    type="text"
+    id="tableSearch"
+    placeholder="🔍 即時搜尋（客戶名稱 / 設備代號 / 備註 / 抄表方式）"
+    style="
+        width: 100%;
+        max-width: 420px;
+        padding: 6px 10px;
+        margin-bottom: 10px;
+        font-size: 16px;
+    ">
+
 <table class="table table-bordered">
     <thead>
         <tr>
@@ -46,7 +60,13 @@
         {% for _, row in df3.iterrows() %}
         <tr>
             {% for col in df3.columns %}
-                {% if col == "備註" %}
+                {% if col == "設備代號" %}
+                    <td>
+                        <a href="{{ url_for('billing.index') }}?device_id={{ row[col] }}" style="color: blue; text-decoration: none;">
+                            {{ row[col] }}
+                        </a>
+                    </td>
+                {% elif col == "備註" %}
                     <td>
                         <input type="text"
                                value="{{ row[col] }}"
@@ -65,7 +85,11 @@
                                style="width:100%;">
                     </td>
                 {% else %}
-                    <td>{{ row[col] }}</td>
+                    {% if col == "客戶名稱" %}
+                        <td style="text-align:left;">{{ row[col] }}</td>
+                    {% else %}
+                        <td>{{ row[col] }}</td>
+                    {% endif %}
                 {% endif %}
             {% endfor %}
         </tr>
@@ -90,7 +114,7 @@ document.querySelectorAll('.gs-input').forEach(el => {
     });
 });
 
-// Accordion 展開/收合 JS（套用你提供樣式）
+// Accordion 展開/收合 JS
 document.querySelectorAll('.accordion-button').forEach(btn => {
     btn.addEventListener('click', () => {
         const content = btn.nextElementSibling;
@@ -104,9 +128,20 @@ document.querySelectorAll('.accordion-button').forEach(btn => {
         content.classList.toggle('show');
     });
 });
+
+// 🔍 即時搜尋（只影響客戶資訊表格）
+document.getElementById('tableSearch').addEventListener('keyup', function () {
+    const keyword = this.value.toLowerCase();
+    const rows = document.querySelectorAll('table tbody tr');
+
+    rows.forEach(row => {
+        let text = row.innerText.toLowerCase();
+        row.style.display = text.includes(keyword) ? '' : 'none';
+    });
+});
 </script>
 
-<!-- Accordion CSS（套用你提供樣式） -->
+<!-- Accordion CSS -->
 <style>
 .accordion-button {
     padding: 6px 14px;

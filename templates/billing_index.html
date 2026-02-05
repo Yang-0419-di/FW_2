@@ -182,9 +182,14 @@ button:hover { background-color: #0056b3; }
         </tr>
         {% endfor %}
       </table>
+	  <br>
+	  <br>
       {% else %}
+	  前次彩色A3張數: <input type="text" value="{{ last_color_a3 }}" readonly style="width:100px;"><br>
       前次彩色張數: <input type="text" value="{{ last_color }}" readonly style="width:100px;"><br>
       前次黑白張數: <input type="text" value="{{ last_bw }}" readonly style="width:100px;"><br><br>
+	  <br>
+	  本月彩色A3張數: <input type="number" name="curr_color_a3" required style="width:100px;"><br>
       本月彩色張數: <input type="number" name="curr_color" required style="width:100px;"><br>
       本月黑白張數: <input type="number" name="curr_bw" required style="width:100px;">
       {% endif %}
@@ -239,32 +244,51 @@ button:hover { background-color: #0056b3; }
         <input type="hidden" name="device_id" value="{{ contract.device_id }}">
         <input type="hidden" name="mode" value="update_contract">
 
-        <table class="contract-table">
-            <tr><th>項目</th><th>數值</th></tr>
-            <tr><td>月租金</td><td><input type="number" step="0.01" name="monthly_rent" value="{{ contract.monthly_rent }}"></td></tr>
-            <tr><td>彩色單價</td><td><input type="number" step="0.01" name="color_unit_price" value="{{ contract.color_unit_price }}"></td></tr>
-            <tr><td>黑白單價</td><td><input type="number" step="0.01" name="bw_unit_price" value="{{ contract.bw_unit_price }}"></td></tr>
-            <tr><td>彩色贈送張數</td><td><input type="number" name="color_giveaway" value="{{ contract.color_giveaway }}"></td></tr>
-            <tr><td>黑白贈送張數</td><td><input type="number" name="bw_giveaway" value="{{ contract.bw_giveaway }}"></td></tr>
-            <tr><td>彩色誤印率 (小數)</td><td><input type="number" step="0.0001" name="color_error_rate" value="{{ contract.color_error_rate }}"></td></tr>
-            <tr><td>黑白誤印率 (小數)</td><td><input type="number" step="0.0001" name="bw_error_rate" value="{{ contract.bw_error_rate }}"></td></tr>
-            <tr><td>彩色基本張數</td><td><input type="number" name="color_basic" value="{{ contract.color_basic }}"></td></tr>
-            <tr><td>黑白基本張數</td><td><input type="number" name="bw_basic" value="{{ contract.bw_basic }}"></td></tr>
-            <tr><td>前次彩色張數</td><td><input type="text" value="{{ last_color }}" readonly></td></tr>
-            <tr><td>前次黑白張數</td><td><input type="text" value="{{ last_bw }}" readonly></td></tr>
-            <tr>
-              <td>合開設備編號（主要設備）</td>
-              <td><input type="text" name="master_device_id" value="{{ contract.master_device_id if contract.master_device_id else '' }}" placeholder="若為主機留空，子機請填主機設備編號" style="width:98%;"></td>
-            </tr>
-            <tr><td>稅別</td>
-                <td>
-                    <select name="tax_type">
-                        <option value="未稅" {% if contract.tax_type == "未稅" %}selected{% endif %}>未稅</option>
-                        <option value="含稅" {% if contract.tax_type == "含稅" %}selected{% endif %}>含稅</option>
-                    </select>
-                </td>
-            </tr>
-        </table>
+		<table class="contract-table">
+			<tr><th>項目</th><th>數值</th></tr>
+
+			<!-- 月租 -->
+			<tr><td>月租金</td><td><input type="number" step="0.01" name="monthly_rent" value="{{ contract.monthly_rent }}"></td></tr>
+
+			<!-- 彩色 -->
+			<tr><td>彩色單價 (A4)</td><td><input type="number" step="0.01" name="color_unit_price" value="{{ contract.color_unit_price }}"></td></tr>
+			<tr><td>彩色單價 (A3)</td><td><input type="number" step="0.01" name="color_a3_unit_price" value="{{ contract.color_a3_unit_price }}"></td></tr>
+			
+			<tr><td>彩色基本張數</td><td><input type="number" name="color_basic" value="{{ contract.color_basic }}"></td></tr>
+			<tr><td>彩色A3基本張數</td><td><input type="number" name="color_a3_basic" value="{{ contract.color_a3_basic }}"></td></tr>
+			
+			<tr><td>彩色贈送張數</td><td><input type="number" name="color_giveaway" value="{{ contract.color_giveaway }}"></td></tr>
+			<tr><td>彩色A3贈送張數</td><td><input type="number" name="color_a3_giveaway" value="{{ contract.color_a3_giveaway }}"></td></tr>
+			
+			<tr><td>彩色誤印率 (小數)</td><td><input type="number" step="0.0001" name="color_error_rate" value="{{ contract.color_error_rate }}"></td></tr>
+			<tr><td>彩色A3誤印率 (小數)</td><td><input type="number" step="0.0001" name="color_a3_error_rate" value="{{ contract.color_a3_error_rate }}"></td></tr>
+			
+			<tr><td>前次彩色張數</td><td><input type="text" value="{{ last_color }}" readonly></td></tr>
+			<tr><td>前次彩色A3張數</td><td><input type="text" value="{{ last_color_a3 }}" readonly></td></tr>
+
+			<!-- 黑白 -->
+			<tr><td>黑白單價</td><td><input type="number" step="0.01" name="bw_unit_price" value="{{ contract.bw_unit_price }}"></td></tr>
+			<tr><td>黑白基本張數</td><td><input type="number" name="bw_basic" value="{{ contract.bw_basic }}"></td></tr>
+			<tr><td>黑白贈送張數</td><td><input type="number" name="bw_giveaway" value="{{ contract.bw_giveaway }}"></td></tr>
+			<tr><td>黑白誤印率 (小數)</td><td><input type="number" step="0.0001" name="bw_error_rate" value="{{ contract.bw_error_rate }}"></td></tr>
+			<tr><td>前次黑白張數</td><td><input type="text" value="{{ last_bw }}" readonly></td></tr>
+
+			<!-- 主機/稅別 -->
+			<tr>
+			  <td>合開設備編號（主要設備）</td>
+			  <td><input type="text" name="master_device_id" value="{{ contract.master_device_id if contract.master_device_id else '' }}" placeholder="若為主機留空，子機請填主機設備編號" style="width:98%;"></td>
+			</tr>
+			<tr>
+			  <td>稅別</td>
+			  <td>
+				<select name="tax_type">
+				  <option value="未稅" {% if contract.tax_type == "未稅" %}selected{% endif %}>未稅</option>
+				  <option value="含稅" {% if contract.tax_type == "含稅" %}selected{% endif %}>含稅</option>
+				</select>
+			  </td>
+			</tr>
+		</table>
+
 
         <div style="margin-top:12px;">
             <button type="submit">更新契約條件</button>

@@ -56,19 +56,23 @@ def init_db():
     # 契約資料表（含稅別欄位與 contra）
     c.execute("""
         CREATE TABLE IF NOT EXISTS contracts (
-            device_id TEXT PRIMARY KEY,
-            monthly_rent REAL,
-            color_unit_price REAL,
-            bw_unit_price REAL,
-            color_giveaway INTEGER,
-            bw_giveaway INTEGER,
-            color_error_rate REAL,
-            bw_error_rate REAL,
-            color_basic INTEGER,
-            bw_basic INTEGER,
-            tax_type TEXT DEFAULT '含稅',
-            contra TEXT DEFAULT '',
-            master_device_id TEXT DEFAULT ''
+            device_id TEXT PRIMARY KEY,             -- 設備編號唯一
+            monthly_rent REAL,                      -- 月租金（含稅或未稅，REAL 可存小數）
+            color_unit_price REAL,                  -- 彩色單價(A4)
+            bw_unit_price REAL,                     -- 黑白單價
+            color_a3_unit_price REAL DEFAULT 0,     -- 彩色單價(A3)，預設 0
+            color_giveaway INTEGER,                 -- 彩色贈送張數
+            bw_giveaway INTEGER,                    -- 黑白贈送張數
+            color_a3_giveaway INTEGER DEFAULT 0,    -- 彩色A3贈送張數
+            color_error_rate REAL,                  -- 彩色誤印率
+            bw_error_rate REAL,                     -- 黑白誤印率
+            color_a3_error_rate REAL DEFAULT 0,     -- 彩色A3誤印率
+            color_basic INTEGER,                     -- 彩色基本張數
+            bw_basic INTEGER,                        -- 黑白基本張數
+            color_a3_basic INTEGER DEFAULT 0,        -- 彩色A3基本張數
+            tax_type TEXT DEFAULT '含稅',           -- 稅別
+            contra TEXT DEFAULT '',                  -- 契約說明
+            master_device_id TEXT DEFAULT ''         -- 合開主機設備編號
         )
     """)
 
@@ -78,6 +82,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             device_id TEXT,
             month TEXT,
+            color_a3_count INTEGER DEFAULT 0,
             color_count INTEGER,
             bw_count INTEGER,
             timestamp TEXT
@@ -105,18 +110,33 @@ def init_db():
         CREATE TABLE IF NOT EXISTS billing_summary (
             device_id TEXT,
             month INTEGER, -- 1~12
-            color_total INTEGER,     -- 本月抄表 彩色總張數（若合開則為合計）
-            bw_total INTEGER,        -- 本月抄表 黑白總張數
-            color_usage INTEGER,     -- 當月使用彩色 = 本月 - 上月 (delta)
-            bw_usage INTEGER,        -- 當月使用黑白 = 本月 - 上月 (delta)
-            color_bill_usage INTEGER,-- 彩色計費張數（扣贈送、誤印率、基本張數）
-            bw_bill_usage INTEGER,   -- 黑白計費張數
-            color_amount REAL,       -- 彩色金額
-            bw_amount REAL,          -- 黑白金額
-            monthly_rent REAL,       -- 月租金
-            untaxed_subtotal REAL,   -- 未稅小計（彩色金額+黑白金額+月租）
-            tax_amount REAL,         -- 稅額
-            total_with_tax REAL,     -- 含稅總額
+
+            -- ===== 本月抄表總數（合開合計） =====
+            color_a3_total INTEGER,   -- 本月抄表 彩色 A3 總張數
+            color_total INTEGER,      -- 本月抄表 彩色 總張數
+            bw_total INTEGER,         -- 本月抄表 黑白 總張數
+
+            -- ===== 當月使用量（delta） =====
+            color_a3_usage INTEGER,   -- 彩色 A3 使用量 = 本月 - 上月
+            color_usage INTEGER,      -- 彩色 使用量 = 本月 - 上月
+            bw_usage INTEGER,         -- 黑白 使用量 = 本月 - 上月
+
+            -- ===== 實際計費張數 =====
+            color_a3_bill_usage INTEGER, -- 彩色 A3 計費張數
+            color_bill_usage INTEGER,    -- 彩色 計費張數
+            bw_bill_usage INTEGER,       -- 黑白 計費張數
+
+            -- ===== 金額 =====
+            color_a3_amount REAL,     -- 彩色 A3 金額
+            color_amount REAL,        -- 彩色 金額
+            bw_amount REAL,           -- 黑白 金額
+            monthly_rent REAL,        -- 月租金
+
+            -- ===== 發票金額 =====
+            untaxed_subtotal REAL,    -- 未稅小計（彩色A3 + 彩色 + 黑白 + 月租）
+            tax_amount REAL,          -- 稅額
+            total_with_tax REAL,      -- 含稅總額
+
             PRIMARY KEY (device_id, month)
         )
     """)
@@ -127,6 +147,12 @@ def init_db():
 
 # 呼叫初始化以確保資料表存在（可在應用啟動時呼叫一次）
 init_db()
+
+def safe_int(val):
+    try:
+        return int(val)
+    except:
+        return 0
 
 
 # --- 查詢契約 ---
@@ -141,6 +167,18 @@ def get_contract(device_id):
         col_names = [desc[0] for desc in c.description]
         contract_dict = dict(zip(col_names, contract_row))
         contra_text = contract_dict.get("contra", "")
+        
+        # 🔹 將可能為 None 的欄位設為 0
+        for key in [
+            "monthly_rent",
+            "color_unit_price", "bw_unit_price",
+            "color_a3_unit_price",
+            "color_giveaway", "bw_giveaway", "color_a3_giveaway",
+            "color_error_rate", "bw_error_rate", "color_a3_error_rate",
+            "color_basic", "bw_basic", "color_a3_basic"
+        ]:
+            if contract_dict.get(key) is None:
+                contract_dict[key] = 0
     else:
         contract_dict = None
 
@@ -206,13 +244,32 @@ def search_customers_by_name(keyword):
 def get_last_counts(device_id):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT color_count, bw_count, timestamp FROM usage WHERE device_id=? ORDER BY id DESC LIMIT 1", (device_id,))
+
+    c.execute("""
+        SELECT
+            color_a3_total,
+            color_total,
+            bw_total,
+            month
+        FROM billing_summary
+        WHERE device_id = ?
+        ORDER BY month DESC
+        LIMIT 1
+    """, (device_id,))
+
     row = c.fetchone()
     conn.close()
+
     if row:
-        # 若為 None，返回 0
-        return row[0] or 0, row[1] or 0, row[2] or ""
-    return 0, 0, ""
+        return (
+            row[0] or 0,  # last_color_a3
+            row[1] or 0,  # last_color
+            row[2] or 0,  # last_bw
+            row[3] or ""  # last_time
+        )
+
+    # 沒有任何歷史資料
+    return 0, 0, 0, ""
 
 
 # --- 合開群組查詢 ---
@@ -246,101 +303,204 @@ def get_related_devices(device_id):
 
 
 # --- 紀錄使用量 ---
-def insert_usage(device_id, color_count, bw_count):
+def insert_usage(device_id, color_a3, color_count, bw_count):
     month = datetime.now().strftime("%Y%m")
     timestamp = datetime.now().strftime("%Y/%m/%d-%H:%M")
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("INSERT INTO usage (device_id, month, color_count, bw_count, timestamp) VALUES (?, ?, ?, ?, ?)",
-              (device_id, month, color_count, bw_count, timestamp))
+    c.execute(
+        "INSERT INTO usage (device_id, month, color_a3_count, color_count, bw_count, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+        (device_id, month, color_a3, color_count, bw_count, timestamp)
+    )
     conn.commit()
     conn.close()
 
 
-# --- 計算邏輯 ---
-def calculate(contract, curr_color, curr_bw, last_color, last_bw):
-    used_color = max(0, curr_color - last_color)
-    used_bw = max(0, curr_bw - last_bw)
+# --- 計算邏輯（彩色A3 / 彩色(A4) / 黑白 全獨立） ---
+def calculate(contract, curr_color_a3, curr_color, curr_bw, last_color_a3, last_color, last_bw):
+    if not contract:
+        return None
 
+    # --- 1️⃣ contract 欄位轉 float ---
+    keys_float = [
+        "color_a3_unit_price", "color_unit_price", "bw_unit_price",
+        "color_a3_giveaway", "color_giveaway", "bw_giveaway",
+        "color_a3_error_rate", "color_error_rate", "bw_error_rate",
+        "color_a3_basic", "color_basic", "bw_basic",
+        "monthly_rent"
+    ]
+    for key in keys_float:
+        try:
+            contract[key] = float(contract.get(key, 0))
+        except:
+            contract[key] = 0.0
+
+    # --- 2️⃣ 安全轉 int ---
+    def safe_int(val):
+        try:
+            return int(float(val))
+        except:
+            return 0
+
+    curr_color_a3 = safe_int(curr_color_a3)
+    curr_color    = safe_int(curr_color)
+    curr_bw       = safe_int(curr_bw)
+    last_color_a3 = safe_int(last_color_a3)
+    last_color    = safe_int(last_color)
+    last_bw       = safe_int(last_bw)
+
+    # =========================
+    # 3️⃣ 使用張數（完全獨立）
+    # =========================
+    used_color_a3 = max(0, curr_color_a3 - last_color_a3)
+    used_color    = max(0, curr_color - last_color)
+    used_bw       = max(0, curr_bw - last_bw)
+
+    # =========================
+    # 4️⃣ 彩色A3計費張數
+    # =========================
+    bill_color_a3 = max(0, used_color_a3 - contract["color_a3_giveaway"])
+    bill_color_a3 = int(round(bill_color_a3 * (1 - contract["color_a3_error_rate"])))
+    if contract["color_a3_basic"] > 0:
+        bill_color_a3 = max(int(contract["color_a3_basic"]), bill_color_a3)
+
+    # =========================
+    # 5️⃣ 彩色(A4)計費張數
+    # =========================
     bill_color = max(0, used_color - contract["color_giveaway"])
-    bill_bw = max(0, used_bw - contract["bw_giveaway"])
-
     bill_color = int(round(bill_color * (1 - contract["color_error_rate"])))
-    bill_bw = int(round(bill_bw * (1 - contract["bw_error_rate"])))
-
     if contract["color_basic"] > 0:
-        bill_color = max(contract["color_basic"], bill_color)
+        bill_color = max(int(contract["color_basic"]), bill_color)
+
+    # =========================
+    # 6️⃣ 黑白計費張數
+    # =========================
+    bill_bw = max(0, used_bw - contract["bw_giveaway"])
+    bill_bw = int(round(bill_bw * (1 - contract["bw_error_rate"])))
     if contract["bw_basic"] > 0:
-        bill_bw = max(contract["bw_basic"], bill_bw)
+        bill_bw = max(int(contract["bw_basic"]), bill_bw)
 
-    color_amount = bill_color * contract["color_unit_price"]
-    bw_amount = bill_bw * contract["bw_unit_price"]
-    subtotal = contract["monthly_rent"] + color_amount + bw_amount
+    # =========================
+    # 7️⃣ 金額計算
+    # =========================
+    color_a3_amount = bill_color_a3 * contract["color_a3_unit_price"]
+    color_amount    = bill_color * contract["color_unit_price"]
+    bw_amount       = bill_bw * contract["bw_unit_price"]
+    subtotal = contract["monthly_rent"] + color_a3_amount + color_amount + bw_amount
 
+    # =========================
+    # 8️⃣ 稅額計算
+    # =========================
     tax_rate = 0.05
     if contract.get("tax_type") == "未稅":
+        untaxed = subtotal
         tax = subtotal * tax_rate
         total = subtotal + tax
-        untaxed = subtotal
     else:
         total = subtotal
         untaxed = subtotal / (1 + tax_rate)
         tax = total - untaxed
 
-    # 傳回詳細欄位（中文鍵名與之前一致）
+    # =========================
+    # 9️⃣ 回傳結果
+    # =========================
     return {
+        "彩色A3使用張數": used_color_a3,
         "彩色使用張數": used_color,
         "黑白使用張數": used_bw,
+        "彩色A3計費張數": bill_color_a3,
         "彩色計費張數": bill_color,
         "黑白計費張數": bill_bw,
+        "彩色A3金額": round(color_a3_amount, 2),
         "彩色金額": round(color_amount, 2),
         "黑白金額": round(bw_amount, 2),
         "月租金": round(contract["monthly_rent"], 2),
-        "未稅小計": round(untaxed),
-        "稅額": round(tax),
-        "含稅總額": round(total)
+        "未稅小計": round(untaxed, 2),
+        "稅額": round(tax, 2),
+        "含稅總額": round(total, 2)
     }
 
 
+
 # --- 儲存當月發票紀錄（覆蓋當月） ---
-def save_monthly_summary(device_id, month_int, total_curr_color, total_curr_bw, last_color, last_bw, calc_result):
+def save_monthly_summary(
+    device_id,
+    month_int,
+
+    total_curr_color_a3,
+    total_curr_color,
+    total_curr_bw,
+
+    last_color_a3,
+    last_color,
+    last_bw,
+
+    calc_result
+):
     """
-    device_id: str
-    month_int: 1..12
-    total_curr_color/ curr_bw: 本月抄表（合開合計）
-    last_color/ last_bw: 上月合計
-    calc_result: calculate(...) 回傳的 dict
+    所有張數與金額皆為「已區分」版本
     """
+
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
 
-    color_usage = max(0, total_curr_color - last_color)
-    bw_usage = max(0, total_curr_bw - last_bw)
+    # --- 使用量計算（三種完全獨立） ---
+    color_a3_usage = max(0, total_curr_color_a3 - last_color_a3)
+    color_usage    = max(0, total_curr_color - last_color)
+    bw_usage       = max(0, total_curr_bw - last_bw)
 
-    c.execute('''
+    c.execute("""
         INSERT OR REPLACE INTO billing_summary (
-            device_id, month, color_total, bw_total,
-            color_usage, bw_usage,
-            color_bill_usage, bw_bill_usage,
-            color_amount, bw_amount, monthly_rent,
-            untaxed_subtotal, tax_amount, total_with_tax
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (
+            device_id,
+            month,
+
+            color_a3_total,
+            color_total,
+            bw_total,
+
+            color_a3_usage,
+            color_usage,
+            bw_usage,
+
+            color_a3_bill_usage,
+            color_bill_usage,
+            bw_bill_usage,
+
+            color_a3_amount,
+            color_amount,
+            bw_amount,
+
+            monthly_rent,
+            untaxed_subtotal,
+            tax_amount,
+            total_with_tax
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
         device_id,
         month_int,
+
+        total_curr_color_a3,
         total_curr_color,
         total_curr_bw,
+
+        color_a3_usage,
         color_usage,
         bw_usage,
+
+        calc_result.get("彩色A3計費張數", 0),
         calc_result.get("彩色計費張數", 0),
         calc_result.get("黑白計費張數", 0),
+
+        calc_result.get("彩色A3金額", 0),
         calc_result.get("彩色金額", 0),
         calc_result.get("黑白金額", 0),
+
         calc_result.get("月租金", 0),
         calc_result.get("未稅小計", 0),
         calc_result.get("稅額", 0),
         calc_result.get("含稅總額", 0)
     ))
+
     conn.commit()
     conn.close()
 
@@ -349,45 +509,91 @@ def save_monthly_summary(device_id, month_int, total_curr_color, total_curr_bw, 
 def load_billing_summary(device_id):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute('SELECT month, color_total, bw_total, color_usage, bw_usage, color_bill_usage, bw_bill_usage, color_amount, bw_amount, monthly_rent, untaxed_subtotal, tax_amount, total_with_tax FROM billing_summary WHERE device_id=?', (device_id,))
+
+    c.execute("""
+        SELECT
+            month,
+
+            color_a3_total,
+            color_total,
+            bw_total,
+
+            color_a3_usage,
+            color_usage,
+            bw_usage,
+
+            color_a3_bill_usage,
+            color_bill_usage,
+            bw_bill_usage,
+
+            color_a3_amount,
+            color_amount,
+            bw_amount,
+
+            monthly_rent,
+            untaxed_subtotal,
+            tax_amount,
+            total_with_tax
+        FROM billing_summary
+        WHERE device_id = ?
+    """, (device_id,))
+
     rows = c.fetchall()
     conn.close()
 
-    # 初始化 12 個月的空值
-    months = {m: {
-        "color_total": "",
-        "bw_total": "",
-        "color_usage": "",
-        "bw_usage": "",
-        "color_bill_usage": "",
-        "bw_bill_usage": "",
-        "color_amount": "",
-        "bw_amount": "",
-        "monthly_rent": "",
-        "untaxed_subtotal": "",
-        "tax_amount": "",
-        "total_with_tax": ""
-    } for m in range(1, 13)}
+    # 初始化 12 個月
+    months = {
+        m: {
+            "color_a3_total": "",
+            "color_total": "",
+            "bw_total": "",
+
+            "color_a3_usage": "",
+            "color_usage": "",
+            "bw_usage": "",
+
+            "color_a3_bill_usage": "",
+            "color_bill_usage": "",
+            "bw_bill_usage": "",
+
+            "color_a3_amount": "",
+            "color_amount": "",
+            "bw_amount": "",
+
+            "monthly_rent": "",
+            "untaxed_subtotal": "",
+            "tax_amount": "",
+            "total_with_tax": ""
+        }
+        for m in range(1, 13)
+    }
 
     for r in rows:
         m = int(r[0])
         months[m] = {
-            "color_total": r[1],
-            "bw_total": r[2],
-            "color_usage": r[3],
-            "bw_usage": r[4],
-            "color_bill_usage": r[5],
-            "bw_bill_usage": r[6],
-            "color_amount": r[7],
-            "bw_amount": r[8],
-            "monthly_rent": r[9],
-            "untaxed_subtotal": r[10],
-            "tax_amount": r[11],
-            "total_with_tax": r[12]
+            "color_a3_total": r[1],
+            "color_total": r[2],
+            "bw_total": r[3],
+
+            "color_a3_usage": r[4],
+            "color_usage": r[5],
+            "bw_usage": r[6],
+
+            "color_a3_bill_usage": r[7],
+            "color_bill_usage": r[8],
+            "bw_bill_usage": r[9],
+
+            "color_a3_amount": r[10],
+            "color_amount": r[11],
+            "bw_amount": r[12],
+
+            "monthly_rent": r[13],
+            "untaxed_subtotal": r[14],
+            "tax_amount": r[15],
+            "total_with_tax": r[16]
         }
 
     return months
-
 
 # --- 主頁面路由 ---
 @bp.route("/", methods=["GET", "POST"])
@@ -395,7 +601,7 @@ def index():
     message = request.args.get("message", "")
     contract, customer, result = None, None, None
     contra_text = ""
-    last_color, last_bw, last_time = 0, 0, ""
+    last_color_a3, last_color, last_bw, last_time = 0, 0, 0, ""
     matches = []
     related_devices = []
 
@@ -414,70 +620,76 @@ def index():
                 else:
                     message = f"❌ 找不到設備或客戶：{keyword}"
             else:
-                last_color, last_bw, last_time = get_last_counts(keyword)
+                last_color_a3, last_color, last_bw, last_time = get_last_counts(keyword)
                 related_devices = get_related_devices(keyword)
 
         elif mode == "calculate":
             device_id = keyword
             contract, contra_text = get_contract(device_id)
             customer = get_customer(device_id)
+
             if contract:
-                # 合開群組
                 related_devices = get_related_devices(device_id)
 
-                # 合併所有設備的上次讀數 & 當前讀數
+                total_last_color_a3 = 0
                 total_last_color = 0
                 total_last_bw = 0
+
+                total_curr_color_a3 = 0
                 total_curr_color = 0
                 total_curr_bw = 0
 
-                # 讀取群組上次/當月數據
                 for dev in related_devices:
-                    last_c, last_b, _ = get_last_counts(dev)
+                    last_a3, last_c, last_b, _ = get_last_counts(dev)
+                    total_last_color_a3 += last_a3
                     total_last_color += last_c
                     total_last_bw += last_b
 
+                    val_a3 = request.form.get(f"curr_color_a3_{dev}")
                     val_c = request.form.get(f"curr_color_{dev}")
                     val_b = request.form.get(f"curr_bw_{dev}")
-                    if val_c is None or val_b is None:
-                        # 兼容單機表單欄位
-                        total_curr_color += int(request.form.get("curr_color", "0"))
-                        total_curr_bw += int(request.form.get("curr_bw", "0"))
+
+                    if val_c is None:
+                        total_curr_color_a3 += int(request.form.get("curr_color_a3", 0))
+                        total_curr_color += int(request.form.get("curr_color", 0))
+                        total_curr_bw += int(request.form.get("curr_bw", 0))
                     else:
+                        total_curr_color_a3 += int(val_a3 or 0)
                         total_curr_color += int(val_c or 0)
                         total_curr_bw += int(val_b or 0)
 
-                # 讀取使用者選擇的月份（1..12），若無則使用當前月份
-                try:
-                    selected_month = int(request.form.get("selected_month") or 0)
-                    if not (1 <= selected_month <= 12):
-                        selected_month = datetime.now().month
-                except ValueError:
-                    selected_month = datetime.now().month
+                selected_month = int(request.form.get("selected_month") or datetime.now().month)
+                
+                result = calculate(
+                    contract,
+                    total_curr_color_a3,
+                    total_curr_color,
+                    total_curr_bw,
+                    total_last_color_a3,
+                    total_last_color,
+                    total_last_bw
+                )
 
-                # 計算差異
-                delta_color = total_curr_color - total_last_color
-                delta_bw = total_curr_bw - total_last_bw
-
-                # 套用主機的契約條件計算總金額（使用主機的 contract）
-                result = calculate(contract, total_curr_color, total_curr_bw, total_last_color, total_last_bw)
-
-                # 寫入每台機的抄表（保持原行為）
                 for dev in related_devices:
-                    val_c = request.form.get(f"curr_color_{dev}")
-                    val_b = request.form.get(f"curr_bw_{dev}")
-                    if val_c is None or val_b is None:
-                        curr_c = int(request.form.get("curr_color", "0"))
-                        curr_b = int(request.form.get("curr_bw", "0"))
-                    else:
-                        curr_c = int(val_c or 0)
-                        curr_b = int(val_b or 0)
-                    insert_usage(dev, curr_c, curr_b)
+                    insert_usage(
+                        dev,
+                        int(request.form.get(f"curr_color_a3_{dev}", 0)),
+                        int(request.form.get(f"curr_color_{dev}", 0)),
+                        int(request.form.get(f"curr_bw_{dev}", 0))
+                    )
 
-                # ✅ 將本次計算結果存入 billing_summary（以表單選擇的月份為 key，若已有則覆蓋）
-                save_monthly_summary(device_id, selected_month, total_curr_color, total_curr_bw, total_last_color, total_last_bw, result)
+                save_monthly_summary(
+                    device_id,
+                    selected_month,
+                    total_curr_color_a3,
+                    total_curr_color,
+                    total_curr_bw,
+                    total_last_color_a3,
+                    total_last_color,
+                    total_last_bw,
+                    result
+                )
 
-                # 訊息回饋
                 message = f"✅ {device_id} 的抄表與金額已儲存至 {selected_month} 月"
             else:
                 message = f"❌ 找不到設備 {device_id}"
@@ -496,20 +708,37 @@ def index():
                 "bw_error_rate": float(request.form.get("bw_error_rate", "0") or 0),
                 "color_basic": int(request.form.get("color_basic", "0") or 0),
                 "bw_basic": int(request.form.get("bw_basic", "0") or 0),
+                # ===== 新增 A3 欄位 =====
+                "color_a3_unit_price": float(request.form.get("color_a3_unit_price", "0") or 0),
+                "color_a3_giveaway": int(request.form.get("color_a3_giveaway", "0") or 0),
+                "color_a3_error_rate": float(request.form.get("color_a3_error_rate", "0") or 0),
+                "color_a3_basic": int(request.form.get("color_a3_basic", "0") or 0),
                 "tax_type": request.form.get("tax_type", "含稅"),
             }
             conn = sqlite3.connect(DB_FILE)
             c = conn.cursor()
             c.execute("""
                 UPDATE contracts SET
-                    monthly_rent=?, color_unit_price=?, bw_unit_price=?,
-                    color_giveaway=?, bw_giveaway=?, color_error_rate=?, bw_error_rate=?,
-                    color_basic=?, bw_basic=?, tax_type=?
-                WHERE device_id=?""",
-                (*fields.values(), device_id))
+                    monthly_rent=?,
+                    color_unit_price=?,
+                    bw_unit_price=?,
+                    color_giveaway=?,
+                    bw_giveaway=?,
+                    color_error_rate=?,
+                    bw_error_rate=?,
+                    color_basic=?,
+                    bw_basic=?,
+                    color_a3_unit_price=?,
+                    color_a3_giveaway=?,
+                    color_a3_error_rate=?,
+                    color_a3_basic=?,
+                    tax_type=?
+                WHERE device_id=?
+            """, (*fields.values(), device_id))
             conn.commit()
             conn.close()
             return redirect(url_for("billing.index", device_id=device_id, message="✅ 契約條件已更新"))
+
 
         elif mode == "update_customer":
             device_id = keyword
@@ -618,7 +847,7 @@ def index():
         contract, contra_text = get_contract(q_device)
         customer = get_customer(q_device)
         if contract:
-            last_color, last_bw, last_time = get_last_counts(q_device)
+            last_color_a3, last_color, last_bw, last_time = get_last_counts(q_device)
             related_devices = get_related_devices(q_device)
         else:
             message = f"❌ 找不到設備 {q_device}"
@@ -630,6 +859,7 @@ def index():
                            contra_text=contra_text,
                            customer=customer,
                            last_color=last_color,
+                           last_color_a3=last_color_a3,
                            last_bw=last_bw,
                            last_time=last_time,
                            result=result,
