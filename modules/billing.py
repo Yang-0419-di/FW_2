@@ -8,11 +8,16 @@ from io import BytesIO
 import pandas as pd
 from modules.gsheet import get_person_worksheet 
 
-
 GITHUB_XLSX_URL = 'https://raw.githubusercontent.com/Yang-0419-di/FW_2/master/MFP/MFP.xlsx'
 _cached_xls = None   # 快取避免多次下載
 bp = Blueprint("billing", __name__, url_prefix="/billing")
 DB_FILE = "billing.db"
+
+def to_int(val):
+    try:
+        return int(float(val))
+    except (TypeError, ValueError):
+        return 0
 
 def load_github_excel():
     """
@@ -85,7 +90,8 @@ def init_db():
             color_a3_count INTEGER DEFAULT 0,
             color_count INTEGER,
             bw_count INTEGER,
-            timestamp TEXT
+            timestamp TEXT,
+            last_date TEXT DEFAULT '' 
         )
     """)
 
@@ -169,16 +175,29 @@ def get_contract(device_id):
         contra_text = contract_dict.get("contra", "")
         
         # 🔹 將可能為 None 的欄位設為 0
-        for key in [
+        # 🔹 將可能為 None / 空字串 的欄位正規化
+        
+        float_fields = [
             "monthly_rent",
             "color_unit_price", "bw_unit_price",
             "color_a3_unit_price",
-            "color_giveaway", "bw_giveaway", "color_a3_giveaway",
             "color_error_rate", "bw_error_rate", "color_a3_error_rate",
-            "color_basic", "bw_basic", "color_a3_basic"
-        ]:
-            if contract_dict.get(key) is None:
-                contract_dict[key] = 0
+        ]
+
+        int_fields = [
+            "color_giveaway", "bw_giveaway", "color_a3_giveaway",
+            "color_basic", "bw_basic", "color_a3_basic",
+        ]
+
+        for k in float_fields:
+            try:
+                contract_dict[k] = float(contract_dict.get(k) or 0)
+            except ValueError:
+                contract_dict[k] = 0.0
+
+        for k in int_fields:
+            contract_dict[k] = to_int(contract_dict.get(k))
+
     else:
         contract_dict = None
 
@@ -240,36 +259,42 @@ def search_customers_by_name(keyword):
     return [{"device_id": r[0], "customer_name": r[1]} for r in rows]
 
 
-# --- 查詢最後抄表 ---
-def get_last_counts(device_id):
+# --- 查詢最後抄表（含跨年） ---
+def get_prev_month_year(selected_year, selected_month):
+    """
+    依照用戶選擇的年月，計算前月年月
+    """
+    
+    # 取得選擇的抄表年份與月份（POST 表單）
+    selected_year = int(request.form.get("selected_year", datetime.now().year))
+    selected_month = int(request.form.get("selected_month", datetime.now().month))
+    
+    if selected_month == 1:
+        return selected_year - 1, 12
+    else:
+        return selected_year, selected_month - 1
+
+
+def get_last_counts(device_id, selected_year, selected_month):
+    """
+    抓取前月抄表張數，如果沒有資料則回傳 0
+    """
+    prev_year, prev_month = get_prev_month_year(selected_year, selected_month)
+
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-
     c.execute("""
-        SELECT
-            color_a3_total,
-            color_total,
-            bw_total,
-            month
+        SELECT color_a3_total, color_total, bw_total, last_date
         FROM billing_summary
-        WHERE device_id = ?
-        ORDER BY month DESC
-        LIMIT 1
-    """, (device_id,))
-
+        WHERE device_id=? AND year=? AND month=?
+    """, (device_id, prev_year, prev_month))
     row = c.fetchone()
     conn.close()
 
     if row:
-        return (
-            row[0] or 0,  # last_color_a3
-            row[1] or 0,  # last_color
-            row[2] or 0,  # last_bw
-            row[3] or ""  # last_time
-        )
-
-    # 沒有任何歷史資料
-    return 0, 0, 0, ""
+        return row[0] or 0, row[1] or 0, row[2] or 0, row[3] or ""
+    else:
+        return 0, 0, 0, ""
 
 
 # --- 合開群組查詢 ---
@@ -453,6 +478,7 @@ def save_monthly_summary(
         INSERT OR REPLACE INTO billing_summary (
             device_id,
             month,
+            year,
 
             color_a3_total,
             color_total,
@@ -474,11 +500,11 @@ def save_monthly_summary(
             untaxed_subtotal,
             tax_amount,
             total_with_tax
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         device_id,
         month_int,
-
+        datetime.now().year,
         total_curr_color_a3,
         total_curr_color,
         total_curr_bw,
@@ -506,7 +532,7 @@ def save_monthly_summary(
 
 
 # --- 讀取 billing_summary（回傳 1..12 月陣列） ---
-def load_billing_summary(device_id):
+def load_billing_summary(device_id, year):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
 
@@ -535,8 +561,8 @@ def load_billing_summary(device_id):
             tax_amount,
             total_with_tax
         FROM billing_summary
-        WHERE device_id = ?
-    """, (device_id,))
+        WHERE device_id = ? AND year = ?
+    """, (device_id,year))
 
     rows = c.fetchall()
     conn.close()
@@ -595,6 +621,7 @@ def load_billing_summary(device_id):
 
     return months
 
+
 # --- 主頁面路由 ---
 @bp.route("/", methods=["GET", "POST"])
 def index():
@@ -605,42 +632,49 @@ def index():
     matches = []
     related_devices = []
 
+    # ✅ 取得選擇的抄表年月（POST 表單或 GET 參數）
+    selected_month = int(request.form.get("selected_month") or request.args.get("selected_month") or datetime.now().month)
+    selected_year  = int(request.form.get("selected_year")  or request.args.get("selected_year")  or datetime.now().year)
+    
+    # --- 計算前月年與月 ---
+    def get_prev_month_year(year, month):
+        if month == 1:
+            return year - 1, 12
+        return year, month - 1
+
+    prev_year, prev_month = get_prev_month_year(selected_year, selected_month)
+
+    # --- 共用：取得 contract 與 customer ---
+    def load_device_data(device_id):
+        c, ct = get_contract(device_id)
+        cu = get_customer(device_id)
+        return c, ct, cu
+
     if request.method == "POST":
         mode = request.form.get("mode")
-        keyword = request.form.get("device_id", "").strip()
+        device_id = request.form.get("device_id", "").strip()
+        keyword = device_id
 
-        # 模糊查詢客戶名稱
         if mode == "query":
             contract, contra_text = get_contract(keyword)
             customer = get_customer(keyword)
             if not contract:
                 matches = search_customers_by_name(keyword)
-                if matches:
-                    message = f"🔍 找到 {len(matches)} 筆相符客戶"
-                else:
-                    message = f"❌ 找不到設備或客戶：{keyword}"
+                message = f"🔍 找到 {len(matches)} 筆相符客戶" if matches else f"❌ 找不到設備或客戶：{keyword}"
             else:
-                last_color_a3, last_color, last_bw, last_time = get_last_counts(keyword)
+                last_color_a3, last_color, last_bw, last_time = get_last_counts(keyword, prev_year, prev_month)
                 related_devices = get_related_devices(keyword)
 
         elif mode == "calculate":
-            device_id = keyword
             contract, contra_text = get_contract(device_id)
             customer = get_customer(device_id)
-
             if contract:
                 related_devices = get_related_devices(device_id)
-
-                total_last_color_a3 = 0
-                total_last_color = 0
-                total_last_bw = 0
-
-                total_curr_color_a3 = 0
-                total_curr_color = 0
-                total_curr_bw = 0
+                total_last_color_a3 = total_last_color = total_last_bw = 0
+                total_curr_color_a3 = total_curr_color = total_curr_bw = 0
 
                 for dev in related_devices:
-                    last_a3, last_c, last_b, _ = get_last_counts(dev)
+                    last_a3, last_c, last_b, _ = get_last_counts(dev, prev_year, prev_month)
                     total_last_color_a3 += last_a3
                     total_last_color += last_c
                     total_last_bw += last_b
@@ -658,8 +692,6 @@ def index():
                         total_curr_color += int(val_c or 0)
                         total_curr_bw += int(val_b or 0)
 
-                selected_month = int(request.form.get("selected_month") or datetime.now().month)
-                
                 result = calculate(
                     contract,
                     total_curr_color_a3,
@@ -689,115 +721,68 @@ def index():
                     total_last_bw,
                     result
                 )
-
                 message = f"✅ {device_id} 的抄表與金額已儲存至 {selected_month} 月"
             else:
                 message = f"❌ 找不到設備 {device_id}"
 
-
-
-        elif mode == "update_contract":
-            device_id = keyword
-            fields = {
-                "monthly_rent": float(request.form.get("monthly_rent", "0") or 0),
-                "color_unit_price": float(request.form.get("color_unit_price", "0") or 0),
-                "bw_unit_price": float(request.form.get("bw_unit_price", "0") or 0),
-                "color_giveaway": int(request.form.get("color_giveaway", "0") or 0),
-                "bw_giveaway": int(request.form.get("bw_giveaway", "0") or 0),
-                "color_error_rate": float(request.form.get("color_error_rate", "0") or 0),
-                "bw_error_rate": float(request.form.get("bw_error_rate", "0") or 0),
-                "color_basic": int(request.form.get("color_basic", "0") or 0),
-                "bw_basic": int(request.form.get("bw_basic", "0") or 0),
-                # ===== 新增 A3 欄位 =====
-                "color_a3_unit_price": float(request.form.get("color_a3_unit_price", "0") or 0),
-                "color_a3_giveaway": int(request.form.get("color_a3_giveaway", "0") or 0),
-                "color_a3_error_rate": float(request.form.get("color_a3_error_rate", "0") or 0),
-                "color_a3_basic": int(request.form.get("color_a3_basic", "0") or 0),
-                "tax_type": request.form.get("tax_type", "含稅"),
-            }
+        elif mode in ["update_contract", "update_customer", "delete_customer", "new_customer"]:
             conn = sqlite3.connect(DB_FILE)
             c = conn.cursor()
-            c.execute("""
-                UPDATE contracts SET
-                    monthly_rent=?,
-                    color_unit_price=?,
-                    bw_unit_price=?,
-                    color_giveaway=?,
-                    bw_giveaway=?,
-                    color_error_rate=?,
-                    bw_error_rate=?,
-                    color_basic=?,
-                    bw_basic=?,
-                    color_a3_unit_price=?,
-                    color_a3_giveaway=?,
-                    color_a3_error_rate=?,
-                    color_a3_basic=?,
-                    tax_type=?
-                WHERE device_id=?
-            """, (*fields.values(), device_id))
-            conn.commit()
-            conn.close()
-            return redirect(url_for("billing.index", device_id=device_id, message="✅ 契約條件已更新"))
+
+            if mode == "update_contract":
+                c.execute("""
+                    UPDATE contracts SET
+                        monthly_rent=?,
+                        color_unit_price=?,
+                        bw_unit_price=?,
+
+                        color_giveaway=?,
+                        bw_giveaway=?,
+
+                        color_error_rate=?,
+                        bw_error_rate=?,
+
+                        color_basic=?,
+                        bw_basic=?,
+
+                        color_a3_unit_price=?,
+                        color_a3_giveaway=?,
+                        color_a3_error_rate=?,
+                        color_a3_basic=?,
+
+                        tax_type=?
+                    WHERE device_id=?
+                """, (
+                    float(request.form.get("monthly_rent") or 0),
+
+                    float(request.form.get("color_unit_price") or 0),
+                    float(request.form.get("bw_unit_price") or 0),
+
+                    to_int(request.form.get("color_giveaway")),
+                    to_int(request.form.get("bw_giveaway")),
+
+                    float(request.form.get("color_error_rate") or 0),
+                    float(request.form.get("bw_error_rate") or 0),
+
+                    to_int(request.form.get("color_basic")),
+                    to_int(request.form.get("bw_basic")),
+
+                    float(request.form.get("color_a3_unit_price") or 0),
+                    to_int(request.form.get("color_a3_giveaway")),
+                    float(request.form.get("color_a3_error_rate") or 0),
+                    to_int(request.form.get("color_a3_basic")),
+
+                    request.form.get("tax_type", "含稅"),
+                    device_id
+                ))
+
+                conn.commit()
+                conn.close()
+                return redirect(url_for("billing.index", device_id=device_id, message="✅ 契約條件已更新"))
 
 
-        elif mode == "update_customer":
-            device_id = keyword
-            fields = {
-                "customer_name": request.form.get("customer_name", "").strip(),
-                "device_number": request.form.get("device_number", "").strip(),
-                "machine_model": request.form.get("machine_model", "").strip(),
-                "tax_id": request.form.get("tax_id", "").strip(),
-                "install_address": request.form.get("install_address", "").strip(),
-                "service_person": request.form.get("service_person", "").strip(),
-                "contract_number": request.form.get("contract_number", "").strip(),
-                "contract_start": request.form.get("contract_start", "").strip(),
-                "contract_end": request.form.get("contract_end", "").strip(),
-            }
-            conn = sqlite3.connect(DB_FILE)
-            c = conn.cursor()
-            c.execute("""
-                UPDATE customers SET
-                    customer_name=?, device_number=?, machine_model=?, tax_id=?,
-                    install_address=?, service_person=?, contract_number=?,
-                    contract_start=?, contract_end=?
-                WHERE device_id=?
-            """, (*fields.values(), device_id))
-            conn.commit()
-            conn.close()
-            return redirect(url_for("billing.index", device_id=device_id, message="✅ 客戶資料已更新"))
-
-        elif mode == "delete_customer":
-            device_id = request.form.get("device_id")
-            conn = sqlite3.connect(DB_FILE)
-            c = conn.cursor()
-            # 刪除客戶資料
-            c.execute("DELETE FROM customers WHERE device_id=?", (device_id,))
-            # 同時刪除該客戶的契約資料
-            c.execute("DELETE FROM contracts WHERE device_id=?", (device_id,))
-            # （可選）刪除該客戶的抄表資料
-            c.execute("DELETE FROM usage WHERE device_id=?", (device_id,))
-            # （可選）刪除該客戶的 billing_summary 紀錄
-            c.execute("DELETE FROM billing_summary WHERE device_id=?", (device_id,))
-            conn.commit()
-            conn.close()
-            message = f"🗑 已刪除客戶（設備編號：{device_id}）"
-
-        elif mode == "new_customer":
-            old_id = request.form.get("device_id")
-            new_id = request.form.get("device_id_new", "").strip()
-
-            # 取得舊客戶資料與契約條件
-            old_customer = get_customer(old_id)
-            old_contract, _ = get_contract(old_id)
-
-            if not old_customer or not old_contract:
-                message = f"❌ 找不到原始客戶或契約資料，無法建檔。"
-            elif not new_id:
-                message = "⚠️ 請輸入新設備編號。"
-            else:
-                # 收集新客戶資料
-                new_fields = {
-                    "device_id": new_id,
+            elif mode == "update_customer":
+                fields = {
                     "customer_name": request.form.get("customer_name", "").strip(),
                     "device_number": request.form.get("device_number", "").strip(),
                     "machine_model": request.form.get("machine_model", "").strip(),
@@ -808,72 +793,125 @@ def index():
                     "contract_start": request.form.get("contract_start", "").strip(),
                     "contract_end": request.form.get("contract_end", "").strip(),
                 }
-
-                conn = sqlite3.connect(DB_FILE)
-                c = conn.cursor()
-
-                # 🔹 新增客戶資料
                 c.execute("""
-                    INSERT INTO customers (
-                        device_id, customer_name, device_number, machine_model,
-                        tax_id, install_address, service_person,
-                        contract_number, contract_start, contract_end
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, tuple(new_fields.values()))
-
-                # 🔹 複製原契約條件
-                c.execute("""
-                    INSERT INTO contracts (
-                        device_id, monthly_rent, color_unit_price, bw_unit_price,
-                        color_giveaway, bw_giveaway, color_error_rate, bw_error_rate,
-                        color_basic, bw_basic, tax_type, contra
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    new_id,
-                    old_contract["monthly_rent"], old_contract["color_unit_price"], old_contract["bw_unit_price"],
-                    old_contract["color_giveaway"], old_contract["bw_giveaway"],
-                    old_contract["color_error_rate"], old_contract["bw_error_rate"],
-                    old_contract["color_basic"], old_contract["bw_basic"],
-                    old_contract["tax_type"], old_contract.get("contra", "")
-                ))
-
+                    UPDATE customers SET
+                        customer_name=?, device_number=?, machine_model=?, tax_id=?,
+                        install_address=?, service_person=?, contract_number=?,
+                        contract_start=?, contract_end=?
+                    WHERE device_id=?
+                """, (*fields.values(), device_id))
                 conn.commit()
                 conn.close()
+                return redirect(url_for("billing.index", device_id=device_id, message="✅ 客戶資料已更新"))
 
-                return redirect(url_for("billing.index", device_id=new_id, message="✅ 新客戶建檔成功！"))
+            elif mode == "delete_customer":
+                c.execute("DELETE FROM customers WHERE device_id=?", (device_id,))
+                c.execute("DELETE FROM contracts WHERE device_id=?", (device_id,))
+                c.execute("DELETE FROM usage WHERE device_id=?", (device_id,))
+                c.execute("DELETE FROM billing_summary WHERE device_id=?", (device_id,))
+                conn.commit()
+                conn.close()
+                message = f"🗑 已刪除客戶（設備編號：{device_id}）"
 
+            elif mode == "new_customer":
+                old_id = request.form.get("device_id")
+                new_id = request.form.get("device_id_new", "").strip()
+                old_customer = get_customer(old_id)
+                old_contract, _ = get_contract(old_id)
+
+                if not old_customer or not old_contract:
+                    message = f"❌ 找不到原始客戶或契約資料，無法建檔。"
+                elif not new_id:
+                    message = "⚠️ 請輸入新設備編號。"
+                else:
+                    new_fields = {
+                        "device_id": new_id,
+                        "customer_name": request.form.get("customer_name", "").strip(),
+                        "device_number": request.form.get("device_number", "").strip(),
+                        "machine_model": request.form.get("machine_model", "").strip(),
+                        "tax_id": request.form.get("tax_id", "").strip(),
+                        "install_address": request.form.get("install_address", "").strip(),
+                        "service_person": request.form.get("service_person", "").strip(),
+                        "contract_number": request.form.get("contract_number", "").strip(),
+                        "contract_start": request.form.get("contract_start", "").strip(),
+                        "contract_end": request.form.get("contract_end", "").strip(),
+                    }
+                    c.execute("""
+                        INSERT INTO customers (
+                            device_id, customer_name, device_number, machine_model,
+                            tax_id, install_address, service_person,
+                            contract_number, contract_start, contract_end
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, tuple(new_fields.values()))
+                    c.execute("""
+                        INSERT INTO contracts (
+                            device_id, monthly_rent, color_unit_price, bw_unit_price,
+                            color_giveaway, bw_giveaway, color_error_rate, bw_error_rate,
+                            color_basic, bw_basic, tax_type, contra
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        new_id,
+                        old_contract["monthly_rent"], old_contract["color_unit_price"], old_contract["bw_unit_price"],
+                        old_contract["color_giveaway"], old_contract["bw_giveaway"],
+                        old_contract["color_error_rate"], old_contract["bw_error_rate"],
+                        old_contract["color_basic"], old_contract["bw_basic"],
+                        old_contract["tax_type"], old_contract.get("contra", "")
+                    ))
+                    conn.commit()
+                    conn.close()
+                    return redirect(url_for("billing.index", device_id=new_id, message="✅ 新客戶建檔成功！"))
+
+    # GET 直接帶 device_id
     elif request.args.get("device_id"):
         q_device = request.args.get("device_id")
         contract, contra_text = get_contract(q_device)
         customer = get_customer(q_device)
         if contract:
-            last_color_a3, last_color, last_bw, last_time = get_last_counts(q_device)
-            related_devices = get_related_devices(q_device)
+            prev_year, prev_month = get_prev_month_year(selected_year, selected_month)
+
+            # 前次張數只拿 4 個
+            last_color_a3, last_color, last_bw, last_time = get_last_counts(
+                q_device, selected_year, selected_month
+            )
         else:
             message = f"❌ 找不到設備 {q_device}"
 
-    # ✅ 統一回傳畫面
-    return render_template("billing_index.html",
-                           billing_page=True,
-                           contract=contract,
-                           contra_text=contra_text,
-                           customer=customer,
-                           last_color=last_color,
-                           last_color_a3=last_color_a3,
-                           last_bw=last_bw,
-                           last_time=last_time,
-                           result=result,
-                           matches=matches,
-                           message=message,
-                           related_devices=related_devices)
+    now = datetime.now()
+    return render_template(
+        "billing_index.html",
+        billing_page=True,
+        contract=contract,
+        contra_text=contra_text,
+        customer=customer,
+        last_color=last_color,
+        last_color_a3=last_color_a3,
+        last_bw=last_bw,
+        last_time=last_time,
+        result=result,
+        matches=matches,
+        message=message,
+        related_devices=related_devices,
+        current_year=now.year,
+        selected_year=selected_year,
+        selected_month=selected_month
+    )
 
 
-# --- 顯示發票紀錄頁面（12 列） ---
+# --- 顯示發票紀錄頁面（12 列，可選年份） ---
 @bp.route("/invoice_log/<device_id>")
 def invoice_log(device_id):
-    months = load_billing_summary(device_id)  # dict keyed by 1..12
-    # 傳給模板：months 為 dict，模板會用 1..12 月遍歷
-    return render_template("invoice_log.html", device_id=device_id, billing_invoice_log=True, months=months)
+    selected_year = request.args.get("year", type=int) or datetime.now().year
+    months = load_billing_summary(device_id, selected_year)  # dict keyed by 1..12
+    return render_template(
+        "invoice_log.html",
+        device_id=device_id,
+        months=months,
+        selected_year=selected_year,
+        current_year=datetime.now().year,
+        billing_invoice_log=True
+    )
+
+
 
 # ================================================================
 # 客戶總表 + 概況（summary）
@@ -1113,8 +1151,23 @@ def person_page(sheet):
         billing_person=True
     )
 
+@bp.route("/get_last_counts", methods=["GET"])
+def api_last_counts():
+    device_id = request.args.get("device_id")
+    year = int(request.args.get("year"))
+    month = int(request.args.get("month"))
 
+    color_a3, color, bw, last_date = get_last_counts(device_id, year, month)
+    prev_year, prev_month = get_prev_month_year(year, month)
 
+    return {
+        "color_a3": color_a3,
+        "color": color,
+        "bw": bw,
+        "prev_year": prev_year,
+        "prev_month": prev_month,
+        "last_date": last_date
+    }
 
 # ✅ 讓主程式 app.py 可以 import billing_bp
 billing_bp = bp

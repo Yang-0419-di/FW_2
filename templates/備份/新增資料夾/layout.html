@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>門市資料查詢</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 40px;
+            background-color: #f7f7f7;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+
+        /* ======================
+           按鈕樣式
+        ====================== */
+        button {
+            padding: 10px 15px;
+            font-size: 20px;
+            margin: 5px;
+			background: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button.button-1 { background-color: #20B2AA; }
+        button.button-2 { background: linear-gradient(135deg, #f9a826, #fbc687);}
+        button.button-3 { background-color: #007BFF; }
+
+        /* ======================
+           導覽列
+        ====================== */
+        .button-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .button-row a {
+            text-decoration: none;
+        }
+
+		/* ======================
+		   Accordion（收合）
+		====================== */
+
+		/* 主按鈕（POS / MFP / 常用連結）→ 改成 Outline 風格 */
+		.accordion-button {
+			padding: 6px 14px;
+			font-size: 18px;
+			font-weight: normal;
+			border: 2px solid #00AEAE;
+			background-color: transparent;
+			color: #00AEAE;
+			border-radius: 6px;
+			cursor: pointer;
+			text-align: left;
+			transition: all 0.2s ease;
+		}
+
+		.accordion-button:hover {
+			background: linear-gradient(135deg, #00AEAE, #3BC6C6);
+			color: white;
+		}
+
+		/* 子選單容器（一定要留） */
+		.accordion-content {
+			display: none;           /* 預設隱藏 */
+			flex-direction: column;  /* 垂直排列 */
+			gap: 5px;
+			padding-left: 10px;
+		}
+
+		/* 展開狀態 */
+		.accordion-content.show {
+			display: flex;
+		}
+
+
+        /* ======================
+           表格與其他
+        ====================== */
+        .table-container {
+            overflow-y: auto;
+            max-height: 600px;
+            border: 1px solid #ccc;
+            background-color: white;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: center;
+        }
+
+        th {
+            background-color: #007BFF;
+            color: white;
+            position: sticky;
+            top: 0;
+        }
+
+        #backToTop {
+            position: fixed;
+            bottom: 230px;
+            right: 30px;
+            display: none;
+            padding: 10px 15px;
+            background-color: #007BFF;
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .version-info {
+            text-align: center;
+            color: gray;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        /* ======================
+           POS / MFP 專用 Outline 風格
+        ====================== */
+        .nav-outline-btn {
+            padding: 6px 14px;
+            font-size: 18px;
+            font-weight: normal;
+            border: 2px solid  #00AEAE;
+            background-color: transparent;
+            color:  #00AEAE;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .nav-outline-btn:hover {
+            background-color: #20B2AA;
+            color: white;
+        }
+
+        .section-hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+
+<body>
+
+<h1>
+{{ page_header or (
+    "出勤時間統計" if time_page else
+    "報修查詢" if report_page else
+    ("PMQ1 個人查詢: " ~ personal_page) if personal_page else
+    "部門排程" if calendar_page else
+    ( "新北勤務一部" if home_page else "TG客戶系統" )
+) }}
+</h1>
+
+{% if version %}
+<div class="version-info">版本：{{ version }}</div>
+{% endif %}
+
+{% if not billing_page and not billing_invoice_log and not billing_mfp_summary and not billing_person %}
+
+<!-- ======================
+     第一列：一般功能
+====================== -->
+<div class="button-row" role="navigation">
+
+    <a href="{{ url_for('personal', name='吳宗鴻') }}">
+    <button class="button-3">吳宗鴻</button>
+	</a>
+	<a href="{{ url_for('personal', name='湯家瑋') }}">
+		<button class="button-3">湯家瑋</button>
+	</a>
+	<a href="{{ url_for('personal', name='劉柏均') }}">
+		<button class="button-3">劉柏均</button>
+	</a>
+	<a href="{{ url_for('personal', name='狄澤洋') }}">
+		<button class="button-3">狄澤洋</button>
+	</a>
+
+    <a href="{{ url_for('time_page') }}"><button class="button-1">出勤時間統計</button></a>
+    <a href="{{ url_for('calendar_page') }}"><button class="button-2">排程表</button></a>
+	<a href="https://bot.toshibatec.com.tw/hl0800/showjob31.php" target="_blank" data-section="POS 相關"><button class="button-2">報修刊版</button></a>
+
+    {% if not home_page %}
+    <a href="/"><button class="button-3">回首頁</button></a>
+    {% endif %}
+</div>
+<hr>
+
+	<!-- 第二列：POS / MFP -->
+<!-- 第二列：POS / MFP / 常用連結 -->
+<div class="button-row accordion-nav">
+
+    <!-- POS Accordion -->
+    <button class="accordion-button">POS 相關功能</button>
+    <div class="accordion-content">
+        <a href="{{ url_for('report') }}" data-section="POS 相關"><button class="button-2">報修紀錄查詢</button></a>
+        <a href="https://bot.toshibatec.com.tw/hl0800/showjob31.php" target="_blank" data-section="POS 相關"><button class="button-2">報修刊版</button></a>
+        <a href="{{ url_for('countpass') }}" data-section="POS 相關"><button class="button-2">店長密碼</button></a>
+        <a href="{{ url_for('disk_page') }}" data-section="POS 相關"><button class="button-2">硬碟數量統計表</button></a>
+    </div>
+
+    <!-- MFP Accordion -->
+    <button class="accordion-button">MFP 相關功能</button>
+    <div class="accordion-content">
+        <a href="{{ url_for('mfp_parts') }}" data-section="MFP 相關"><button class="button-2">MFP_零件表</button></a>
+        <a href="{{ url_for('billing.index') }}" data-section="MFP 相關"><button class="button-2">TG客戶系統</button></a>
+    </div>
+
+    <!-- 常用連結 Accordion -->
+    <button class="accordion-button">常用連結</button>
+    <div class="accordion-content">
+        <a href="https://imainte.toshibatec.com.tw/i_mainte_center2/login.cfm" target="_blank" data-section="常用連結"><button class="button-2">iMainte</button></a>
+        <a href="http://eip.toshibatec.com.tw/Main.aspx" target="_blank" data-section="常用連結"><button class="button-2">EIP</button></a>
+        <a href="https://drive.google.com/drive/folders/1AA1vj047xTfcaTuUO3SVPS1GN48xKN6I?usp=drive_link" target="_blank" data-section="常用連結"><button class="button-2">雲端驅動下載</button></a>
+    </div>
+
+</div>
+
+{% endif %}
+
+<!-- ======================
+     子頁內容
+====================== -->
+<main>
+{% block content %}
+<div class="table-container">
+    <p style="text-align:center;padding:20px;">請在子模板中填入內容</p>
+</div>
+{% endblock %}
+</main>
+
+<button id="backToTop" onclick="window.scrollTo({top:0, behavior:'smooth'})">回頂部</button>
+
+<script>
+// Accordion 展開/收合
+document.querySelectorAll('.accordion-nav .accordion-button').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const content = btn.nextElementSibling; // 緊跟的 accordion-content
+
+        // 收起其他內容
+        btn.closest('.accordion-nav').querySelectorAll('.accordion-content').forEach(c => {
+            if (c !== content) c.classList.remove('show');
+        });
+
+        // 切換目前內容
+        content.classList.toggle('show');
+    });
+});
+</script>
+
+{% block extra_scripts %}{% endblock %}
+</body>
+</html>

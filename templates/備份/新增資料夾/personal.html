@@ -1,0 +1,138 @@
+{% extends "layout.html" %}
+
+{% block content %}
+    <!-- === 個人查詢頁 personal.html === -->
+
+    {% if show_top %}
+        <h2 id="season-title">{{ personal_page }} - 季保養進度</h2>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        {% for key in tables_top[0].keys() %}
+                            <th>{{ key }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in tables_top %}
+                        <tr {% if loop.index == 4 %}class="highlight-row"{% endif %}>
+                            {% for value in row.values() %}
+                                <td>{{ value }}</td>
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+	
+	{% if show_area %}
+		<h2>
+			<button onclick="toggleSection('area-content', event)" style="margin-right: 8px;">▶</button>
+			區域數量
+		</h2>
+
+		<div id="area-content" style="display: none;" class="table-container">
+
+			<table>
+				<thead>
+					{% if tables_area %}
+						<tr>
+							{% for key in tables_area[0].keys() %}
+								<th>{{ key }}</th>
+							{% endfor %}
+						</tr>
+					{% endif %}
+				</thead>
+				<tbody>
+					{% for row in tables_area %}
+						<tr>
+							{% for value in row.values() %}
+								<td>{{ value }}</td>
+							{% endfor %}
+						</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+
+		</div>
+	{% endif %}
+
+
+	{% if show_project %}
+
+	<h2>
+		<button onclick="toggleSection('project-content', event)" style="margin-right: 8px;">▼</button>
+		專案進度
+	</h2>
+
+	<div id="project-content" style="display: block;" class="table-container">
+
+		<table>
+			<thead>
+				{% if tables_project %}
+					<tr>
+						{% for key in tables_project[0].keys() %}
+							<th>{{ key }}</th>
+						{% endfor %}
+					</tr>
+				{% endif %}
+			</thead>
+			<tbody>
+				{% for row in tables_project %}
+					<tr>
+						{% for value in row.values() %}
+							<td>{{ value }}</td>
+						{% endfor %}
+					</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+
+	</div>
+
+	{% endif %}
+
+
+    <h2>門市資料</h2>
+    <div class="table-container">
+        <table>
+            <thead>
+                {% if tables_bottom %}
+                    <tr>
+                        {% for key in tables_bottom[0].keys() %}
+                            <th>{{ key }}</th>
+                        {% endfor %}
+                    </tr>
+                {% endif %}
+            </thead>
+            <tbody>
+                {% for row in tables_bottom %}
+                    <tr>
+                        {% for value in row.values() %}
+                            <td>{{ value }}</td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+	
+	<script>
+	function toggleSection(id, event) {
+		const content = document.getElementById(id);
+		const btn = event.target;
+
+		if (content.style.display === "none") {
+			content.style.display = "block";
+			btn.textContent = "▼";
+		} else {
+			content.style.display = "none";
+			btn.textContent = "▶";
+		}
+	}
+	</script>
+
+
+{% endblock %}

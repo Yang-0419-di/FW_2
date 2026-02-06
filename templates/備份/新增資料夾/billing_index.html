@@ -194,105 +194,101 @@ button:hover { background-color: #0056b3; }
 
     <!-- 本月抄表區塊 -->
     {% if contract %}
-	<div class="billing-card">
-		<h3 style="margin-top:0; color:#007BFF;">📊 本月抄表 — 設備：{{ contract.device_id }}</h3>
+    <div class="billing-card">
+        <h3 style="margin-top:0; color:#007BFF;">📊 本月抄表 — 設備：{{ contract.device_id }}</h3>
 
-		<form method="POST">
-			<input type="hidden" name="device_id" value="{{ contract.device_id }}">
-			<input type="hidden" name="mode" value="calculate">
+        <form method="POST">
+            <input type="hidden" name="device_id" value="{{ contract.device_id }}">
+            <input type="hidden" name="mode" value="calculate">
 
-			{% if related_devices and related_devices|length > 1 %}
-			<!-- 多台合開群組 -->
-			<p style="font-size:16px; color:#333;">📦 合開群組（主機：{{ related_devices[0] }}），共 {{ related_devices|length }} 台</p>
-			<table class="contract-table" style="width:100%; margin-top:8px;">
-				<thead style="background:#007BFF; color:#fff;">
-					<tr>
-						<th>設備編號</th>
-						<th>本月彩色張數</th>
-						<th>本月黑白張數</th>
-					</tr>
-				</thead>
-				<tbody>
-					{% for dev in related_devices %}
-					<tr>
-						<td style="font-weight:bold;">{{ dev }}</td>
-						<td><input type="number" name="curr_color_{{ dev }}" style="width:100%; padding:4px;"></td>
-						<td><input type="number" name="curr_bw_{{ dev }}" style="width:100%; padding:4px;"></td>
-					</tr>
-					{% endfor %}
-				</tbody>
-			</table>
-			{% if last_time %}
-			<p style="color:#555; font-size:14px;">📅 前次抄表月份：{{ last_time }}</p>
-			{% endif %}
+            {% if related_devices and related_devices|length > 1 %}
+            <!-- 多台合開群組 -->
+            <p style="font-size:16px; color:#333;">📦 合開群組（主機：{{ related_devices[0] }}），共 {{ related_devices|length }} 台</p>
+            <table class="contract-table" style="width:100%; margin-top:8px;">
+                <thead style="background:#007BFF; color:#fff;">
+                    <tr>
+                        <th>設備編號</th>
+                        <th>本月彩色張數</th>
+                        <th>本月黑白張數</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for dev in related_devices %}
+                    <tr>
+                        <td style="font-weight:bold;">{{ dev }}</td>
+                        <td><input type="number" name="curr_color_{{ dev }}" style="width:100%; padding:4px;"></td>
+                        <td><input type="number" name="curr_bw_{{ dev }}" style="width:100%; padding:4px;"></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% if last_time %}
+            <p style="color:#555; font-size:14px;">📅 前次抄表月份：{{ last_time }}</p>
+            {% endif %}
 
-			{% else %}
-			<!-- 單一設備 -->
-			<div class="form-column">
-				<div style="display:flex; gap:16px; margin-bottom:8px;">
-					<div>
-						<label for="selected_year">抄表年份：</label><br>
-						<select name="selected_year" id="selected_year" required style="padding:4px;">
-							{% for y in range(current_year - 2, current_year + 2) %}
-							<option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }} 年</option>
-							{% endfor %}
-						</select>
-					</div>
-					<div>
-						<label for="selected_month">抄表月份：</label><br>
-						<select name="selected_month" id="selected_month" required style="padding:4px;">
-							{% for m in range(1,13) %}
-							<option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ m }} 月</option>
-							{% endfor %}
-						</select>
-					</div>
-				</div>
+            {% else %}
+            <!-- 單一設備 -->
+            <div class="form-column">
+                <div>
+                    <label>前次彩色A3張數：</label><br>
+                    <input type="text" value="{{ last_color_a3 }}" readonly style="width:100px; padding:4px;">
+                </div>
+                <div>
+                    <label>前次彩色張數：</label><br>
+                    <input type="text" value="{{ last_color }}" readonly style="width:100px; padding:4px;">
+                </div>
+                <div>
+                    <label>前次黑白張數：</label><br>
+                    <input type="text" value="{{ last_bw }}" readonly style="width:100px; padding:4px;">
+                </div>
 
-				<div class="form-column">
-					<div>
-						<label>前次彩色A3張數：</label><br>
-						<input id="prev-color-a3" type="text" value="{{ last_color_a3 }}" readonly style="width:100px; padding:4px;">
-					</div>
-					<div>
-						<label>前次彩色張數：</label><br>
-						<input id="prev-color" type="text" value="{{ last_color }}" readonly style="width:100px; padding:4px;">
-					</div>
-					<div>
-						<label>前次黑白張數：</label><br>
-						<input id="prev-bw" type="text" value="{{ last_bw }}" readonly style="width:100px; padding:4px;">
-					</div>
-					<div>
-						<p id="prev-date" style="color:#555; font-size:14px;">📅 前次抄表月份：{{ last_time }}</p>
-					</div>
+                <div style="display:flex; gap:16px; margin-top:8px;">
+                    <div>
+                        <label for="selected_year">抄表年份：</label><br>
+                        <select name="selected_year" id="selected_year" required style="padding:4px;">
+                            {% for y in range(current_year - 2, current_year + 2) %}
+                            <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }} 年</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="selected_month">抄表月份：</label><br>
+                        <select name="selected_month" id="selected_month" required style="padding:4px;">
+                            {% for m in range(1,13) %}
+                            <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ m }} 月</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
 
-					<div>
-						<label>本月彩色A3張數：</label><br>
-						<input type="number" name="curr_color_a3" required style="width:100px; padding:4px;">
-					</div>
-					<div>
-						<label>本月彩色張數：</label><br>
-						<input type="number" name="curr_color" required style="width:100px; padding:4px;">
-					</div>
-					<div>
-						<label>本月黑白張數：</label><br>
-						<input type="number" name="curr_bw" required style="width:100px; padding:4px;">
-					</div>
-				</div>
-			</div>
-			{% endif %}
+                <div class="form-column">
+                    <div>
+                        <label>本月彩色A3張數：</label><br>
+                        <input type="number" name="curr_color_a3" required style="width:100px; padding:4px;">
+                    </div>
+                    <div>
+                        <label>本月彩色張數：</label><br>
+                        <input type="number" name="curr_color" required style="width:100px; padding:4px;">
+                    </div>
+                    <div>
+                        <label>本月黑白張數：</label><br>
+                        <input type="number" name="curr_bw" required style="width:100px; padding:4px;">
+                    </div>
+                </div>
+            </div>
+            {% endif %}
 
-			<!-- 按鈕同列 -->
-			<div class="button-row">
-				<button type="submit" class="save-btn">💾 計算並儲存抄表</button>
-				<a href="{{ url_for('billing.invoice_log', device_id=contract.device_id) }}">
-					<button type="button" class="invoice-btn">📄 發票紀錄</button>
-				</a>
-			</div>
-		</form>
-	</div>
-
+            <!-- 按鈕同列 -->
+            <div class="button-row">
+                <button type="submit" class="save-btn">💾 計算並儲存抄表</button>
+                <a href="{{ url_for('billing.invoice_log', device_id=contract.device_id) }}">
+                    <button type="button" class="invoice-btn">📄 發票紀錄</button>
+                </a>
+            </div>
+        </form>
+    </div>
     {% endif %}
-	
+
     <!-- 計算結果 -->
     {% if result %}
     <hr>
@@ -344,7 +340,7 @@ button:hover { background-color: #0056b3; }
             <tr><td>黑白基本張數</td><td><input type="number" name="bw_basic" value="{{ contract.bw_basic }}"></td></tr>
             <tr><td>黑白贈送張數</td><td><input type="number" name="bw_giveaway" value="{{ contract.bw_giveaway }}"></td></tr>
             <tr><td>黑白誤印率 (小數)</td><td><input type="number" step="0.0001" name="bw_error_rate" value="{{ contract.bw_error_rate }}"></td></tr>
-
+            <tr><td>前次黑白張數</td><td><input type="text" value="{{ last_bw }}" readonly></td></tr>
             <!-- 稅別 -->
             <tr>
                 <td>稅別</td>
@@ -366,28 +362,7 @@ button:hover { background-color: #0056b3; }
             <button type="submit">更新契約條件</button>
         </div>
     </form>
+
 </div>
-
-<script>
-function updateLastCounts() {
-    const month = document.getElementById('selected_month').value;
-    const year = document.getElementById('selected_year').value;
-    const device_id = "{{ contract.device_id }}";
-
-    fetch(`/billing/get_last_counts?device_id=${device_id}&year=${year}&month=${month}`)
-    .then(res => res.json())
-    .then(data => {
-        document.getElementById('prev-color-a3').value = data.color_a3;
-        document.getElementById('prev-color').value = data.color;
-        document.getElementById('prev-bw').value = data.bw;
-        document.getElementById('prev-date').innerText = `📅 前次抄表月份：${data.prev_year} 年 ${data.prev_month} 月`;
-    })
-    .catch(err => console.error(err));
-}
-
-document.getElementById('selected_month').addEventListener('change', updateLastCounts);
-document.getElementById('selected_year').addEventListener('change', updateLastCounts);
-</script>
-
 </body>
 </html>

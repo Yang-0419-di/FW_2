@@ -1,0 +1,233 @@
+{% extends 'layout.html' %}
+{% block content %}
+
+<!-- ================= 導覽列 ================= -->
+<div class="nav-buttons">
+  <a href="{{ url_for('billing.index') }}">TG客戶系統</a>
+  <a href="{{ url_for('billing.mfp_summary') }}">客戶總表</a>
+  <a href="{{ url_for('billing.person_page', sheet='湯家瑋') }}">湯家瑋</a>
+  <a href="{{ url_for('billing.person_page', sheet='吳宗鴻') }}">吳宗鴻</a>
+  <a href="{{ url_for('billing.person_page', sheet='劉柏均') }}">劉柏均</a>
+  <a href="javascript:history.back()">← 返回上一頁</a>
+  <a href="/">回首頁</a>
+</div>
+
+<!-- ================= 樣式 ================= -->
+<style>
+/* ===== 導覽列按鈕 ===== */
+.nav-buttons {
+    margin-bottom: 15px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.nav-buttons a {
+    display: inline-block;
+    padding: 8px 16px;
+    background-color: #007BFF; /* 主色 */
+    color: #fff;
+    text-decoration: none;
+    border-radius: 6px;
+    font-size: 14px;
+    transition: background-color 0.2s;
+    text-align: center;
+}
+
+.nav-buttons a:hover {
+    background-color: #0056b3;
+}
+
+/* 特定按鈕不同顏色 */
+.nav-buttons a:nth-child(3),
+.nav-buttons a:nth-child(4),
+.nav-buttons a:nth-child(5) {
+    background-color: #20c997; /* 綠色 */
+}
+.nav-buttons a:nth-child(3):hover,
+.nav-buttons a:nth-child(4):hover,
+.nav-buttons a:nth-child(5):hover {
+    background-color: #198754;
+}
+
+/* ===== 表格自適應畫面，不爆版 ===== */
+.mfp-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+}
+
+/* 所有內容靠左、可換行 */
+.mfp-table th,
+.mfp-table td {
+    text-align: left !important;
+    vertical-align: top;
+    word-break: break-word;
+    white-space: normal;
+    padding: 6px 8px;
+    font-size: 14px;
+}
+
+/* 小螢幕自動縮字 */
+@media (max-width: 1400px) {
+    .mfp-table th,
+    .mfp-table td {
+        font-size: 13px;
+    }
+}
+@media (max-width: 1100px) {
+    .mfp-table th,
+    .mfp-table td {
+        font-size: 12px;
+    }
+}
+
+/* 客戶總表容器 */
+.table-container.no-scroll {
+    width: 100%;
+    overflow-x: auto; /* 水平可滑動 */
+    overflow-y: visible; /* 垂直自動撐開 */
+}
+
+/* 搜尋框 */
+.search-box {
+    margin: 10px 0 15px 0;
+}
+.search-box input {
+    width: 320px;
+    padding: 6px 10px;
+    font-size: 16px;
+}
+
+/* 淡紅底色 */
+.bg-warning {
+    background-color: #ffcccc;
+}
+
+/* 設備代號按鈕 */
+.device-btn {
+    display: inline-block;
+    padding: 4px 10px;
+    background-color: #007BFF;
+    color: white;
+    text-decoration: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+}
+.device-btn:hover {
+    background-color: #0056b3;
+}
+</style>
+
+<!-- ================= 區域台數 ================= -->
+<h2>區域台數</h2>
+<div class="table-container">
+  <table class="mfp-table">
+    <thead>
+      <tr>{% for col in area_header %}<th>{{ col }}</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+      {% for row in area_body %}
+      <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- ================= 保養週期評估 ================= -->
+<h2>保養週期評估</h2>
+<div class="table-container">
+  <table class="mfp-table">
+    <thead>
+      <tr>{% for col in cycle_header %}<th>{{ col }}</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+      {% for row in cycle_body %}
+      <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- ================= 客戶總表 ================= -->
+<h2>客戶總表</h2>
+<div class="search-box">
+  <input type="text" id="customerSearch" placeholder="即時搜尋（客戶 / 設備 / 地址 / 工程師…）">
+</div>
+
+<div class="table-container no-scroll">
+  <table class="mfp-table" id="customerTable">
+    <thead>
+      <tr>
+        <th>設備代號</th>
+        <th>客戶名稱</th>
+        <th>保養週期</th>
+        <th>設備機號</th>
+        <th>機型</th>
+        <th>統一編號</th>
+        <th>裝機地址</th>
+        <th>工程師</th>
+        <th>契約編號</th>
+        <th>合約起始</th>
+        <th>合約結束</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in tables %}
+      <tr>
+        <td>
+          <a href="{{ url_for('billing.index') }}?device_id={{ row.device_id }}" class="device-btn">{{ row.device_id }}</a>
+        </td>
+        <td>{{ row.customer_name }}</td>
+        <td>{{ row.pm|int }}</td>
+        <td>{{ row.device_number|int }}</td>
+        <td>{{ row.machine_model }}</td>
+        <td>{{ row.tax_id|int }}</td>
+        <td>{{ row.install_address }}</td>
+        <td>{{ row.service_person }}</td>
+        <td>{{ row.contract_number }}</td>
+        <td class="date-cell">{{ row.contract_start }}</td>
+        <td class="date-cell contract-end {% if row._contract_end_alert %}bg-warning{% endif %}">{{ row.contract_end }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- ================= JS ================= -->
+<script>
+/* 🔍 即時搜尋 */
+document.getElementById('customerSearch').addEventListener('input', function () {
+    const keyword = this.value.toLowerCase();
+    document.querySelectorAll('#customerTable tbody tr').forEach(row => {
+        row.style.display = row.innerText.toLowerCase().includes(keyword) ? '' : 'none';
+    });
+});
+
+/* 📅 日期格式化 YYYY/MM/DD */
+const today = new Date();
+document.querySelectorAll('.date-cell').forEach(td => {
+    const raw = td.innerText.trim();
+    if (!raw) return;
+    const d = new Date(raw);
+    if (!isNaN(d)) {
+        td.innerText = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+    }
+});
+
+/* 🔴 合約結束小於三個月底色 */
+document.querySelectorAll('.contract-end').forEach(td => {
+    const raw = td.innerText.trim();
+    if (!raw) return;
+    const d = new Date(raw);
+    if (!isNaN(d)) {
+        const diffDays = (d - today)/(1000*60*60*24);
+        if(diffDays >=0 && diffDays <=90){
+            td.classList.add('bg-warning');
+        }
+    }
+});
+</script>
+
+{% endblock %}
