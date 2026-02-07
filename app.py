@@ -34,18 +34,6 @@ matplotlib.rcParams['axes.unicode_minus'] = False
 font_path = "./fonts/NotoSansCJKtc-Regular.otf"
 font_prop = FontProperties(fname=font_path)
 
-def safe_int(val):
-    try:
-        if val is None:
-            return 0
-        val = str(val).replace(',', '').strip()
-        if val == '':
-            return 0
-        return int(float(val))
-    except:
-        return 0
-
-
 # ====== 載入 Excel（含版本號） ======
 def load_excel_from_github(url):
     global cached_xls, version_time
@@ -207,11 +195,7 @@ def disk_page():
         'sc_256_new','sc_256_old','sc_500_new','sc_500_old',
         'sc_1t_new','sc_1t_old','tm_128_new','tm_128_old','tm_256_new','tm_256_old'
     ]
-    total = {
-        k: sum(safe_int(r.get(k)) for r in rows)
-        for k in total_keys
-    }
-
+    total = {k: sum(int(r.get(k) or 0) for r in rows) for k in total_keys}
 
     return render_template("disk.html", page_header="POS 相關", rows=rows, total=total)
 

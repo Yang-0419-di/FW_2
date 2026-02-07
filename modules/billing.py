@@ -1039,8 +1039,8 @@ def load_person_remarks(sheet_name):
 
     return {
         r["設備代號"]: {
-            "remark": r.get("備註", ""),
-            "method": r.get("抄表方式", "")
+            "remark": str(r.get("備註", "") or ""),
+            "method": str(r.get("抄表方式", "") or "")
         }
         for r in rows
     }
@@ -1067,9 +1067,9 @@ def upsert_person_field(sheet_name, device_id, field, value):
             return
 
     ws.append_row([
-        device_id,
-        value if field == "remark" else "",
-        value if field == "method" else ""
+        str(device_id),
+        str(value) if field == "remark" else "",
+        str(value) if field == "method" else ""
     ])
     
     
