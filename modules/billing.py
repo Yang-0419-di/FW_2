@@ -19,39 +19,89 @@ def to_int(val):
     except (TypeError, ValueError):
         return 0
 
-def load_github_excel():
+
+# --- 計算保養逾期狀態並加上顏色 ---
+def color_overdue(val, last_pm, cycle):
+    """
+    val: 客戶名稱
+    last_pm: 最後保養日 (str)
+    cycle: 保養週期 (str 或 int)
+    """
+    if last_pm == "" or cycle == "":
+        return val  # 無資料就不處理
+
+    # 特例：合約規範視為30天
+    try:
+        cycle_days = int(cycle) if str(cycle) != "合約規範" else 30
+    except:
+        cycle_days = 30  # 防呆
+
+    try:
+        last_date = pd.to_datetime(last_pm)
+    except:
+        return val
+
+    today = datetime.today()
+    delta_days = (today - last_date).days
+
+    if delta_days > cycle_days:
+        # HTML 加上淺粉紅背景
+        return f'<span style="background-color:#FFC0CB">{val}</span>'
+    else:
+        return val
+
+
+# ================================================================
+# 讀取 GitHub / 本地 Excel（支援檔名參數）
+# ================================================================
+_cached_xls = None  # 快取字典 {'filename': '...', 'xls': pd.ExcelFile}
+
+def load_github_excel(filename="MFP.xlsx"):
     """
     安全下載 GitHub RAW EXCEL（含快取與 fallback）
+    filename: 可選，本地 fallback 使用的 Excel 檔名
     """
+    import requests
+    from io import BytesIO
+    import pandas as pd
+
     global _cached_xls
 
-    if _cached_xls:
-        return _cached_xls
+    if _cached_xls and _cached_xls['filename'] == filename:
+        return _cached_xls['xls']
 
     try:
         resp = requests.get(GITHUB_XLSX_URL, timeout=10)
-
-        # 必須是 200 才算成功
         if resp.status_code != 200:
             raise Exception(f"HTTP {resp.status_code}")
 
         excel_bytes = BytesIO(resp.content)
 
-        # 必須要能被 openpyxl 視為 zip（xlsx）
         import zipfile
         if not zipfile.is_zipfile(excel_bytes):
             raise Exception("下載內容不是 Excel（不是 zip 格式）")
 
-        _cached_xls = pd.ExcelFile(excel_bytes, engine="openpyxl")
-        return _cached_xls
+        xls = pd.ExcelFile(excel_bytes, engine="openpyxl")
+        _cached_xls = {'filename': filename, 'xls': xls}
+        return xls
 
     except Exception as e:
-        print("⚠ GitHub Excel 載入失敗，改用本地 MFP/MFP.xlsx，原因：", e)
+        print(f"⚠ GitHub Excel 載入失敗，改用本地 {filename}，原因：{e}")
+        local_path = f"MFP/{filename}"  # 本地 fallback
+        xls = pd.ExcelFile(local_path, engine="openpyxl")
+        _cached_xls = {'filename': filename, 'xls': xls}
+        return xls
 
-        local_path = "MFP/MFP.xlsx"
 
-        _cached_xls = pd.ExcelFile(local_path, engine="openpyxl")
-        return _cached_xls
+    except Exception as e:
+        print(f"⚠ GitHub Excel '{filename}' 載入失敗，改用本地 fallback，原因：", e)
+
+        # fallback 本地路徑，假設 MFP.xlsx 與 output.xlsx 都在 MFP/資料夾
+        local_path = f"MFP/{filename}"
+        xls = pd.ExcelFile(local_path, engine="openpyxl")
+
+        _cached_xls = {"filename": filename, "xls": xls}
+        return xls
 
 # --- 初始化資料庫（完整，不略） ---
 def init_db():
@@ -1089,16 +1139,57 @@ def save_person_field():
 
 
 # ================================================================
+# 讀取 GitHub / 本地 Excel（支援檔名參數）
+# ================================================================
+_cached_xls = None  # 快取字典 {'filename': '...', 'xls': pd.ExcelFile}
+
+def load_github_excel(filename="MFP.xlsx"):
+    """
+    安全下載 GitHub RAW EXCEL（含快取與 fallback）
+    filename: 可選，本地 fallback 使用的 Excel 檔名
+    """
+    import requests
+    from io import BytesIO
+    import pandas as pd
+
+    global _cached_xls
+
+    if _cached_xls and _cached_xls['filename'] == filename:
+        return _cached_xls['xls']
+
+    try:
+        resp = requests.get(GITHUB_XLSX_URL, timeout=10)
+        if resp.status_code != 200:
+            raise Exception(f"HTTP {resp.status_code}")
+
+        excel_bytes = BytesIO(resp.content)
+
+        import zipfile
+        if not zipfile.is_zipfile(excel_bytes):
+            raise Exception("下載內容不是 Excel（不是 zip 格式）")
+
+        xls = pd.ExcelFile(excel_bytes, engine="openpyxl")
+        _cached_xls = {'filename': filename, 'xls': xls}
+        return xls
+
+    except Exception as e:
+        print(f"⚠ GitHub Excel 載入失敗，改用本地 {filename}，原因：{e}")
+        local_path = f"MFP/{filename}"  # 本地 fallback
+        xls = pd.ExcelFile(local_path, engine="openpyxl")
+        _cached_xls = {'filename': filename, 'xls': xls}
+        return xls
+
+# ================================================================
 # 2️⃣ 人員個人資料頁（person）
 # ================================================================
 @bp.route("/person/<sheet>")
 def person_page(sheet):
     keyword = request.args.get("keyword", "").strip()
 
-    # --- 讀 GitHub Excel 保留前兩區塊（Accordion） ---
-    xls = load_github_excel()
-    df1 = pd.read_excel(xls, sheet_name=sheet, header=0, usecols="A:R", nrows=4)
-    df2 = pd.read_excel(xls, sheet_name=sheet, header=0, usecols="A:R", skiprows=5, nrows=4)
+    # --- 讀 GitHub MFP.xlsx 保留前兩區塊（Accordion） ---
+    mfp_xls = load_github_excel("MFP.xlsx")
+    df1 = pd.read_excel(mfp_xls, sheet_name=sheet, header=0, usecols="A:R", nrows=4)
+    df2 = pd.read_excel(mfp_xls, sheet_name=sheet, header=0, usecols="A:R", skiprows=5, nrows=4)
 
     # --- 從 SQLite 讀取客戶資料 ---
     conn = sqlite3.connect(DB_FILE)
@@ -1106,19 +1197,47 @@ def person_page(sheet):
     df3 = pd.read_sql_query(query, conn, params=(sheet,))
     conn.close()
 
+    # --- 從 output.xlsx 讀取 pm_date ---
+    output_xls = load_github_excel("output.xlsx")
+    df_pm = pd.read_excel("MFP/output.xlsx", sheet_name="customers", usecols="A:L", engine="openpyxl")
+    df_pm["device_id"] = df_pm["device_id"].astype(str).str.strip()  # 確保設備代號一致
+
     # --- 從 Google Sheet 讀取備註與抄表方式 ---
     gs_data = load_person_remarks(sheet)  # dict keyed by 設備代號
 
-    # 新增欄位 備註 / 抄表方式
+    # --- 表頭重新命名（SQLite -> 中文） ---
+    df3 = df3.rename(columns={
+        "customer_name": "客戶名稱",
+        "pm": "保養週期",
+        "device_id": "設備代號"
+    })
+
+    # --- 新增欄位 備註 / 抄表方式 / 最後保養日 ---
     df3["備註"] = ""
     df3["抄表方式"] = ""
+    df3["最後保養日"] = ""
 
     # --- 合併 Google Sheet 資料 ---
     for idx, row in df3.iterrows():
-        dev_id = str(row["device_id"]).strip()
+        dev_id = str(row["設備代號"]).strip()
         if dev_id in gs_data:
             df3.at[idx, "備註"] = gs_data[dev_id].get("remark", "")
             df3.at[idx, "抄表方式"] = gs_data[dev_id].get("method", "")
+
+    # --- 合併 output.xlsx pm_date 資料 ---
+    for idx, row in df3.iterrows():
+        dev_id = str(row["設備代號"]).strip()
+        match = df_pm[df_pm["device_id"] == dev_id]
+        if not match.empty and pd.notna(match.iloc[0]["pm_date"]):
+            df3.at[idx, "最後保養日"] = pd.to_datetime(match.iloc[0]["pm_date"]).strftime("%Y-%m-%d")
+        else:
+            df3.at[idx, "最後保養日"] = ""
+    
+    # --- 對 df3["客戶名稱"] 套用 ---
+    df3["客戶名稱"] = df3.apply(
+        lambda r: color_overdue(r["客戶名稱"], r["最後保養日"], r["保養週期"]),
+        axis=1
+    )
 
     # ✅ 將所有 NaN 轉成空字串
     df3 = df3.fillna("")
@@ -1127,14 +1246,7 @@ def person_page(sheet):
     df3.insert(0, "項次", range(1, len(df3) + 1))
 
     # --- 調整欄位順序 ---
-    df3 = df3[["項次", "customer_name", "備註", "pm", "device_id", "抄表方式"]]
-
-    # --- 表頭重新命名 ---
-    df3 = df3.rename(columns={
-        "customer_name": "客戶名稱",
-        "pm": "保養週期",
-        "device_id": "設備代號"
-    })
+    df3 = df3[["項次", "客戶名稱", "備註", "保養週期", "最後保養日", "設備代號", "抄表方式"]]
 
     # --- 關鍵字過濾 ---
     if keyword:
@@ -1145,11 +1257,12 @@ def person_page(sheet):
         "tjw.html",
         table1=df1.to_html(index=False, classes="table table-bordered"),
         table2=df2.to_html(index=False, classes="table table-bordered"),
-        df3=df3,  # ← SQLite + Google Sheet 資料
+        df3=df3,  # ← SQLite + Google Sheet + output.xlsx 資料
         page_name=sheet,
         keyword=keyword,
         billing_person=True
     )
+
 
 @bp.route("/get_last_counts", methods=["GET"])
 def api_last_counts():

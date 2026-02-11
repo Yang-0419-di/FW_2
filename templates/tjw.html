@@ -86,10 +86,10 @@
                     </td>
                 {% else %}
                     {% if col == "客戶名稱" %}
-                        <td style="text-align:left;">{{ row[col] }}</td>
-                    {% else %}
-                        <td>{{ row[col] }}</td>
-                    {% endif %}
+						<td style="text-align:left;">{{ row[col]|safe }}</td>
+					{% else %}
+						<td>{{ row[col] }}</td>
+					{% endif %}
                 {% endif %}
             {% endfor %}
         </tr>

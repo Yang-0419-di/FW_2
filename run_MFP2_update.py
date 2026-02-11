@@ -37,7 +37,7 @@ else:
 base_dir = os.path.dirname(os.path.abspath(__file__))  # run_MFP2_update.py 位置
 
 # MFP 主檔路徑
-data_file = os.path.join(base_dir, "MFP", "MFP.xlsx")
+data_file = os.path.join(base_dir, "MFP", "output.xlsx")
 if not os.path.exists(data_file):
     print(f"❌ 找不到主檔：{data_file}")
     sys.exit(1)
