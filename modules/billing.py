@@ -7,6 +7,9 @@ import requests
 from io import BytesIO
 import pandas as pd
 from modules.gsheet import get_person_worksheet 
+from modules.gsheet import get_customer_worksheet
+from modules.gsheet import get_contract_worksheet
+
 
 GITHUB_XLSX_URL = 'https://raw.githubusercontent.com/Yang-0419-di/FW_2/master/MFP/MFP.xlsx'
 _cached_xls = None   # 快取避免多次下載
@@ -27,28 +30,33 @@ def color_overdue(val, last_pm, cycle):
     last_pm: 最後保養日 (str)
     cycle: 保養週期 (str 或 int)
     """
+    # 防呆：空白保養日或空白週期都算逾期
+    overdue = False
+
     if last_pm == "" or cycle == "":
-        return val  # 無資料就不處理
+        overdue = True
+    else:
+        # 特例：合約規範視為30天
+        try:
+            cycle_days = int(cycle) if str(cycle) != "合約規範" else 30
+        except:
+            cycle_days = 30  # 防呆
 
-    # 特例：合約規範視為30天
-    try:
-        cycle_days = int(cycle) if str(cycle) != "合約規範" else 30
-    except:
-        cycle_days = 30  # 防呆
+        try:
+            last_date = pd.to_datetime(last_pm)
+            today = datetime.today()
+            delta_days = (today - last_date).days
+            if delta_days > cycle_days:
+                overdue = True
+        except:
+            overdue = True  # 無法解析日期也算逾期
 
-    try:
-        last_date = pd.to_datetime(last_pm)
-    except:
-        return val
-
-    today = datetime.today()
-    delta_days = (today - last_date).days
-
-    if delta_days > cycle_days:
+    if overdue:
         # HTML 加上淺粉紅背景
         return f'<span style="background-color:#FFC0CB">{val}</span>'
     else:
         return val
+
 
 
 # ================================================================
@@ -213,75 +221,77 @@ def safe_int(val):
 
 # --- 查詢契約 ---
 def get_contract(device_id):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT * FROM contracts WHERE device_id=?", (device_id,))
-    contract_row = c.fetchone()
-    contra_text = ""
+    ws = get_person_worksheet("contracts")
+    rows = ws.get_all_records()   # ← 這行是關鍵
 
-    if contract_row:
-        col_names = [desc[0] for desc in c.description]
-        contract_dict = dict(zip(col_names, contract_row))
-        contra_text = contract_dict.get("contra", "")
-        
-        # 🔹 將可能為 None 的欄位設為 0
-        # 🔹 將可能為 None / 空字串 的欄位正規化
-        
-        float_fields = [
-            "monthly_rent",
-            "color_unit_price", "bw_unit_price",
-            "color_a3_unit_price",
-            "color_error_rate", "bw_error_rate", "color_a3_error_rate",
-        ]
+    contract_row = next(
+        (row for row in rows
+         if str(row.get("device_id", "")).strip() == str(device_id).strip()),
+        None
+    )
 
-        int_fields = [
-            "color_giveaway", "bw_giveaway", "color_a3_giveaway",
-            "color_basic", "bw_basic", "color_a3_basic",
-        ]
+    if not contract_row:
+        return None, ""
 
-        for k in float_fields:
-            try:
-                contract_dict[k] = float(contract_dict.get(k) or 0)
-            except ValueError:
-                contract_dict[k] = 0.0
+    contra_text = contract_row.get("contra", "")
 
-        for k in int_fields:
-            contract_dict[k] = to_int(contract_dict.get(k))
+    # 欄位型別正規化
+    float_fields = [
+        "monthly_rent",
+        "color_unit_price", "bw_unit_price",
+        "color_a3_unit_price",
+        "color_error_rate", "bw_error_rate", "color_a3_error_rate",
+    ]
 
-    else:
-        contract_dict = None
+    int_fields = [
+        "color_giveaway", "bw_giveaway", "color_a3_giveaway",
+        "color_basic", "bw_basic", "color_a3_basic",
+    ]
 
-    conn.close()
-    return contract_dict, contra_text
+    for k in float_fields:
+        try:
+            contract_row[k] = float(contract_row.get(k) or 0)
+        except:
+            contract_row[k] = 0.0
+
+    for k in int_fields:
+        try:
+            contract_row[k] = int(float(contract_row.get(k) or 0))
+        except:
+            contract_row[k] = 0
+
+    return contract_row, contra_text
 
 
 # --- 查詢客戶資料 ---
 def get_customer(device_id):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT * FROM customers WHERE device_id=?", (device_id,))
-    row = c.fetchone()
-    conn.close()
+    ws = get_person_worksheet("customers")
+    rows = ws.get_all_records()   # ← 必須加這行
+
+    row = next(
+        (r for r in rows
+         if str(r.get("device_id", "")).strip() == str(device_id).strip()),
+        None
+    )
 
     if not row:
         return None
 
-    # 先把資料存到 customer dict
     customer = {
-        "device_id": row[0],
-        "customer_name": row[1],
-        "pm": row[2],              # 保養週期
-        "device_number": row[3],
-        "machine_model": row[4],
-        "tax_id": row[5],
-        "install_address": row[6],
-        "service_person": row[7],
-        "contract_number": row[8],
-        "contract_start": row[9],
-        "contract_end": row[10]
+        "device_id": row.get("device_id", ""),
+        "customer_name": row.get("customer_name", ""),
+        "pm": row.get("pm", ""),
+        "device_number": row.get("device_number", ""),
+        "machine_model": row.get("machine_model", ""),
+        "tax_id": row.get("tax_id", ""),
+        "install_address": row.get("install_address", ""),
+        "service_person": row.get("service_person", ""),
+        "contract_number": row.get("contract_number", ""),
+        "contract_start": row.get("contract_start", ""),
+        "contract_end": row.get("contract_end", "")
     }
 
-    # 格式化日期欄位 YYYY/MM/DD
+    # 日期格式化
     for key in ["contract_start", "contract_end"]:
         val = customer.get(key)
         if val:
@@ -289,24 +299,127 @@ def get_customer(device_id):
                 dt = pd.to_datetime(val)
                 customer[key] = dt.strftime("%Y/%m/%d")
             except:
-                pass  # 轉換失敗就保留原值
+                pass
 
     return customer
 
 
-
-# --- 模糊搜尋客戶名稱 ---
+# --- 模糊搜尋客戶名稱（Google Sheet 版本） ---
 def search_customers_by_name(keyword):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("""
-        SELECT device_id, customer_name
-        FROM customers
-        WHERE customer_name LIKE ?
-    """, (f"%{keyword}%",))
-    rows = c.fetchall()
-    conn.close()
-    return [{"device_id": r[0], "customer_name": r[1]} for r in rows]
+    ws = get_person_worksheet("customers")
+    rows = ws.get_all_records()   # ← 必須加這行
+
+    result = []
+    keyword_lower = keyword.lower().strip()
+
+    for r in rows:
+        if keyword_lower in str(r.get("customer_name", "")).lower():
+            result.append({
+                "device_id": r.get("device_id", ""),
+                "customer_name": r.get("customer_name", "")
+            })
+
+    return result
+
+def update_contract(device_id, contract_data):
+    ws = get_person_worksheet("contracts")
+    rows = ws.get_all_records()
+
+    for idx, row in enumerate(rows, start=2):  # start=2 因為第1列是表頭
+        if str(row.get("device_id", "")).strip() == str(device_id).strip():
+
+            for key, value in contract_data.items():
+                try:
+                    col = list(row.keys()).index(key) + 1
+                    ws.update_cell(idx, col, value)
+                except:
+                    pass
+
+            return True
+
+    return False
+    
+def update_customer(device_id, customer_data):
+    ws = get_person_worksheet("customers")
+    rows = ws.get_all_records()
+
+    for idx, row in enumerate(rows, start=2):
+        if str(row.get("device_id", "")).strip() == str(device_id).strip():
+
+            for key, value in customer_data.items():
+                try:
+                    col = list(row.keys()).index(key) + 1
+                    ws.update_cell(idx, col, value)
+                except:
+                    pass
+
+            return True
+
+    return False
+
+#新客戶建檔
+def insert_customer(device_id, customer_data):
+    """
+    將新客戶資料寫入 Google Sheet customers 工作表
+    """
+
+    try:
+        ws = get_customer_worksheet()
+
+        # 取得表頭
+        headers = ws.row_values(1)
+
+        # 建立一整列空值
+        new_row = [""] * len(headers)
+
+        # 依表頭名稱填入資料
+        for key, value in customer_data.items():
+            if key in headers:
+                col_index = headers.index(key)
+                new_row[col_index] = value
+
+        # device_id 確保一定寫入
+        if "device_id" in headers:
+            new_row[headers.index("device_id")] = device_id
+
+        ws.append_row(new_row)
+
+        return True
+
+    except Exception as e:
+        print("insert_customer error:", e)
+        return False
+
+#新合約建檔
+def insert_contract(device_id, contract_data):
+    """
+    將新契約資料寫入 Google Sheet contracts 工作表
+    """
+
+    try:
+        ws = get_contract_worksheet()
+
+        # 取得表頭
+        headers = ws.row_values(1)
+
+        new_row = [""] * len(headers)
+
+        for key, value in contract_data.items():
+            if key in headers:
+                col_index = headers.index(key)
+                new_row[col_index] = value
+
+        # 強制寫入 device_id
+        if "device_id" in headers:
+            new_row[headers.index("device_id")] = device_id
+
+        ws.append_row(new_row)
+
+        return True
+
+    except Exception as e:
+        print("insert_contract error:", e)
+        return False
 
 
 # --- 查詢最後抄表（含跨年） ---
@@ -776,63 +889,33 @@ def index():
                 message = f"❌ 找不到設備 {device_id}"
 
         elif mode in ["update_contract", "update_customer", "delete_customer", "new_customer"]:
-            conn = sqlite3.connect(DB_FILE)
-            c = conn.cursor()
+            # --- Google Sheet 客戶與契約工作表 ---
+            customers_ws = get_person_worksheet("customers")
+            contracts_ws = get_person_worksheet("contracts")
 
             if mode == "update_contract":
-                c.execute("""
-                    UPDATE contracts SET
-                        monthly_rent=?,
-                        color_unit_price=?,
-                        bw_unit_price=?,
+                contract_data = {
+                    "monthly_rent": float(request.form.get("monthly_rent") or 0),
+                    "color_unit_price": float(request.form.get("color_unit_price") or 0),
+                    "bw_unit_price": float(request.form.get("bw_unit_price") or 0),
+                    "color_giveaway": to_int(request.form.get("color_giveaway")),
+                    "bw_giveaway": to_int(request.form.get("bw_giveaway")),
+                    "color_error_rate": float(request.form.get("color_error_rate") or 0),
+                    "bw_error_rate": float(request.form.get("bw_error_rate") or 0),
+                    "color_basic": to_int(request.form.get("color_basic")),
+                    "bw_basic": to_int(request.form.get("bw_basic")),
+                    "color_a3_unit_price": float(request.form.get("color_a3_unit_price") or 0),
+                    "color_a3_giveaway": to_int(request.form.get("color_a3_giveaway")),
+                    "color_a3_error_rate": float(request.form.get("color_a3_error_rate") or 0),
+                    "color_a3_basic": to_int(request.form.get("color_a3_basic")),
+                    "tax_type": request.form.get("tax_type", "含稅")
+                }
 
-                        color_giveaway=?,
-                        bw_giveaway=?,
-
-                        color_error_rate=?,
-                        bw_error_rate=?,
-
-                        color_basic=?,
-                        bw_basic=?,
-
-                        color_a3_unit_price=?,
-                        color_a3_giveaway=?,
-                        color_a3_error_rate=?,
-                        color_a3_basic=?,
-
-                        tax_type=?
-                    WHERE device_id=?
-                """, (
-                    float(request.form.get("monthly_rent") or 0),
-
-                    float(request.form.get("color_unit_price") or 0),
-                    float(request.form.get("bw_unit_price") or 0),
-
-                    to_int(request.form.get("color_giveaway")),
-                    to_int(request.form.get("bw_giveaway")),
-
-                    float(request.form.get("color_error_rate") or 0),
-                    float(request.form.get("bw_error_rate") or 0),
-
-                    to_int(request.form.get("color_basic")),
-                    to_int(request.form.get("bw_basic")),
-
-                    float(request.form.get("color_a3_unit_price") or 0),
-                    to_int(request.form.get("color_a3_giveaway")),
-                    float(request.form.get("color_a3_error_rate") or 0),
-                    to_int(request.form.get("color_a3_basic")),
-
-                    request.form.get("tax_type", "含稅"),
-                    device_id
-                ))
-
-                conn.commit()
-                conn.close()
+                update_contract(device_id, contract_data)
                 return redirect(url_for("billing.index", device_id=device_id, message="✅ 契約條件已更新"))
 
-
             elif mode == "update_customer":
-                fields = {
+                customer_data = {
                     "customer_name": request.form.get("customer_name", "").strip(),
                     "device_number": request.form.get("device_number", "").strip(),
                     "machine_model": request.form.get("machine_model", "").strip(),
@@ -842,39 +925,37 @@ def index():
                     "contract_number": request.form.get("contract_number", "").strip(),
                     "contract_start": request.form.get("contract_start", "").strip(),
                     "contract_end": request.form.get("contract_end", "").strip(),
+                    "pm": request.form.get("pm", "").strip()  # 如果有保養週期
                 }
-                c.execute("""
-                    UPDATE customers SET
-                        customer_name=?, device_number=?, machine_model=?, tax_id=?,
-                        install_address=?, service_person=?, contract_number=?,
-                        contract_start=?, contract_end=?
-                    WHERE device_id=?
-                """, (*fields.values(), device_id))
-                conn.commit()
-                conn.close()
+                update_customer(device_id, customer_data)
                 return redirect(url_for("billing.index", device_id=device_id, message="✅ 客戶資料已更新"))
 
             elif mode == "delete_customer":
-                c.execute("DELETE FROM customers WHERE device_id=?", (device_id,))
-                c.execute("DELETE FROM contracts WHERE device_id=?", (device_id,))
-                c.execute("DELETE FROM usage WHERE device_id=?", (device_id,))
-                c.execute("DELETE FROM billing_summary WHERE device_id=?", (device_id,))
-                conn.commit()
-                conn.close()
+                delete_customer(device_id)
                 message = f"🗑 已刪除客戶（設備編號：{device_id}）"
 
             elif mode == "new_customer":
                 old_id = request.form.get("device_id")
                 new_id = request.form.get("device_id_new", "").strip()
+
                 old_customer = get_customer(old_id)
                 old_contract, _ = get_contract(old_id)
 
+                # 檢查原始資料
                 if not old_customer or not old_contract:
-                    message = f"❌ 找不到原始客戶或契約資料，無法建檔。"
+                    message = "❌ 找不到原始客戶或契約資料，無法建檔。"
+
+                # 檢查新設備編號
                 elif not new_id:
                     message = "⚠️ 請輸入新設備編號。"
+
+                # 檢查新ID是否已存在
+                elif get_customer(new_id):
+                    message = "❌ 此設備編號已存在，請使用不同編號。"
+
                 else:
-                    new_fields = {
+                    # ===== 建立新客戶資料 =====
+                    new_customer_data = {
                         "device_id": new_id,
                         "customer_name": request.form.get("customer_name", "").strip(),
                         "device_number": request.form.get("device_number", "").strip(),
@@ -885,31 +966,45 @@ def index():
                         "contract_number": request.form.get("contract_number", "").strip(),
                         "contract_start": request.form.get("contract_start", "").strip(),
                         "contract_end": request.form.get("contract_end", "").strip(),
+                        "pm": request.form.get("pm", "").strip()
                     }
-                    c.execute("""
-                        INSERT INTO customers (
-                            device_id, customer_name, device_number, machine_model,
-                            tax_id, install_address, service_person,
-                            contract_number, contract_start, contract_end
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, tuple(new_fields.values()))
-                    c.execute("""
-                        INSERT INTO contracts (
-                            device_id, monthly_rent, color_unit_price, bw_unit_price,
-                            color_giveaway, bw_giveaway, color_error_rate, bw_error_rate,
-                            color_basic, bw_basic, tax_type, contra
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        new_id,
-                        old_contract["monthly_rent"], old_contract["color_unit_price"], old_contract["bw_unit_price"],
-                        old_contract["color_giveaway"], old_contract["bw_giveaway"],
-                        old_contract["color_error_rate"], old_contract["bw_error_rate"],
-                        old_contract["color_basic"], old_contract["bw_basic"],
-                        old_contract["tax_type"], old_contract.get("contra", "")
-                    ))
-                    conn.commit()
-                    conn.close()
-                    return redirect(url_for("billing.index", device_id=new_id, message="✅ 新客戶建檔成功！"))
+
+                    # ===== 建立新契約資料（複製舊契約） =====
+                    new_contract_data = {
+                        "device_id": new_id,
+                        "monthly_rent": old_contract.get("monthly_rent", 0),
+                        "color_unit_price": old_contract.get("color_unit_price", 0),
+                        "bw_unit_price": old_contract.get("bw_unit_price", 0),
+                        "color_giveaway": old_contract.get("color_giveaway", 0),
+                        "bw_giveaway": old_contract.get("bw_giveaway", 0),
+                        "color_error_rate": old_contract.get("color_error_rate", 0),
+                        "bw_error_rate": old_contract.get("bw_error_rate", 0),
+                        "color_basic": old_contract.get("color_basic", 0),
+                        "bw_basic": old_contract.get("bw_basic", 0),
+                        "color_a3_unit_price": old_contract.get("color_a3_unit_price", 0),
+                        "color_a3_giveaway": old_contract.get("color_a3_giveaway", 0),
+                        "color_a3_error_rate": old_contract.get("color_a3_error_rate", 0),
+                        "color_a3_basic": old_contract.get("color_a3_basic", 0),
+                        "tax_type": old_contract.get("tax_type", ""),
+                        "contra": old_contract.get("contra", "")
+                    }
+
+                    # ===== 寫入 Google Sheet =====
+                    ok1 = insert_customer(new_id, new_customer_data)
+                    ok2 = insert_contract(new_id, new_contract_data)
+
+                    if not ok1 or not ok2:
+                        message = "❌ 新客戶建檔失敗（Google Sheet 寫入錯誤）"
+                    else:
+                        return redirect(
+                            url_for(
+                                "billing.index",
+                                device_id=new_id,
+                                message="✅ 新客戶建檔成功！"
+                            )
+                        )
+
+
 
     # GET 直接帶 device_id
     elif request.args.get("device_id"):
@@ -971,42 +1066,23 @@ def mfp_summary():
     keyword = request.args.get("keyword", "").strip()
 
     # =====================================
-    # ① 改為讀取 SQLITE：billing.db
+    # ① 改為讀取 GOOGLE SHEET：customers
     # =====================================
-    conn = sqlite3.connect("billing.db")
-    conn.row_factory = sqlite3.Row
+    ws = get_person_worksheet("customers")
+    rows = ws.get_all_records()   # list of dict
 
-    sql = """
-        SELECT
-            device_id,
-            customer_name,
-            pm,
-            device_number,
-            machine_model,
-            tax_id,
-            install_address,
-            service_person,
-            contract_number,
-            contract_start,
-            contract_end
-        FROM customers
-    """
-
-    rows = conn.execute(sql).fetchall()
-    conn.close()
-
-    tables = [dict(row) for row in rows]
+    tables = rows.copy()
 
     # 🔹 將數字欄位轉整數，避免 round 報錯
     numeric_fields = ['pm', 'device_number', 'tax_id']
     for row in tables:
         for key in numeric_fields:
             val = row.get(key)
-            if val is not None:
+            if val not in (None, ""):
                 try:
                     row[key] = int(float(val))
                 except:
-                    row[key] = val  # 若無法轉型保持原值
+                    pass  # 轉型失敗就保留原值
 
     # 🔹 日期欄位格式化 YYYY/MM/DD
     for row in tables:
@@ -1014,11 +1090,10 @@ def mfp_summary():
             val = row.get(key)
             if val:
                 try:
-                    # SQLite 可能回傳字串或 datetime
                     dt = pd.to_datetime(val)
                     row[key] = dt.strftime("%Y/%m/%d")
                 except:
-                    row[key] = val
+                    pass
 
     # 🔹 合約結束距今天小於三個月加標記
     today = pd.Timestamp.today()
@@ -1028,7 +1103,7 @@ def mfp_summary():
             try:
                 end_date = pd.to_datetime(val)
                 delta = (end_date - today).days
-                row['_contract_end_alert'] = delta < 90  # True 則淡紅
+                row['_contract_end_alert'] = delta < 90
             except:
                 row['_contract_end_alert'] = False
         else:
@@ -1041,6 +1116,13 @@ def mfp_summary():
             r for r in tables
             if any(keyword_lower in str(v).lower() for v in r.values())
         ]
+
+    return render_template(
+        "mfp_summary.html",
+        tables=tables,
+        keyword=keyword
+    )
+
 
     # =====================================
     # ② 以下 Excel 區塊完全保留
@@ -1191,11 +1273,15 @@ def person_page(sheet):
     df1 = pd.read_excel(mfp_xls, sheet_name=sheet, header=0, usecols="A:R", nrows=4)
     df2 = pd.read_excel(mfp_xls, sheet_name=sheet, header=0, usecols="A:R", skiprows=5, nrows=4)
 
-    # --- 從 SQLite 讀取客戶資料 ---
-    conn = sqlite3.connect(DB_FILE)
-    query = "SELECT customer_name, pm, device_id FROM customers WHERE service_person = ?"
-    df3 = pd.read_sql_query(query, conn, params=(sheet,))
-    conn.close()
+    # --- 從 Google Sheet 讀取 customers ---
+    ws = get_person_worksheet("customers")        # 取得 Worksheet
+    rows = ws.get_all_records()                   # 轉成 list of dict
+    all_customers = pd.DataFrame(rows)           # 轉成 DataFrame
+
+    # 篩選該負責人的資料
+    df3 = all_customers[
+        all_customers["service_person"].astype(str).str.strip() == sheet
+    ][["customer_name", "pm", "device_id"]].copy()
 
     # --- 從 output.xlsx 讀取 pm_date ---
     output_xls = load_github_excel("output.xlsx")
@@ -1205,7 +1291,7 @@ def person_page(sheet):
     # --- 從 Google Sheet 讀取備註與抄表方式 ---
     gs_data = load_person_remarks(sheet)  # dict keyed by 設備代號
 
-    # --- 表頭重新命名（SQLite -> 中文） ---
+    # --- 表頭重新命名（Google Sheet -> 中文） ---
     df3 = df3.rename(columns={
         "customer_name": "客戶名稱",
         "pm": "保養週期",
@@ -1217,7 +1303,7 @@ def person_page(sheet):
     df3["抄表方式"] = ""
     df3["最後保養日"] = ""
 
-    # --- 合併 Google Sheet 資料 ---
+    # --- 合併 Google Sheet 備註資料 ---
     for idx, row in df3.iterrows():
         dev_id = str(row["設備代號"]).strip()
         if dev_id in gs_data:
@@ -1232,8 +1318,8 @@ def person_page(sheet):
             df3.at[idx, "最後保養日"] = pd.to_datetime(match.iloc[0]["pm_date"]).strftime("%Y-%m-%d")
         else:
             df3.at[idx, "最後保養日"] = ""
-    
-    # --- 對 df3["客戶名稱"] 套用 ---
+
+    # --- 對 df3["客戶名稱"] 套用顏色判斷 ---
     df3["客戶名稱"] = df3.apply(
         lambda r: color_overdue(r["客戶名稱"], r["最後保養日"], r["保養週期"]),
         axis=1
@@ -1257,7 +1343,7 @@ def person_page(sheet):
         "tjw.html",
         table1=df1.to_html(index=False, classes="table table-bordered"),
         table2=df2.to_html(index=False, classes="table table-bordered"),
-        df3=df3,  # ← SQLite + Google Sheet + output.xlsx 資料
+        df3=df3,  # ← Google Sheet + output.xlsx 資料
         page_name=sheet,
         keyword=keyword,
         billing_person=True
