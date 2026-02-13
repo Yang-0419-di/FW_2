@@ -248,7 +248,71 @@
 </main>
 
 <button id="backToTop" onclick="window.scrollTo({top:0, behavior:'smooth'})">回頂部</button>
+<!-- 全域 Loading 遮罩 -->
+<div id="global-loading" style="
+    display:none;
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background:rgba(0,0,0,0.4);
+    z-index:9999;
+    justify-content:center;
+    align-items:center;
+">
+    <div style="
+        background:white;
+        padding:30px 50px;
+        border-radius:12px;
+        font-size:22px;
+        font-weight:bold;
+        box-shadow:0 4px 20px rgba(0,0,0,0.3);
+    ">
+        ⏳ 加載中...請稍後
+    </div>
+</div>
+<script>
+function showGlobalLoading() {
+    const loading = document.getElementById("global-loading");
+    if (loading) {
+        loading.style.display = "flex";
+    }
+}
 
+/* 只監聽真正會跳轉頁面的 <a> */
+document.addEventListener("click", function (e) {
+
+    const link = e.target.closest("a");
+    if (!link) return;
+
+    const rawHref = link.getAttribute("href");
+
+    // 排除：
+    if (!rawHref ||
+        rawHref.startsWith("javascript") ||
+        rawHref.startsWith("#")) {
+        return;
+    }
+
+    showGlobalLoading();
+});
+
+/* 監聽 form submit（正常提交才顯示） */
+document.addEventListener("submit", function () {
+    showGlobalLoading();
+});
+</script>
+
+<script>
+window.addEventListener("pageshow", function (event) {
+    const loading = document.getElementById("global-loading");
+
+    if (loading) {
+        loading.style.display = "none";
+    }
+});
+</script>
 <script>
 // Accordion 展開/收合
 document.querySelectorAll('.accordion-nav .accordion-button').forEach(btn => {

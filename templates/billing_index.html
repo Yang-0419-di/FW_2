@@ -109,7 +109,9 @@ button:hover { background-color: #0056b3; }
         <a href="{{ url_for('billing.person_page', sheet='湯家瑋') }}" class="nav-btn-green">湯家瑋</a>
         <a href="{{ url_for('billing.person_page', sheet='吳宗鴻') }}" class="nav-btn-green">吳宗鴻</a>
         <a href="{{ url_for('billing.person_page', sheet='劉柏均') }}" class="nav-btn-green">劉柏均</a>
-        <a href="javascript:history.back()" class="nav-btn-gray">← 返回上一頁</a>
+        <button type="button" onclick="history.back()" class="nav-btn-gray">
+			← 返回上一頁
+		</button>
         <a href="/" class="nav-btn-gray">回首頁</a>
     </div>
 
@@ -311,7 +313,8 @@ button:hover { background-color: #0056b3; }
         {% endfor %}
     </table>
     {% endif %}
-
+	
+	{% if contract %}
     <!-- 契約條件 -->
     <div class="header-flex" style="width:80%; margin-top:20px;">
         <h3 style="font-size:22px;">契約條件</h3>
@@ -369,8 +372,76 @@ button:hover { background-color: #0056b3; }
         <div style="margin-top:12px;">
             <button type="submit">更新契約條件</button>
         </div>
+		{% endif %}
     </form>
 </div>
+
+<!-- 全域 Loading 遮罩 -->
+<div id="global-loading" style="
+    display:none;
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background:rgba(0,0,0,0.4);
+    z-index:9999;
+    justify-content:center;
+    align-items:center;
+">
+    <div style="
+        background:white;
+        padding:30px 50px;
+        border-radius:12px;
+        font-size:22px;
+        font-weight:bold;
+        box-shadow:0 4px 20px rgba(0,0,0,0.3);
+    ">
+        ⏳ 加載中...請稍後
+    </div>
+</div>
+<script>
+function showGlobalLoading() {
+    const loading = document.getElementById("global-loading");
+    if (loading) {
+        loading.style.display = "flex";
+    }
+}
+
+/* 只監聽真正會跳轉頁面的 <a> */
+document.addEventListener("click", function (e) {
+
+    const link = e.target.closest("a");
+    if (!link) return;
+
+    const rawHref = link.getAttribute("href");
+
+    // 排除：
+    if (!rawHref ||
+        rawHref.startsWith("javascript") ||
+        rawHref.startsWith("#")) {
+        return;
+    }
+
+    showGlobalLoading();
+});
+
+/* 監聽 form submit（正常提交才顯示） */
+document.addEventListener("submit", function () {
+    showGlobalLoading();
+});
+</script>
+
+<script>
+window.addEventListener("pageshow", function (event) {
+    const loading = document.getElementById("global-loading");
+
+    if (loading) {
+        loading.style.display = "none";
+    }
+});
+</script>
+
 
 <script>
 function updateLastCounts() {
