@@ -135,24 +135,58 @@
         </table>
     </div>
 
-    <h2>
-        <button onclick="toggleHUB()" style="margin-right: 8px;">▶</button>
-        HUB異常檢查
-    </h2>
-    <div id="HUB-content" class="table-container section-hidden">
-        <table>
-            <thead>
-                {% if HUB_table %}
-                    <tr>{% for key in HUB_table[0].keys() %}<th>{{ key }}</th>{% endfor %}</tr>
-                {% endif %}
-            </thead>
-            <tbody>
-                {% for row in HUB_table %}
-                    <tr>{% for value in row.values() %}<td>{{ value }}</td>{% endfor %}</tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+	<h2>
+		<button onclick="toggleHUB()" style="margin-right: 8px;">▶</button>
+		HUB異常檢查
+	</h2>
+
+	<!-- 前段統計 -->
+	<div id="HUB-summary" class="table-container section-hidden">
+		<table>
+			<thead>
+				{% if HUB_summary %}
+					<tr>
+						{% for key in HUB_summary[0].keys() %}
+							<th>{{ key }}</th>
+						{% endfor %}
+					</tr>
+				{% endif %}
+			</thead>
+			<tbody>
+				{% for row in HUB_summary %}
+					<tr>
+						{% for value in row.values() %}
+							<td>{{ value }}</td>
+						{% endfor %}
+					</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+
+	<!-- 後段明細 -->
+	<div id="HUB-content" class="table-container section-hidden">
+		<table>
+			<thead>
+				{% if HUB_table %}
+					<tr>
+						{% for key in HUB_table[0].keys() %}
+							<th>{{ key }}</th>
+						{% endfor %}
+					</tr>
+				{% endif %}
+			</thead>
+			<tbody>
+				{% for row in HUB_table %}
+					<tr>
+						{% for value in row.values() %}
+							<td>{{ value }}</td>
+						{% endfor %}
+					</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
 
     <h2>門市資料</h2>
     <div class="table-container">

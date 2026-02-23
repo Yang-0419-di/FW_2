@@ -77,7 +77,13 @@ def home():
         )
     )
 
-    df_HUB_top = df_HUB_top[['HUB檢查', 'HUB完工', 'HUB進度']]
+    # 清理標題空白
+    df_HUB_top.columns = df_HUB_top.columns.str.strip()
+
+    # 選需要的欄位
+    cols = ['HUB檢查', 'HUB完工', 'HUB進度']
+    existing_cols = [c for c in cols if c in df_HUB_top.columns]
+    df_HUB_top = df_HUB_top[existing_cols]
 
     # 🔹 原本那段改成 header=20
     df_HUB = clean_df(
@@ -173,6 +179,7 @@ def home():
         department_table=df_department.to_dict(orient='records'),
         seasons_table=df_seasons.to_dict(orient='records'),
         project1_table=df_project1.to_dict(orient='records'),
+        HUB_summary=df_HUB_top.to_dict(orient='records'), 
         HUB_table=df_HUB.to_dict(orient='records'),
 
         no_data_found=no_data_found,
