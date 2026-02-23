@@ -63,17 +63,32 @@ def home():
 
     # ====== 原本首頁資料 ======
     df_department = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:F", skiprows=4, nrows=1))
-    df_seasons = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:E", skiprows=8, nrows=2))
+    df_seasons = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:D", skiprows=8, nrows=2))
     df_project1 = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:E", skiprows=12, nrows=3))
 
+    # ===== HUB 區塊 =====
+    # 🔹 新增：抓第 19 列 (header=18)，只抓 A:C
+    df_HUB_top = clean_df(
+        pd.read_excel(
+            xls,
+            sheet_name='首頁',
+            header=18,
+            usecols="A:C"
+        )
+    )
+
+    df_HUB_top = df_HUB_top[['HUB檢查', 'HUB完工', 'HUB進度']]
+
+    # 🔹 原本那段改成 header=20
     df_HUB = clean_df(
         pd.read_excel(
             xls,
             sheet_name='首頁',
-            header=18,      # 第 19 列當欄位名稱
-            usecols="A:E"   # 只抓 A~D
+            header=20,
+            usecols="A:E"
         )
     )
+
     df_HUB = df_HUB[df_HUB['門市編號'].astype(str).str.strip() != '']
     df_HUB['門市編號'] = df_HUB['門市編號'].astype(str).str.replace(r'\.0$', '', regex=True)
     df_HUB = df_HUB[['門市編號', '門市名稱', 'HUB規格', '異常原因', '完工確認']]
