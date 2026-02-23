@@ -174,7 +174,7 @@
 <div class="version-info">版本：{{ version }}</div>
 {% endif %}
 
-{% if not billing_page and not billing_invoice_log and not billing_mfp_summary and not billing_person %}
+{% if not billing_page and not billing_invoice_log and not billing_mfp_summary and not billing_person and not billing_index%}
 
 <!-- ======================
      第一列：一般功能
@@ -212,7 +212,6 @@
     <button class="accordion-button">POS 相關功能</button>
     <div class="accordion-content">
         <a href="{{ url_for('report') }}" data-section="POS 相關"><button class="button-2">報修紀錄查詢</button></a>
-        <a href="https://bot.toshibatec.com.tw/hl0800/showjob31.php" target="_blank" data-section="POS 相關"><button class="button-2">報修刊版</button></a>
         <a href="{{ url_for('countpass') }}" data-section="POS 相關"><button class="button-2">店長密碼</button></a>
         <a href="{{ url_for('disk_page') }}" data-section="POS 相關"><button class="button-2">硬碟數量統計表</button></a>
     </div>

@@ -1118,7 +1118,7 @@ def mfp_summary():
         ]
 
     return render_template(
-        "mfp_summary.html",
+        "billing_mfp_summary.html",
         tables=tables,
         keyword=keyword
     )
