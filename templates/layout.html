@@ -271,6 +271,7 @@
         ⏳ 加載中...請稍後
     </div>
 </div>
+
 <script>
 function showGlobalLoading() {
     const loading = document.getElementById("global-loading");
@@ -287,13 +288,29 @@ document.addEventListener("click", function (e) {
 
     const rawHref = link.getAttribute("href");
 
-    // 排除：
+    // 1️⃣ 沒有 href 或特殊連結
     if (!rawHref ||
         rawHref.startsWith("javascript") ||
         rawHref.startsWith("#")) {
         return;
     }
 
+    // 2️⃣ 開新分頁 (target="_blank")
+    if (link.target === "_blank") {
+        return;
+    }
+
+    // 3️⃣ 有 download 屬性
+    if (link.hasAttribute("download")) {
+        return;
+    }
+
+    // 4️⃣ Ctrl / Cmd / Shift / 中鍵 點擊（新分頁）
+    if (e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1) {
+        return;
+    }
+
+    // ✅ 真正會離開本頁才顯示
     showGlobalLoading();
 });
 
@@ -301,17 +318,16 @@ document.addEventListener("click", function (e) {
 document.addEventListener("submit", function () {
     showGlobalLoading();
 });
-</script>
 
-<script>
-window.addEventListener("pageshow", function (event) {
+/* 頁面回來時隱藏 loading */
+window.addEventListener("pageshow", function () {
     const loading = document.getElementById("global-loading");
-
     if (loading) {
         loading.style.display = "none";
     }
 });
 </script>
+
 <script>
 // Accordion 展開/收合
 document.querySelectorAll('.accordion-nav .accordion-button').forEach(btn => {
