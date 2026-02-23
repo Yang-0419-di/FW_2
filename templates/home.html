@@ -141,19 +141,19 @@
 	</h2>
 
 	<!-- 前段統計 -->
-	<div id="HUB-summary" class="table-container section-hidden">
+	<div id="HUB-top" class="table-container section-hidden">
 		<table>
 			<thead>
-				{% if HUB_summary %}
+				{% if HUB_top_table and HUB_top_table|length > 0 %}
 					<tr>
-						{% for key in HUB_summary[0].keys() %}
+						{% for key in HUB_top_table[0].keys() %}
 							<th>{{ key }}</th>
 						{% endfor %}
 					</tr>
 				{% endif %}
 			</thead>
 			<tbody>
-				{% for row in HUB_summary %}
+				{% for row in HUB_top_table %}
 					<tr>
 						{% for value in row.values() %}
 							<td>{{ value }}</td>
@@ -231,6 +231,7 @@
 	}
 
 	function toggleHUB() {
+	    toggleSection('HUB-top');
 		toggleSection('HUB-content');
 	}
 </script>

@@ -66,21 +66,23 @@ def home():
     df_seasons = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:D", skiprows=8, nrows=2))
     df_project1 = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:E", skiprows=12, nrows=3))
 
-    # ===== HUB 區塊 =====
-    # 🔹 新增：抓第 19 列 (header=18)，只抓 A:C
-    df_HUB_top = clean_df(
-        pd.read_excel(
-            xls,
-            sheet_name='首頁',
-            header=18,
-            usecols="A:C"
-        )
+    
+    # ===== HUB 前段統計 =====
+    # 假設你的前段統計在 Excel 第 19 列開始 (A19:C19 為標題，A20:C21 為數據)
+    df_HUB_top_raw = pd.read_excel(
+        xls,
+        sheet_name='首頁',
+        header=None,       # 不用把第 19 列當作 header
+        usecols="A:C",     # 只抓 A~C
+        skiprows=18,       # 跳過前 18 列
+        nrows=2            # 讀 2 列數據（標題列 + 1列數據，依實際需要調整）
     )
 
-    # 清理標題空白
-    df_HUB_top.columns = df_HUB_top.columns.str.strip()
+    # 取第一列當欄位名稱
+    df_HUB_top_raw.columns = df_HUB_top_raw.iloc[0].str.strip()
+    df_HUB_top = df_HUB_top_raw[1:]  # 只取數據列
 
-    # 選需要的欄位
+    # 只選需要欄位
     cols = ['HUB檢查', 'HUB完工', 'HUB進度']
     existing_cols = [c for c in cols if c in df_HUB_top.columns]
     df_HUB_top = df_HUB_top[existing_cols]
@@ -179,7 +181,7 @@ def home():
         department_table=df_department.to_dict(orient='records'),
         seasons_table=df_seasons.to_dict(orient='records'),
         project1_table=df_project1.to_dict(orient='records'),
-        HUB_summary=df_HUB_top.to_dict(orient='records'), 
+        HUB_top_table=df_HUB_top.to_dict(orient='records'), 
         HUB_table=df_HUB.to_dict(orient='records'),
 
         no_data_found=no_data_found,
