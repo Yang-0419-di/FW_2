@@ -198,7 +198,7 @@
     <a href="{{ url_for('calendar_page') }}"><button class="button-2">排程表</button></a>
 	<a href="https://bot.toshibatec.com.tw/hl0800/showjob31.php" target="_blank" data-section="POS 相關"><button class="button-2">報修刊版</button></a>
 
-    {% if not home_page %}
+    {% if not home_page and not billing_mfp_summary %}
     <a href="/"><button class="button-3">回首頁</button></a>
     {% endif %}
 </div>

@@ -137,13 +137,21 @@ document.addEventListener('DOMContentLoaded', function () {
     dayMaxEventRows: false,
     aspectRatio: 1.35,
 
-    // ⭐ 一定要寫在這裡
     eventDidMount: function(info) {
       if (info.event.extendedProps.is_special) {
-        info.el.style.backgroundColor = '#000';
-        info.el.style.color = '#fff';
-        info.el.style.fontWeight = 'bold';
-        info.el.style.border = '2px solid gold';
+
+        // ⭐ 加金色星號（不破壞原結構）
+        let mainEl = info.el.querySelector('.fc-event-main');
+        if (mainEl && !mainEl.innerHTML.includes('★')) {
+          mainEl.insertAdjacentHTML(
+            'afterbegin',
+            '<span style="color: red; margin-right:4px;">★</span>'
+          );
+        }
+
+        // ⭐ 只改邊框，不改底色
+        info.el.style.border = '2px solid red';
+        info.el.style.fontWeight = 'bold';  // 可保留強調感
       }
     }
 

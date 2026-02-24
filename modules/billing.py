@@ -1119,6 +1119,7 @@ def mfp_summary():
 
     return render_template(
         "billing_mfp_summary.html",
+        billing_mfp_summary=True,
         tables=tables,
         keyword=keyword
     )
