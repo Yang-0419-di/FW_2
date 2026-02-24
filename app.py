@@ -534,7 +534,14 @@ def calendar_events():
             is_special = str(row.get('特殊', '')).strip().upper() in ['Y', 'YES', '1']
             if start_date < today:
                 color = "gray"
-            events.append({"title": str(title_val), "start": start_date.strftime('%Y-%m-%d'), "color": color},"extendedProps": {"is_special": is_special)}})
+            events.append({
+                "title": str(title_val),
+                "start": start_date.strftime('%Y-%m-%d'),
+                "color": color,
+                "extendedProps": {
+                    "is_special": is_special
+                }
+            })
     return jsonify(events)
     
 @app.route("/worktime")
