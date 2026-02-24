@@ -137,9 +137,20 @@ document.addEventListener('DOMContentLoaded', function () {
     dayMaxEventRows: false,
     aspectRatio: 1.35
   });
+  
+  eventDidMount: function(info) {
+	  if (info.event.extendedProps.is_special) {
+		info.el.style.backgroundColor = '#000';
+		info.el.style.color = '#fff';
+		info.el.style.fontWeight = 'bold';
+		info.el.style.border = '2px solid gold';
+	  }
+	}
 
   calendar.render();
 });
 </script>
+
+
 
 {% endblock %}

@@ -531,9 +531,10 @@ def calendar_events():
             start_date = pd.to_datetime(date_val).date()
             color_map = {"狄澤洋": "red", "V": "red", "湯家瑋": "green", "吳宗鴻": "orange", "劉柏均": "skyblue"}
             color = color_map.get(row.get('屬性'), "blue")
+            is_special = str(row.get('特殊', '')).strip().upper() in ['Y', 'YES', '1']
             if start_date < today:
                 color = "gray"
-            events.append({"title": str(title_val), "start": start_date.strftime('%Y-%m-%d'), "color": color})
+            events.append({"title": str(title_val), "start": start_date.strftime('%Y-%m-%d'), "color": color},"extendedProps": {"is_special": is_special)}})
     return jsonify(events)
     
 @app.route("/worktime")
