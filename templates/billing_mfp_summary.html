@@ -3,38 +3,7 @@
 
 <!-- ================= 樣式 ================= -->
 <style>
-/* ===== 導覽列按鈕 ===== */
-.nav-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 15px;
-}
 
-.nav-buttons a {
-    display: inline-block;
-    padding: 8px 16px;
-    color: #fff;
-    text-decoration: none;
-    border-radius: 6px;
-    font-size: 14px;
-    transition: background-color 0.2s;
-}
-
-.nav-btn-blue { background-color: #007BFF; }
-.nav-btn-blue:hover { background-color: #0056b3; }
-
-.nav-btn-green { background-color: #20c997; }
-.nav-btn-green:hover { background-color: #198754; }
-
-.nav-btn-gray { background-color: #6c757d; }
-.nav-btn-gray:hover { background-color: #495057; }
-
-.nav-buttons button {
-    padding: 6px 14px;   /* 和 a.btn 一樣 */
-    font-size: 14px;
-    margin: 0;
-}
 
 /* ===== 表格自適應畫面，不爆版 ===== */
 .mfp-table {
@@ -107,45 +76,32 @@
 </style>
 
 <!-- ================= 導覽列 ================= -->
-    <div class="nav-buttons">
-        <a href="{{ url_for('billing.mfp_summary') }}" class="nav-btn-blue">客戶總表</a>
-        <a href="{{ url_for('billing.person_page', sheet='湯家瑋') }}" class="nav-btn-green">湯家瑋</a>
-        <a href="{{ url_for('billing.person_page', sheet='吳宗鴻') }}" class="nav-btn-green">吳宗鴻</a>
-        <a href="{{ url_for('billing.person_page', sheet='劉柏均') }}" class="nav-btn-green">劉柏均</a>
-        <button type="button" onclick="history.back()" class="nav-btn-gray">
-			← 返回上一頁
-		</button>
-        <a href="/" class="nav-btn-gray">回首頁</a>
-    </div>
-	
-<!-- ================= 區域台數 ================= -->
-<h2>區域台數</h2>
-<div class="table-container">
-  <table class="mfp-table">
-    <thead>
-      <tr>{% for col in area_header %}<th>{{ col }}</th>{% endfor %}</tr>
-    </thead>
-    <tbody>
-      {% for row in area_body %}
-      <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<div style="margin-bottom:10px;">
+    <a href="{{ url_for('billing.index') }}"><button class="button-1">TG客戶系統</button></a>
+    <a href="{{ url_for('billing.mfp_summary') }}"><button class="button-1">客戶總表</button></a>
+    <a href="{{ url_for('billing.person_page', sheet='湯家瑋') }}"><button>湯家瑋</button></a>
+    <a href="{{ url_for('billing.person_page', sheet='吳宗鴻') }}"><button>吳宗鴻</button></a>
+    <a href="{{ url_for('billing.person_page', sheet='劉柏均') }}"><button>劉柏均</button></a>
+    <button type="button" onclick="history.back()" class="nav-btn-gray">
+		← 返回上一頁
+	</button>
+    <a href="/"><button class="button-3">回首頁</button></a>
 </div>
 
-<!-- ================= 保養週期評估 ================= -->
-<h2>保養週期評估</h2>
-<div class="table-container">
-  <table class="mfp-table">
-    <thead>
-      <tr>{% for col in cycle_header %}<th>{{ col }}</th>{% endfor %}</tr>
-    </thead>
-    <tbody>
-      {% for row in cycle_body %}
-      <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<!-- ===== 第一區塊 Accordion（客戶數量） ===== -->
+<button class="accordion-button">客戶數量</button>
+<div class="accordion-content">
+    <div class="table-container-NO">
+        {{ table_area | safe }}
+    </div>
+</div>
+
+<!-- ===== 第二區塊 Accordion（保養週期） ===== -->
+<button class="accordion-button">保養週期</button>
+<div class="accordion-content">
+    <div class="table-container-NO">
+        {{ table_cycle | safe }}
+    </div>
 </div>
 
 <!-- ================= 客戶總表 ================= -->
@@ -226,6 +182,22 @@ document.querySelectorAll('.contract-end').forEach(td => {
         }
     }
 });
+
+// Accordion 展開/收合 JS
+document.querySelectorAll('.accordion-button').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const content = btn.nextElementSibling;
+
+        // 收起其他內容
+        document.querySelectorAll('.accordion-content').forEach(c => {
+            if (c !== content) c.classList.remove('show');
+        });
+
+        // 切換目前內容
+        content.classList.toggle('show');
+    });
+});
+
 </script>
 
 {% endblock %}

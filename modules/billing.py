@@ -1117,49 +1117,42 @@ def mfp_summary():
             if any(keyword_lower in str(v).lower() for v in r.values())
         ]
 
-    return render_template(
-        "billing_mfp_summary.html",
-        billing_mfp_summary=True,
-        tables=tables,
-        keyword=keyword
-    )
+    # -------------------------
+    # 讀 Excel 概況（區域台數 / 保養週期）
+    # -------------------------
+    xls = load_github_excel("MFP.xlsx")
+    df_overview = pd.read_excel(xls, sheet_name='概況', header=0)
 
-
-    # =====================================
-    # ② 以下 Excel 區塊完全保留
-    # =====================================
-    xls = load_github_excel()
-
-    df_overview = pd.read_excel(
+    # 區域台數：A1:R4
+    df_area = pd.read_excel(
         xls,
         sheet_name='概況',
-        header=None
-    )
+        header=0,
+        usecols="A:R",
+        nrows=4
+    ).infer_objects()  # 避免 FutureWarning
 
-    # 🔹 區域台數：A1:P4
-    area_raw = df_overview.iloc[0:4, 0:20].fillna("").values.tolist()
-    area_header = area_raw[0]
-    area_body = area_raw[1:]
-
-    # 🔹 保養週期評估：A6:P12
-    cycle_raw = df_overview.iloc[5:12, 0:20].fillna("").values.tolist()
-    cycle_header = cycle_raw[0]
-    cycle_body = cycle_raw[1:]
+    # 保養週期：A6:R12
+    df_cycle = pd.read_excel(
+        xls,
+        sheet_name='概況',
+        header=0,
+        usecols="A:R",
+        skiprows=5,  # 從第6列開始
+        nrows=7      # 6~12列
+    ).infer_objects()  # 避免 FutureWarning
 
     version = current_app.config['VERSION_TIME']
 
     return render_template(
         'billing_mfp_summary.html',
         tables=tables,
-        area_header=area_header,
-        area_body=area_body,
-        cycle_header=cycle_header,
-        cycle_body=cycle_body,
+        table_area = df_area.to_html(index=False, classes="table table-bordered"),
+        table_cycle = df_cycle.to_html(index=False, classes="table table-bordered"),
         version=version,
         keyword=keyword,
         billing_mfp_summary=True
     )
-
 
 
 
