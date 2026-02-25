@@ -85,8 +85,8 @@ for tag in month_tags:
     # 掃描報表每列，確保讀到第28欄(AB欄)
     for row in report_ws.iter_rows(min_row=start_row, max_col=28):
 
-        ab_value = row[27].value  # AB 欄 = 第28欄
-        if ab_value != 1:
+        s_value = row[18].value  # S 欄 = 第19欄
+        if str(s_value).strip().upper() != "O":
             continue
 
         l_value = row[11].value  # L欄

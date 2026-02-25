@@ -65,10 +65,10 @@ for tag in month_tags:
     start_row = 2
     append_rows = []
 
-    # 掃描報表每列，確保讀取到第28欄(AB欄)
+    # 掃描報表每列，確保讀取到第19欄(S欄)
     for row in report_ws.iter_rows(min_row=start_row, max_col=28):
-        ab_value = row[27].value  # AB欄 (第28欄，索引27)
-        if ab_value != 1:
+        s_value = row[18].value  # S 欄 = 第19欄
+        if str(s_value).strip().upper() != "O":
             continue
         
         l_value = row[11].value  # L欄 (第12欄，索引11)
