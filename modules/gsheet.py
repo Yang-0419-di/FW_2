@@ -24,7 +24,7 @@ def get_person_worksheet(person_name):
 # ====== contracts 分頁 ======
 def get_contract(device_id):
     sh = client.open_by_key(SHEET_ID)
-    ws = sh.worksheet("Contracts")
+    ws = sh.worksheet("contracts")
     records = ws.get_all_records()
     for r in records:
         if str(r.get("device_id")) == str(device_id):
@@ -34,7 +34,7 @@ def get_contract(device_id):
 # ====== customers 分頁 ======
 def get_customer(device_id):
     sh = client.open_by_key(SHEET_ID)
-    ws = sh.worksheet("Customers")
+    ws = sh.worksheet("customers")
     records = ws.get_all_records()
     for r in records:
         if str(r.get("device_id")) == str(device_id):
@@ -44,7 +44,7 @@ def get_customer(device_id):
 # ====== 模糊搜尋 customer_name ======
 def search_customers_by_name(keyword):
     sh = client.open_by_key(SHEET_ID)
-    ws = sh.worksheet("Customers")
+    ws = sh.worksheet("customers")
     records = ws.get_all_records()
     keyword_lower = keyword.lower()
     return [r for r in records if keyword_lower in str(r.get("customer_name", "")).lower()]
@@ -52,10 +52,10 @@ def search_customers_by_name(keyword):
 # 回傳 Customers worksheet
 def get_customer_worksheet():
     sh = client.open_by_key(SHEET_ID)
-    return sh.worksheet("Customers")
+    return sh.worksheet("customers")
 
 # 回傳 Contracts worksheet
 def get_contract_worksheet():
     sh = client.open_by_key(SHEET_ID)
-    return sh.worksheet("Contracts")
+    return sh.worksheet("contracts")
 
