@@ -372,6 +372,18 @@ def report():
         home_page=False
     )
 
+@app.route('/sm_web')
+def sm_web_page():
+    
+        return render_template(
+        'sm_web.html',
+        sm_web=True,
+        version=version_time,
+        billing_invoice_log=False,
+        home_page=False
+    )
+
+
 @app.route('/time')
 def time_page():
     xls = load_excel_from_github(GITHUB_XLSX_URL)
@@ -497,6 +509,7 @@ def mfp_parts():
                 message = "查無資料"
             else:
                 table_html = filtered[['零件名稱', '料號', '型號']].to_html(classes="data-table", index=False, border=0)
+                
     return render_template(
         'mfp_parts.html',
         page_header="MFP 相關",
