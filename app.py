@@ -86,6 +86,16 @@ def home():
     cols = ['HUB檢查', 'HUB完工', 'HUB進度']
     existing_cols = [c for c in cols if c in df_HUB_top.columns]
     df_HUB_top = df_HUB_top[existing_cols]
+    
+    if 'HUB進度' in df_HUB_top.columns:
+        df_HUB_top['HUB進度'] = (
+            df_HUB_top['HUB進度']
+            .astype(float)
+            .mul(100)
+            .round(0)
+            .astype(int)
+            .astype(str) + '%'
+        )
 
     # 🔹 原本那段改成 header=20
     df_HUB = clean_df(
