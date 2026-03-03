@@ -518,7 +518,7 @@ def mfp_parts():
             if filtered.empty:
                 message = "查無資料"
             else:
-                table_html = filtered[['零件名稱', '料號', '型號']].to_html(classes="data-table", index=False, border=0)
+                table_html = filtered[['零件名稱', '部件', '料號', '型號']].to_html(classes="data-table", index=False, border=0)
                 
     return render_template(
         'mfp_parts.html',
