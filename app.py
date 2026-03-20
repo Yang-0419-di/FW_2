@@ -302,6 +302,7 @@ def personal(name):
     df_top = clean_df(pd.read_excel(xls, sheet_name=sheet_name, usecols="A:G", nrows=4))
     df_project = clean_df(pd.read_excel(xls, sheet_name=sheet_name, usecols="H:L", nrows=4))
     df_bottom = clean_df(pd.read_excel(xls, sheet_name=sheet_name, usecols="A:J", skiprows=5))
+    df_ads = clean_df(pd.read_excel(xls,sheet_name=sheet_name,usecols="A,B,S",skiprows=5))
 
     # --- 正確讀取區域數量 W1:AE2 ---
     df_area = pd.read_excel(
@@ -333,14 +334,16 @@ def personal(name):
         show_top=not df_top.empty,
         show_area=not df_area.empty,
         show_project=not df_project.empty,
+        show_ads=not df_ads.empty,
 
         tables_top=df_top.to_dict(orient="records"),
         tables_project=df_project.to_dict(orient="records"),
         tables_bottom=df_bottom.to_dict(orient="records"),
+        tables_ads=df_ads.to_dict(orient="records"),
 
         # 區域數量（直接給 dataframe）
         tables_area=df_area.to_dict(orient="records"),
-
+        
         version=version_time,
         billing_invoice_log=False,
         home_page=False
