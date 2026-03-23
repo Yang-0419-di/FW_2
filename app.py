@@ -62,9 +62,9 @@ def home():
     xls = load_excel_from_github(GITHUB_XLSX_URL)
 
     # ====== 原本首頁資料 ======
-    df_department = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:F", skiprows=4, nrows=1))
+    df_department = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:D", skiprows=4, nrows=1))
     df_seasons = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:D", skiprows=8, nrows=2))
-    df_project1 = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:E", skiprows=12, nrows=3))
+    df_project1 = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:E", skiprows=12, nrows=5))
 
     
     # ===== HUB 前段統計 =====
@@ -74,7 +74,7 @@ def home():
         sheet_name='首頁',
         header=None,       # 不用把第 19 列當作 header
         usecols="A:C",     # 只抓 A~C
-        skiprows=18,       # 跳過前 18 列
+        skiprows=20,       # 跳過前 18 列
         nrows=2            # 讀 2 列數據（標題列 + 1列數據，依實際需要調整）
     )
 
