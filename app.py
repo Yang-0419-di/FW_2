@@ -102,7 +102,7 @@ def home():
         pd.read_excel(
             xls,
             sheet_name='首頁',
-            header=20,
+            header=22,
             usecols="A:E"
         )
     )
