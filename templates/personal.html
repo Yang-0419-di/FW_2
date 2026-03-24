@@ -1,6 +1,12 @@
 {% extends "layout.html" %}
 
 {% block content %}
+
+	<style>
+	.status-alert {
+		background-color: #f8d7da;
+	}
+	</style>
     <!-- === 個人查詢頁 personal.html === -->
 
     {% if show_top %}
@@ -150,15 +156,22 @@
                     </tr>
                 {% endif %}
             </thead>
-            <tbody>
-                {% for row in tables_bottom %}
-                    <tr>
-                        {% for value in row.values() %}
-                            <td>{{ value }}</td>
-                        {% endfor %}
-                    </tr>
-                {% endfor %}
-            </tbody>
+			
+			<tbody>
+				{% for row in tables_bottom %}
+					<tr>
+						{% for key in tables_bottom[0].keys() %}
+							<td
+								{% if key == "門市狀態" and row[key] and row[key] != "未保養" %}
+									class="status-alert"
+								{% endif %}
+							>
+								{{ row[key] }}
+							</td>
+						{% endfor %}
+					</tr>
+				{% endfor %}
+			</tbody>
         </table >
     </div>
 	
@@ -187,7 +200,7 @@ document.getElementById("storeSearchBottom").addEventListener("input", function 
 });
 
 // 門市地址
-document.getElementById("storeSearchAds").addEventListener("input", function () {
+document.getElementById("storeSearchads").addEventListener("input", function () {
     const keyword = this.value.toLowerCase();
 
     document.querySelectorAll("#adsTable tbody tr").forEach(row => {
