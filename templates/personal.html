@@ -156,18 +156,16 @@
                     </tr>
                 {% endif %}
             </thead>
-			
 			<tbody>
 				{% for row in tables_bottom %}
 					<tr>
 						{% for key in tables_bottom[0].keys() %}
-							<td
-								{% if key == "門市狀態" and row[key] and row[key] != "未保養" %}
-									class="status-alert"
-								{% endif %}
-							>
-								{{ row[key] }}
-							</td>
+					<td
+						class="{% if key == '門市狀態' and row[key] and row[key] != '未保養' %}status-alert{% endif %}"
+						{% if key == "門市狀態" %}style="white-space: pre-line;"{% endif %}
+					>
+						{{ row[key] | string | trim }}
+					</td>
 						{% endfor %}
 					</tr>
 				{% endfor %}
