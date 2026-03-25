@@ -164,7 +164,7 @@
 						class="{% if key == '門市狀態' and row[key] and row[key] != '未保養' %}status-alert{% endif %}"
 						{% if key == "門市狀態" %}style="white-space: pre-line;"{% endif %}
 					>
-						{{ row[key] | string | trim }}
+						{{ row[key] | safe }}
 					</td>
 						{% endfor %}
 					</tr>
