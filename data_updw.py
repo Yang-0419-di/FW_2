@@ -47,10 +47,10 @@ def sort_sheet(sheet, start_row, end_col, key_col, order, name, has_header=False
 
 # 範例排序
 sort_sheet(workbook.Sheets("門市主檔"), 23, "AC", "J", xlAscending, "門市主檔（J 從最舊到最新）")
-sort_sheet(workbook.Sheets("吳宗鴻"), 7, "Z", "F", xlDescending, "吳宗鴻（F 從 Z 到 A）")
-sort_sheet(workbook.Sheets("湯家瑋"), 7, "Z", "F", xlDescending, "湯家瑋（F 從 Z 到 A）")
-sort_sheet(workbook.Sheets("劉柏均"), 7, "Z", "F", xlDescending, "劉柏均（F 從 Z 到 A）")
-sort_sheet(workbook.Sheets("狄澤洋"), 7, "Z", "F", xlDescending, "狄澤洋（F 從 Z 到 A）")
+sort_sheet(workbook.Sheets("吳宗鴻"), 8, "Z", "F", xlDescending, "吳宗鴻（F 從 Z 到 A）")
+sort_sheet(workbook.Sheets("湯家瑋"), 8, "Z", "F", xlDescending, "湯家瑋（F 從 Z 到 A）")
+sort_sheet(workbook.Sheets("劉柏均"), 8, "Z", "F", xlDescending, "劉柏均（F 從 Z 到 A）")
+sort_sheet(workbook.Sheets("狄澤洋"), 8, "Z", "F", xlDescending, "狄澤洋（F 從 Z 到 A）")
 
 # 儲存關閉
 workbook.Save()
