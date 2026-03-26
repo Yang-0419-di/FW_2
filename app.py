@@ -299,10 +299,10 @@ def personal(name):
     xls = load_excel_from_github(GITHUB_XLSX_URL)
 
     # --- 其他表格 ---
-    df_top = clean_df(pd.read_excel(xls, sheet_name=sheet_name, usecols="A:G", nrows=4))
-    df_project = clean_df(pd.read_excel(xls, sheet_name=sheet_name, usecols="H:L", nrows=4))
-    df_bottom = clean_df(pd.read_excel(xls, sheet_name=sheet_name, usecols="A:J", skiprows=5))
-    df_ads = clean_df(pd.read_excel(xls,sheet_name=sheet_name,usecols="A,B,S",skiprows=5))
+    df_top = clean_df(pd.read_excel(xls, sheet_name=sheet_name, usecols="A:G", nrows=5))
+    df_project = clean_df(pd.read_excel(xls, sheet_name=sheet_name, usecols="H:L", nrows=5))
+    df_bottom = clean_df(pd.read_excel(xls, sheet_name=sheet_name, usecols="A:K", skiprows=6))
+    df_ads = clean_df(pd.read_excel(xls,sheet_name=sheet_name,usecols="A,B,S",skiprows=6))
 
     # --- 正確讀取區域數量 W1:AE2 ---
     df_area = pd.read_excel(
