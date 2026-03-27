@@ -6,8 +6,31 @@ import copy
 import os
 import threading
 import sys
+import time
 
-# 預設值（今天年月）
+# ========= 正確處理路徑 =========
+base_dir = os.path.dirname(os.path.abspath(__file__))  # 程式所在目錄
+data_file = os.path.join(base_dir, "MFP", "output.xlsx")  # MFP 主檔
+
+# ========= 函式：等待檔案就緒 =========
+def wait_file_ready(path, timeout=10):
+    """確認檔案存在且大小穩定"""
+    last_size = -1
+    for _ in range(timeout):
+        if os.path.exists(path):
+            size = os.path.getsize(path)
+            if size == last_size:
+                return True
+            last_size = size
+        time.sleep(1)
+    return False
+
+# 等待主檔就緒
+if not wait_file_ready(data_file):
+    print(f"❌ 主檔不存在或無法穩定讀取：{data_file}")
+    sys.exit(1)
+
+# ========= 預設值（今天年月）與輸入 =========
 default_tag = datetime.today().strftime("%Y%m")
 user_input = {"value": None}
 
@@ -31,26 +54,13 @@ else:
     print(f"⏰ 超過 10 秒未輸入，自動使用 {default_tag}")
     month_tags = [default_tag]
 
-
-# ========= 正確處理路徑 =========
-
-base_dir = os.path.dirname(os.path.abspath(__file__))  # run_MFP2_update.py 位置
-
-# MFP 主檔路徑
-data_file = os.path.join(base_dir, "MFP", "output.xlsx")
+# ========= 載入 MFP 主檔 =========
 if not os.path.exists(data_file):
     print(f"❌ 找不到主檔：{data_file}")
     sys.exit(1)
 
-# IM 月報表路徑由 base_dir + IM 子資料夾建構
-# report_file = os.path.join(base_dir, "IM", f"{tag}_Service_Count_Report.xlsx")
-
-# =================================
-
-
-# 載入 MFP 主檔
 data_wb = load_workbook(data_file)
-data_ws = data_wb["MFP"]  # 主檔分頁 IM
+data_ws = data_wb["MFP"]  # 主檔分頁 MFP
 
 # 取得所有現有案號（B欄 = 第2欄）
 existing_case_ids = set()
@@ -66,13 +76,12 @@ ref_cells = {cell.column: cell for cell in data_ws[ref_row]}
 
 total_new_rows = 0
 
-# 逐月處理資料
+# ========= 逐月處理報表 =========
 for tag in month_tags:
-
     report_file = os.path.join(base_dir, "IM", f"{tag}_Service_Count_Report.xlsx")
 
-    if not os.path.exists(report_file):
-        print(f"❌ 找不到：{report_file}")
+    if not wait_file_ready(report_file):
+        print(f"❌ 報表不存在或無法穩定讀取：{report_file}")
         continue
 
     print(f"🔄 處理報表：{report_file}")
@@ -84,7 +93,6 @@ for tag in month_tags:
 
     # 掃描報表每列，確保讀到第28欄(AB欄)
     for row in report_ws.iter_rows(min_row=start_row, max_col=28):
-
         s_value = row[18].value  # S 欄 = 第19欄
         if str(s_value).strip().upper() != "O":
             continue
@@ -93,7 +101,7 @@ for tag in month_tags:
         if l_value and "萊爾富" in str(l_value):
             continue
 
-        case_cell = row[1]  # 案號 B 欄
+        case_cell = row[1]  # B欄 = 案號
         case_id_raw = str(case_cell.value).strip() if case_cell.value else ""
 
         if not case_id_raw or not case_id_raw.isdigit():
@@ -104,7 +112,7 @@ for tag in month_tags:
             values = [cell.value for cell in row]
 
             if all(v is None for v in values):
-                break
+                continue  # 空列跳過，不 break
 
             append_rows.append(values)
             existing_case_ids.add(case_id_raw)
@@ -146,7 +154,6 @@ for tag in month_tags:
                 except Exception as e:
                     print(f"❗ 日期格式錯誤（欄{col_idx}）：{e}")
 
-
-# 儲存更新後的主檔
+# ========= 儲存更新後主檔 =========
 data_wb.save(data_file)
 print(f"✅ 更新完成，共加入 {total_new_rows} 筆資料")

@@ -349,7 +349,9 @@ def personal(name):
         show_area=not df_area.empty,
         show_project=not df_project.empty,
         show_ads=not df_ads.empty,
+        show_unfinished=not df_unfinished.empty,
 
+        tables_unfinished=df_unfinished.to_dict(orient="records"),
         tables_top=df_top.to_dict(orient="records"),
         tables_project=df_project.to_dict(orient="records"),
         tables_bottom=df_bottom.to_dict(orient="records"),
