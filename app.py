@@ -318,6 +318,20 @@ def personal(name):
         lambda x: "-" if str(x).strip().startswith("-") else str(x)
     )
 
+    # === ✅ 新增這段（未完工清單） ===
+    df_unfinished = pd.read_excel(
+        xls,
+        sheet_name="未完工清單",
+        usecols="A:L"
+    )
+
+    df_unfinished = clean_df(df_unfinished)
+
+    df_unfinished = df_unfinished[
+        df_unfinished.iloc[:, 0].astype(str).str.strip() == name
+    ]
+
+
     # ---- 搜尋功能 for 下方門市 ----
     keyword = request.args.get('keyword', '').strip()
     no_data_found = False

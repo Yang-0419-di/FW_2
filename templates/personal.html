@@ -33,6 +33,30 @@
         </div>
     {% endif %}
 	
+	{% if show_unfinished %}
+		<h2>未完工清單</h2>
+		<div class="table-container">
+			<table>
+				<thead>
+					<tr>
+						{% for key in tables_unfinished[0].keys() %}
+							<th>{{ key }}</th>
+						{% endfor %}
+					</tr>
+				</thead>
+				<tbody>
+					{% for row in tables_unfinished %}
+						<tr>
+							{% for val in row.values() %}
+								<td>{{ val }}</td>
+							{% endfor %}
+						</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+	{% endif %}
+	
 	{% if show_area %}
 		<h2>
 			<button onclick="toggleSection('area-content', event)" style="margin-right: 8px;">▶</button>
