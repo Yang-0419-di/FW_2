@@ -38,6 +38,10 @@ echo [2/9] 複製 MFP.xlsx 到臨時備份資料夾...
 copy /Y "MFP\MFP.xlsx" "MFP\自動備份\MFP.xlsx"
 if errorlevel 1 goto error
 
+echo [2/9] 複製 output.xlsx 到臨時備份資料夾...
+copy /Y "MFP\output.xlsx" "MFP\自動備份\output.xlsx"
+if errorlevel 1 goto error
+
 :: -----------------------------
 :: [3/9] 執行 run_update.py
 :: -----------------------------
