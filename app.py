@@ -89,8 +89,8 @@ def home():
     
     if 'HUB進度' in df_HUB_top.columns:
         df_HUB_top['HUB進度'] = (
-            df_HUB_top['HUB進度']
-            .astype(float)
+            pd.to_numeric(df_HUB_top['HUB進度'], errors='coerce')  # 轉數字，錯誤變 NaN
+            .fillna(0)                                             # NaN → 0
             .mul(100)
             .round(0)
             .astype(int)
