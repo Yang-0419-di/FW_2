@@ -132,7 +132,7 @@ def home():
         sheet_name='首頁',
         header=None,
         usecols="E:K",
-        skiprows=54,
+        skiprows=56,
         nrows=3
     )
 
@@ -148,7 +148,7 @@ def home():
         sheet_name='首頁',
         header=None,
         usecols="E:P",
-        skiprows=58,
+        skiprows=60,
         nrows=3
     )
 
@@ -164,7 +164,7 @@ def home():
         sheet_name='首頁',
         header=None,
         usecols="E:L",
-        skiprows=62,
+        skiprows=64,
         nrows=3
     )
 
