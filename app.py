@@ -322,7 +322,7 @@ def personal(name):
     df_unfinished = pd.read_excel(
         xls,
         sheet_name="未完工清單",
-        usecols="A:L"
+        usecols="A:K"
     )
 
     df_unfinished = clean_df(df_unfinished)
