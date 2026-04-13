@@ -88,7 +88,7 @@ def main():
 
         # ===== 排序設定 =====
         configs = [
-            ("門市主檔", 22, "AC", "J", xlAscending, False, "門市主檔（J 由舊到新）"),
+            ("門市主檔", 23, "AC", "J", xlAscending, False, "門市主檔（J 由舊到新）"),
             ("吳宗鴻", 8, "Z", ["F","L","S"], [xlDescending,xlDescending,xlDescending], False, "吳宗鴻（F→L→S）"),
             ("湯家瑋", 8, "Z", ["F","L","S"], [xlDescending,xlDescending,xlDescending], False, "湯家瑋（F→L→S）"),
             ("劉柏均", 8, "Z", ["F","L","S"], [xlDescending,xlDescending,xlDescending], False, "劉柏均（F→L→S）"),
