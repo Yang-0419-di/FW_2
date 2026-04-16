@@ -193,8 +193,16 @@ try:
             total = process_sheet(ws, job, base_dir, month_tags)
             total_all += total
 
-        wb.save(file_path)
+        tmp_path = file_path + ".tmp"
+
+        wb.save(tmp_path)
         wb.close()
+
+        # 等一下確保寫完
+        time.sleep(1)
+
+        # 原子替換（避免壞檔）
+        os.replace(tmp_path, file_path)
 
         print(f"✅ 完成 {file_path}，共新增 {total_all} 筆\n")
 

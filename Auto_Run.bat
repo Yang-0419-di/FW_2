@@ -44,6 +44,9 @@ if errorlevel 1 goto error
 :: -----------------------------
 :: [4/6] 版本號
 :: -----------------------------
+echo 等待檔案完全寫入...
+timeout /t 5 /nobreak >nul
+
 echo [4/6] 執行 add_ver.py（10 秒自動填入）...
 call python "add_ver.py"
 
