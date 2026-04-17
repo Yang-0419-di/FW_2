@@ -160,6 +160,22 @@ try:
             }
         ],
 
+        os.path.join(base_dir, "MFP", "MFP.xlsx"): [
+            {
+                "sheet": "IM",
+                "case_col": 3,
+                "report_name": "HL_Maintain_Report",
+                "copy_formula": True
+            },
+            {
+                "sheet": "MFP",
+                "case_col": 2,
+                "report_name": "Service_Count_Report",
+                "filter_func": lambda r: str(r[18].value).strip().upper() == "O"
+                                          and not (r[11].value and "萊爾富" in str(r[11].value))
+            }
+        ],
+
         os.path.join(base_dir, "MFP", "output.xlsx"): [
             {
                 "sheet": "IM",
