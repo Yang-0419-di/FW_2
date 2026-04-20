@@ -415,7 +415,7 @@ def sm_web_page():
 
 @app.route('/time')
 def time_page():
-    xls = load_excel_from_github(GITHUB_XLSX_URL)
+    xls = pd.ExcelFile("MFP/MFP.xlsx")
 
     # ======================================================
     # 區塊一：摘要 A1:F1 / A2:F2
