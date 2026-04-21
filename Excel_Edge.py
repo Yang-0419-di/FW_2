@@ -3,179 +3,174 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
-import os, time, shutil, glob
+import os
+import time
+import shutil
+import glob
 from datetime import datetime
 
 # ===============================
-# 基本設定
+# 時間與資料夾設定
 # ===============================
 yyyymm = datetime.now().strftime("%Y%m")
 
+# Edge 實際下載位置（IM 保留）
 download_path = r"D:\flask2\IM"
+
+# Synology 同步位置（複製一份）
 synology_im_path = r"D:\SynologyDrive\TOSHIBA\HL\保養\IM"
 
 os.makedirs(download_path, exist_ok=True)
 os.makedirs(synology_im_path, exist_ok=True)
 
+# 檔案樣式
+pos_pattern = os.path.join(download_path, f"{yyyymm}_HL_Maintain_Report*.xlsx")
+mfp_pattern = os.path.join(download_path, f"{yyyymm}_Service_Count_Report*.xlsx")
+
+pos_final = os.path.join(download_path, f"{yyyymm}_HL_Maintain_Report.xlsx")
+mfp_final = os.path.join(download_path, f"{yyyymm}_Service_Count_Report.xlsx")
+
+pos_synology = os.path.join(synology_im_path, f"{yyyymm}_HL_Maintain_Report.xlsx")
+mfp_synology = os.path.join(synology_im_path, f"{yyyymm}_Service_Count_Report.xlsx")
+
 # ===============================
-# Edge 設定
+# Edge 選項
 # ===============================
 options = webdriver.EdgeOptions()
 options.use_chromium = True
 options.add_experimental_option("prefs", {
     "download.default_directory": download_path,
     "download.prompt_for_download": False,
+    "download.directory_upgrade": True,
+    "safebrowsing.enabled": True
 })
 
-driver = webdriver.Edge(options=options)
-wait = WebDriverWait(driver, 30)
+try:
+    driver = webdriver.Edge(options=options)
+    wait = WebDriverWait(driver, 30)
 
-# ===============================
-# 共用工具
-# ===============================
-def wait_for_excel_button():
-    """等待匯出按鈕 + 檢查是否空資料"""
-    try:
-        wait.until(EC.presence_of_element_located(
-            (By.XPATH, '//input[@type="submit" and @value="匯出成EXCEL"]')
-        ))
+    # ===============================
+    # 登入
+    # ===============================
+    driver.get("http://eip.toshibatec.com.tw/Main.aspx")
+    wait.until(EC.presence_of_element_located((By.NAME, "AccountID"))).send_keys("yang.di")
+    driver.find_element(By.NAME, "PassWord").send_keys("foxdie789")
+    driver.find_element(By.NAME, "login_SubmitBtn").click()
 
-        # 判斷是否空資料
-        if "查無資料" in driver.page_source:
-            return False
+    # ===============================
+    # 進入系統
+    # ===============================
+    wait.until(EC.element_to_be_clickable((By.XPATH, '//td[text()="內部系統"]'))).click()
+    time.sleep(1)
+    wait.until(EC.element_to_be_clickable((By.XPATH, '//td[contains(text(),"EIP 分析系統")]'))).click()
+    time.sleep(3)
 
-        return True
+    driver.switch_to.window(driver.window_handles[-1])
+    driver.refresh()
+    wait.until(EC.title_contains("台芝技術服務分析系統"))
 
-    except TimeoutException:
-        return False
+    # ==================================================
+    # POS 服務工作統計表
+    # ==================================================
+    driver.switch_to.default_content()
+    wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "服務資料查詢"))).click()
+    time.sleep(1)
+    wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "POS服務工作統計表"))).click()
+    driver.switch_to.frame("iframe")
+    time.sleep(2)
 
+    if "Warning: mysql" in driver.page_source:
+        raise Exception("Warning: mysql detected")
 
-def wait_download(pattern, timeout=30):
-    """等待下載完成（避免抓到 .crdownload）"""
-    for _ in range(timeout):
-        files = glob.glob(pattern)
-        if files:
-            latest = max(files, key=os.path.getctime)
-
-            if not latest.endswith(".crdownload"):
-                return latest
-
-        time.sleep(1)
-
-    return None
-
-
-def download_report(menu_text, pattern, final_path, synology_path, pre_actions=None):
-    """通用下載流程（含 retry + refresh）"""
-
-    success = False
-
-    for attempt in range(3):
-        try:
-            driver.switch_to.default_content()
-
-            # 進入報表
-            wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "服務資料查詢"))).click()
-            time.sleep(1)
-            wait.until(EC.element_to_be_clickable((By.LINK_TEXT, menu_text))).click()
-
-            # iframe
-            wait.until(EC.frame_to_be_available_and_switch_to_it((By.ID, "iframe")))
-            time.sleep(2)
-
-            # 額外選項（POS 用）
-            if pre_actions:
-                pre_actions()
-
-            # 查詢
-            driver.find_element(By.XPATH, '//input[@type="submit" and @value="查詢"]').click()
-
-            # 等結果
-            if not wait_for_excel_button():
-                raise Exception("查詢結果為空或未載入")
-
-            # 刪舊檔
-            for f in glob.glob(pattern):
-                os.remove(f)
-
-            # 下載
-            driver.find_element(By.XPATH, '//input[@type="submit" and @value="匯出成EXCEL"]').click()
-
-            downloaded = wait_download(pattern)
-
-            if not downloaded:
-                raise Exception("下載失敗")
-
-            # 改名
-            shutil.move(downloaded, final_path)
-
-            # 備份
-            try:
-                shutil.copy2(final_path, synology_path)
-            except Exception as e:
-                print(f"⚠️ 複製失敗：{e}")
-
-            print(f"✅ {menu_text} 完成")
-            success = True
-            break
-
-        except Exception as e:
-            print(f"⚠️ {menu_text} 第 {attempt+1} 次失敗：{e}")
-            driver.refresh()
-            time.sleep(3)
-
-    if not success:
-        raise Exception(f"{menu_text} 最終失敗")
-
-
-# ===============================
-# 登入流程
-# ===============================
-driver.get("http://eip.toshibatec.com.tw/Main.aspx")
-
-wait.until(EC.presence_of_element_located((By.NAME, "AccountID"))).send_keys("yang.di")
-driver.find_element(By.NAME, "PassWord").send_keys("foxdie789")
-driver.find_element(By.NAME, "login_SubmitBtn").click()
-
-# 進系統
-wait.until(EC.element_to_be_clickable((By.XPATH, '//td[text()="內部系統"]'))).click()
-time.sleep(1)
-wait.until(EC.element_to_be_clickable((By.XPATH, '//td[contains(text(),"EIP 分析系統")]'))).click()
-
-driver.switch_to.window(driver.window_handles[-1])
-driver.refresh()
-wait.until(EC.title_contains("台芝技術服務分析系統"))
-
-# ===============================
-# POS
-# ===============================
-pos_pattern = os.path.join(download_path, f"{yyyymm}_HL_Maintain_Report*.xlsx")
-pos_final = os.path.join(download_path, f"{yyyymm}_HL_Maintain_Report.xlsx")
-pos_synology = os.path.join(synology_im_path, f"{yyyymm}_HL_Maintain_Report.xlsx")
-
-def pos_actions():
     wait.until(EC.element_to_be_clickable(
         (By.XPATH, '//option[contains(text(),"萊爾富")]'))).click()
+    time.sleep(0.5)
     wait.until(EC.element_to_be_clickable(
         (By.XPATH, '//option[contains(text(),"新北勤務一部")]'))).click()
 
-download_report("POS服務工作統計表", pos_pattern, pos_final, pos_synology, pos_actions)
+    driver.find_element(By.XPATH, '//input[@type="submit" and @value="查詢"]').click()
+    wait.until(EC.presence_of_element_located(
+        (By.XPATH, '//input[@type="submit" and @value="匯出成EXCEL"]')))
 
-# ===============================
-# MFP
-# ===============================
-mfp_pattern = os.path.join(download_path, f"{yyyymm}_Service_Count_Report*.xlsx")
-mfp_final = os.path.join(download_path, f"{yyyymm}_Service_Count_Report.xlsx")
-mfp_synology = os.path.join(synology_im_path, f"{yyyymm}_Service_Count_Report.xlsx")
+    # 刪除舊檔
+    for f in glob.glob(pos_pattern):
+        os.remove(f)
 
-def mfp_actions():
+    driver.find_element(By.XPATH, '//input[@type="submit" and @value="匯出成EXCEL"]').click()
+
+    downloaded_pos = None
+    for _ in range(30):
+        files = glob.glob(pos_pattern)
+        if files:
+            downloaded_pos = max(files, key=os.path.getctime)
+            break
+        time.sleep(1)
+
+    if downloaded_pos:
+        shutil.move(downloaded_pos, pos_final)
+        try:
+            shutil.copy2(pos_final, pos_synology)
+        except Exception as e:
+            print(f"⚠️ POS 複製至 Synology 失敗：{e}")
+
+        print("✅ POS 報表完成")
+        print(f"   IM：{pos_final}")
+        print(f"   Synology：{pos_synology}")
+    else:
+        print("❌ POS 報表未下載完成")
+
+    wait.until(EC.element_to_be_clickable((By.ID, "back"))).click()
+    time.sleep(2)
+
+    # ==================================================
+    # MFP 勤務工作統計表
+    # ==================================================
+    driver.switch_to.default_content()
+    wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "服務資料查詢"))).click()
+    time.sleep(1)
+    wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "勤務工作統計表"))).click()
+    driver.switch_to.frame("iframe")
+    time.sleep(2)
+
+    if "Warning: mysql" in driver.page_source:
+        raise Exception("Warning: mysql detected")
+
     wait.until(EC.element_to_be_clickable(
         (By.XPATH, '//option[contains(text(),"新北勤務一部")]'))).click()
 
-download_report("勤務工作統計表", mfp_pattern, mfp_final, mfp_synology, mfp_actions)
+    driver.find_element(By.XPATH, '//input[@type="submit" and @value="查詢"]').click()
+    wait.until(EC.presence_of_element_located(
+        (By.XPATH, '//input[@type="submit" and @value="匯出成EXCEL"]')))
 
-# ===============================
-# 結束
-# ===============================
-driver.quit()
-print("🎉 全部完成")
+    for f in glob.glob(mfp_pattern):
+        os.remove(f)
+
+    driver.find_element(By.XPATH, '//input[@type="submit" and @value="匯出成EXCEL"]').click()
+
+    downloaded_mfp = None
+    for _ in range(30):
+        files = glob.glob(mfp_pattern)
+        if files:
+            downloaded_mfp = max(files, key=os.path.getctime)
+            break
+        time.sleep(1)
+
+    if downloaded_mfp:
+        shutil.move(downloaded_mfp, mfp_final)
+        try:
+            shutil.copy2(mfp_final, mfp_synology)
+        except Exception as e:
+            print(f"⚠️ MFP 複製至 Synology 失敗：{e}")
+
+        print("✅ MFP 報表完成")
+        print(f"   IM：{mfp_final}")
+        print(f"   Synology：{mfp_synology}")
+    else:
+        print("❌ MFP 報表未下載完成")
+
+    driver.quit()
+
+except Exception as e:
+    print(f"❌ 發生錯誤：{e}")
+    if 'driver' in locals():
+        driver.quit()
