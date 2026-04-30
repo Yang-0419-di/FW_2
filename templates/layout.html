@@ -161,13 +161,21 @@
 <body>
 
 <h1>
-{{ page_header or (
-    "出勤時間統計" if time_page else
-    "報修查詢" if report_page else
-    ("PMQ2 個人查詢: " ~ personal_page) if personal_page else
-    "部門排程" if calendar_page else
-    ( "新北勤務一部" if home_page else "TG客戶系統" )
-) }}
+{% if page_header %}
+  {{ page_header }}
+{% elif time_page %}
+  出勤時間統計
+{% elif report_page %}
+  報修查詢
+{% elif personal_page %}
+  PMQ2 個人查詢: {{ personal_page }}
+{% elif calendar_page %}
+  部門排程表
+{% elif home_page %}
+  新北勤務一部
+{% else %}
+  TG客戶系統
+{% endif %}
 </h1>
 
 {% if version %}

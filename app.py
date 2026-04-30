@@ -553,8 +553,11 @@ def mfp_parts():
 
 @app.route('/calendar')
 def calendar_page():
-    version=version_time,
-    return render_template('calendar.html', version=version_time,)
+    return render_template(
+        'calendar.html',
+        version=version_time,
+        calendar_page=True
+    )
 
 @app.route('/calendar/events')
 def calendar_events():
