@@ -190,6 +190,11 @@
 
     <h2>門市資料</h2>
     <div class="table-container">
+	
+		<div style="margin:10px 0;">
+			<input type="text" id="storeSearchBottom" placeholder="搜尋門市資料..." style="width:300px;padding:6px;font-size:14px;">
+		</div>
+	
         <table>
             <thead>
                 {% if tables %}
@@ -234,5 +239,19 @@
 	    toggleSection('HUB-top');
 		toggleSection('HUB-content');
 	}
+	
+	// ===== 門市資料搜尋 =====
+	const storeSearchBottom = document.getElementById("storeSearchBottom");
+	if (storeSearchBottom) {
+		storeSearchBottom.addEventListener("input", function () {
+			const keyword = this.value.toLowerCase();
+
+			document.querySelectorAll("#storeTable tbody tr").forEach(row => {
+				row.style.display =
+					row.innerText.toLowerCase().includes(keyword) ? "" : "none";
+			});
+		});
+	}
+	
 </script>
 {% endblock %}
