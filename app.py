@@ -612,13 +612,13 @@ def worktime():
 
     # ================================
     # 區塊 2：跑勤統計（多一列）
-    # A5:H9 → A5 標題、A9 說明
+    # A5:J9 → A5 標題、A9 說明
     # ================================
     df_2 = pd.read_excel(
         path,
         sheet_name="工時計算",
         header=None,
-        usecols="A:H",
+        usecols="A:J",
         skiprows=4,     # A5
         nrows=5         # A5～A9（比原本多 1 列）
     )
