@@ -57,7 +57,7 @@
 
     /* 固定每日格子高度 */
     .fc .fc-daygrid-day-frame {
-      height: 160px !important;
+      min-height: 160px !important;
       overflow-y: auto !important;
     }
 
@@ -140,14 +140,7 @@ document.addEventListener('DOMContentLoaded', function () {
     eventDidMount: function(info) {
       if (info.event.extendedProps.is_special) {
 
-        // ⭐ 加金色星號（不破壞原結構）
-        let mainEl = info.el.querySelector('.fc-event-main');
-        if (mainEl && !mainEl.innerHTML.includes('★')) {
-          mainEl.insertAdjacentHTML(
-            'afterbegin',
-            '<span style="color: red; margin-right:4px;">★</span>'
-          );
-        }
+
 
         // ⭐ 只改邊框，不改底色
         info.el.style.border = '2px solid red';
