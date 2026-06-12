@@ -908,7 +908,8 @@ def index():
                     "color_a3_giveaway": to_int(request.form.get("color_a3_giveaway")),
                     "color_a3_error_rate": float(request.form.get("color_a3_error_rate") or 0),
                     "color_a3_basic": to_int(request.form.get("color_a3_basic")),
-                    "tax_type": request.form.get("tax_type", "含稅")
+                    "tax_type": request.form.get("tax_type", "含稅"),
+                    "contra": request.form.get("contra", "").strip()
                 }
 
                 update_contract(device_id, contract_data)

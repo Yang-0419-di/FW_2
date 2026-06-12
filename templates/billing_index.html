@@ -320,18 +320,25 @@ button:hover { background-color: #0056b3; }
         <h3 style="font-size:22px;">契約條件</h3>
     </div>
 
-    {% if contra_text %}
-    <div style="width:80%; margin-top:10px;">
-        <div style="border: 1px solid #aaa; border-radius: 8px; padding: 10px; font-size: 15px; font-family: 'Microsoft JhengHei', sans-serif; white-space: pre-line; background-color:#f8f8f8;">
-            {{ contra_text }}
-        </div>
-    </div>
-    {% endif %}
-
     <form method="POST" style="margin-top:8px;">
         <input type="hidden" name="device_id" value="{{ contract.device_id }}">
         <input type="hidden" name="mode" value="update_contract">
-
+		
+		<div style="width:80%; margin-top:10px;">
+			<textarea
+				name="contra"
+				rows="4"
+				style="
+					width:100%;
+					border:1px solid #aaa;
+					border-radius:8px;
+					padding:10px;
+					font-size:15px;
+					font-family:'Microsoft JhengHei', sans-serif;
+				"
+			>{{ contra_text }}</textarea>
+		</div>
+		
         <table class="contract-table">
             <tr><th>項目</th><th>數值</th></tr>
             <!-- 月租 -->
