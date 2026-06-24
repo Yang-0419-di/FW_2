@@ -1,113 +1,254 @@
 {% extends 'layout.html' %}
 {% block content %}
 
-<!-- ================= 樣式 ================= -->
 <style>
+/* ===== 專屬手風琴選單 (Summary Accordion) 實體撐開佈局 ===== */
+.summary-accordion-container {
+    display: flex; 
+    gap: 12px;     
+    width: 100%;
+    max-width: 600px; 
+    margin: 15px 0; 
+    box-sizing: border-box;
+}
 
+.summary-accordion-item {
+    flex: 1;       
+    background: #ffffff; 
+    border: 1px solid #cbd5e1; 
+    border-radius: 8px; 
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05); 
+    height: fit-content;
+}
 
-/* ===== 表格自適應畫面，不爆版 ===== */
+.summary-accordion-button {
+    width: 100%; 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    padding: 10px 14px; 
+    font-size: 14px; 
+    font-weight: bold; 
+    color: #334155; 
+    background-color: #f8fafc; 
+    border: none; 
+    cursor: pointer; 
+    text-align: left; 
+    outline: none; 
+    margin: 0;
+    border-radius: 8px;
+    transition: background-color 0.2s ease;
+}
+
+.summary-accordion-button:hover, .summary-accordion-button.active {
+    background-color: #f1f5f9;
+}
+
+.summary-accordion-content {
+    display: none; 
+    width: 100%;
+    overflow-x: auto; 
+    padding: 15px; 
+    background-color: #ffffff; 
+    border-top: 1px solid #cbd5e1;
+    box-sizing: border-box;
+}
+
+.summary-accordion-content.show {
+    display: block !important;
+}
+
+/* ===================================================
+   🚀 核心優化：強制美化後端 Pandas 塞入的「客戶數量/保養週期」統計表 
+=================================================== */
+.summary-accordion-content table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin: 5px 0 !important;
+    background: #ffffff !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
+    border-radius: 6px !important;
+    overflow: hidden !important;
+    border: 1px solid #e2e8f0 !important;
+}
+
+/* 標頭美化：改為精緻的高級淺藍灰底色 */
+.summary-accordion-content th {
+    background-color: #f1f5f9 !important;
+    color: #334155 !important;
+    font-weight: bold !important;
+    font-size: 13px !important;
+    padding: 8px 12px !important;
+    border: 1px solid #e2e8f0 !important;
+    text-align: left !important;
+}
+
+/* 內容儲存格美化：縮小間距，提高緊湊度 */
+.summary-accordion-content td {
+    background-color: #ffffff !important;
+    color: #475569 !important;
+    font-size: 13px !important;
+    padding: 7px 12px !important;
+    border: 1px solid #e2e8f0 !important;
+    text-align: left !important;
+}
+
+/* 滑鼠懸停整行變色，方便眼睛對齊閱讀 */
+.summary-accordion-content tr:hover td {
+    background-color: #f8fafc !important;
+}
+
+/* 移除 Pandas 自帶的 index 欄位粗體多餘樣式 (如果有) */
+.summary-accordion-content th.dataframe {
+    background: #f1f5f9 !important;
+}
+
+/* ===================================================
+   🚀 客戶總表基本佈局
+=================================================== */
+.table-container.no-scroll {
+    width: 100%;
+    max-height: 650px;    
+    overflow-y: auto;     
+    overflow-x: hidden;   
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    margin-top: 10px;
+    position: relative;
+}
+
 .mfp-table {
     width: 100%;
-    table-layout: fixed;
+    table-layout: fixed; 
     border-collapse: collapse;
 }
 
-/* 所有內容靠左、可換行 */
 .mfp-table th,
 .mfp-table td {
     text-align: left !important;
-    vertical-align: top;
-    word-break: break-word;
-    white-space: normal;
-    padding: 6px 8px;
-    font-size: 14px;
+    vertical-align: middle;
+    padding: 8px 5px; 
+    font-size: 11px;  
+    border: 1px solid #edf2f7;
+    word-break: break-all; 
+    white-space: normal;   
 }
 
-/* 小螢幕自動縮字 */
-@media (max-width: 1400px) {
-    .mfp-table th,
-    .mfp-table td {
-        font-size: 13px;
-    }
-}
-@media (max-width: 1100px) {
-    .mfp-table th,
-    .mfp-table td {
-        font-size: 12px;
-    }
+.mfp-table th {
+    background-color: #f1f5f9;
+    font-weight: bold;
+    color: #4a5568;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    box-shadow: inset 0 -1px 0 #edf2f7; 
 }
 
-/* 客戶總表容器 */
-.table-container.no-scroll {
-    width: 100%;
-    overflow-x: auto; /* 水平可滑動 */
-    overflow-y: visible; /* 垂直自動撐開 */
-}
+/* 精準分配 11 個欄位的寬度百分比（總和為 100%） */
+.mfp-table th:nth-child(1), .mfp-table td:nth-child(1) { width: 6%; }  
+.mfp-table th:nth-child(2), .mfp-table td:nth-child(2) { width: 14%; } 
+.mfp-table th:nth-child(3), .mfp-table td:nth-child(3) { width: 5%; }  
+.mfp-table th:nth-child(4), .mfp-table td:nth-child(4) { width: 8%; }  
+.mfp-table th:nth-child(5), .mfp-table td:nth-child(5) { width: 7%; }  
+.mfp-table th:nth-child(6), .mfp-table td:nth-child(6) { width: 8%; }  
+.mfp-table th:nth-child(7), .mfp-table td:nth-child(7) { width: 24%; } 
+.mfp-table th:nth-child(8), .mfp-table td:nth-child(8) { width: 6%; }  
+.mfp-table th:nth-child(9), .mfp-table td:nth-child(9) { width: 8%; }  
+.mfp-table th:nth-child(10), .mfp-table td:nth-child(10) { width: 7%; }
+.mfp-table th:nth-child(11), .mfp-table td:nth-child(11) { width: 7%; }
 
 /* 搜尋框 */
 .search-box {
-    margin: 10px 0 15px 0;
+    margin: 15px 0;
 }
 .search-box input {
-    width: 320px;
-    padding: 6px 10px;
-    font-size: 16px;
+    width: 300px;
+    padding: 6px 12px;
+    font-size: 14px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    outline: none;
+}
+.search-box input:focus {
+    border-color: #007BFF;
 }
 
-/* 淡紅底色 */
+/* 淡紅底色（合約到期警告） */
 .bg-warning {
-    background-color: #ffcccc;
+    background-color: #fef2f2 !important;
+    color: #ef4444 !important;
+    font-weight: bold;
 }
 
 /* 設備代號按鈕 */
 .device-btn {
-    display: inline-block;
-    padding: 4px 10px;
+    display: block;
+    padding: 3px 0;
     background-color: #007BFF;
     color: white;
     text-decoration: none;
-    border-radius: 6px;
+    border-radius: 4px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 11px;
+    font-weight: bold;
+    text-align: center;
+    width: 100%;
+    box-sizing: border-box;
 }
 .device-btn:hover {
     background-color: #0056b3;
 }
+
+.nav-btn-gray {
+    background-color: #e2e8f0;
+    color: #495057;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+.nav-btn-gray:hover {
+    background-color: #cbd5e1;
+}
 </style>
 
-<!-- ================= 導覽列 ================= -->
-<div style="margin-bottom:10px;">
-    <a href="{{ url_for('billing.index') }}"><button class="button-1">TG客戶系統</button></a>
-    <a href="{{ url_for('billing.mfp_summary') }}"><button class="button-1">客戶總表</button></a>
-    <a href="{{ url_for('billing.person_page', sheet='湯家瑋') }}"><button>湯家瑋</button></a>
-    <a href="{{ url_for('billing.person_page', sheet='吳宗鴻') }}"><button>吳宗鴻</button></a>
-    <a href="{{ url_for('billing.person_page', sheet='劉柏均') }}"><button>劉柏均</button></a>
-    <button type="button" onclick="history.back()" class="nav-btn-gray">
-		← 返回上一頁
-	</button>
-    <a href="/"><button class="button-3">回首頁</button></a>
+<div style="margin-bottom:15px; display: flex; flex-wrap: wrap; gap: 8px;">
+    <a href="{{ url_for('billing.index') }}"><button class="button-1" style="font-size:14px; padding: 6px 12px;">TG客戶系統</button></a>
+    <a href="{{ url_for('billing.mfp_summary') }}"><button class="button-1" style="font-size:14px; padding: 6px 12px;">客戶總表</button></a>
+    <a href="{{ url_for('billing.person_page', sheet='湯家瑋') }}"><button style="font-size:14px; padding: 6px 12px;">湯家瑋</button></a>
+    <a href="{{ url_for('billing.person_page', sheet='吳宗鴻') }}"><button style="font-size:14px; padding: 6px 12px;">吳宗鴻</button></a>
+    <a href="{{ url_for('billing.person_page', sheet='劉柏均') }}"><button style="font-size:14px; padding: 6px 12px;">劉柏均</button></a>
+    <button type="button" onclick="history.back()" class="nav-btn-gray" style="font-size:14px; padding: 6px 12px; color:#333;">← 返回上一頁</button>
+    <a href="/"><button class="button-3" style="font-size:14px; padding: 6px 12px;">回首頁</button></a>
 </div>
 
-<!-- ===== 第一區塊 Accordion（客戶數量） ===== -->
-<button class="accordion-button">客戶數量</button>
-<div class="accordion-content">
-    <div class="table-container-NO">
-        {{ table_area | safe }}
+<div class="summary-accordion-container">
+
+    <div class="summary-accordion-item">
+        <button class="summary-accordion-button" type="button">
+            <span>📊 客戶數量</span>
+            <span class="arrow" style="font-size: 11px; color: #94a3b8;">▼</span>
+        </button>
+        <div class="summary-accordion-content">
+            {{ table_area | safe }}
+        </div>
     </div>
-</div>
 
-<!-- ===== 第二區塊 Accordion（保養週期） ===== -->
-<button class="accordion-button">保養週期</button>
-<div class="accordion-content">
-    <div class="table-container-NO">
-        {{ table_cycle | safe }}
+    <div class="summary-accordion-item">
+        <button class="summary-accordion-button" type="button">
+            <span>🔧 保養週期</span>
+            <span class="arrow" style="font-size: 11px; color: #94a3b8;">▼</span>
+        </button>
+        <div class="summary-accordion-content">
+            {{ table_cycle | safe }}
+        </div>
     </div>
+
 </div>
 
-<!-- ================= 客戶總表 ================= -->
-<h2>客戶總表</h2>
+<h2 style="color: #222; margin-top: 15px; font-size: 20px;">📄 客戶總表</h2>
 <div class="search-box">
-  <input type="text" id="customerSearch" placeholder="即時搜尋（客戶 / 設備 / 地址 / 工程師…）">
+  <input type="text" id="customerSearch" placeholder="🔍 即時搜尋（客戶 / 設備 / 地址 / 工程師…）">
 </div>
 
 <div class="table-container no-scroll">
@@ -134,10 +275,10 @@
           <a href="{{ url_for('billing.index') }}?device_id={{ row.device_id }}" class="device-btn">{{ row.device_id }}</a>
         </td>
         <td>{{ row.customer_name }}</td>
-        <td>{{ row.pm|int }}</td>
-        <td>{{ row.device_number|int }}</td>
+        <td>{{ row.pm|int if row.pm is not none else '' }}</td>
+        <td>{{ row.device_number|int if row.device_number is not none else '' }}</td>
         <td>{{ row.machine_model }}</td>
-        <td>{{ row.tax_id|int }}</td>
+        <td>{{ row.tax_id|int if row.tax_id is not none else '' }}</td>
         <td>{{ row.install_address }}</td>
         <td>{{ row.service_person }}</td>
         <td>{{ row.contract_number }}</td>
@@ -149,7 +290,6 @@
   </table>
 </div>
 
-<!-- ================= JS ================= -->
 <script>
 /* 🔍 即時搜尋 */
 document.getElementById('customerSearch').addEventListener('input', function () {
@@ -183,21 +323,32 @@ document.querySelectorAll('.contract-end').forEach(td => {
     }
 });
 
-// Accordion 展開/收合 JS
-document.querySelectorAll('.accordion-button').forEach(btn => {
-    btn.addEventListener('click', () => {
-        const content = btn.nextElementSibling;
+/* 🔄 手風琴展開/收合獨立 JS 邏輯 */
+document.querySelectorAll('.summary-accordion-button').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const currentItem = btn.closest('.summary-accordion-item');
+        const content = currentItem.querySelector('.summary-accordion-content');
+        const arrow = btn.querySelector('.arrow');
 
-        // 收起其他內容
-        document.querySelectorAll('.accordion-content').forEach(c => {
-            if (c !== content) c.classList.remove('show');
+        document.querySelectorAll('.summary-accordion-item').forEach(item => {
+            if (item !== currentItem) {
+                const c = item.querySelector('.summary-accordion-content');
+                const b = item.querySelector('.summary-accordion-button');
+                const a = item.querySelector('.arrow');
+                if (c) c.classList.remove('show');
+                if (b) b.classList.remove('active');
+                if (a) a.innerText = '▼';
+            }
         });
 
-        // 切換目前內容
-        content.classList.toggle('show');
+        const isShowing = content.classList.toggle('show');
+        btn.classList.toggle('active', isShowing);
+        
+        if (arrow) {
+            arrow.innerText = isShowing ? '▲' : '▼';
+        }
     });
 });
-
 </script>
 
 {% endblock %}

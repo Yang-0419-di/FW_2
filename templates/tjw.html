@@ -1,7 +1,6 @@
 {% extends "layout.html" %}
 {% block content %}
 
-<!-- 🔹 導覽按鈕 -->
 <div style="margin-bottom:10px;">
     <a href="{{ url_for('billing.index') }}"><button class="button-1">TG客戶系統</button></a>
     <a href="{{ url_for('billing.mfp_summary') }}"><button class="button-1">客戶總表</button></a>
@@ -18,26 +17,22 @@
     {{ page_name }} — 個人客戶資料
 </h2>
 
-<!-- ===== 第一區塊 Accordion（客戶數量） ===== -->
-<button class="accordion-button">客戶數量</button>
-<div class="accordion-content">
+<button class="tjw-accordion-button">客戶數量</button>
+<div class="tjw-accordion-content">
     <div class="table-container-NO">
         {{ table1 | safe }}
     </div>
 </div>
 
-<!-- ===== 第二區塊 Accordion（保養週期） ===== -->
-<button class="accordion-button">保養週期</button>
-<div class="accordion-content">
+<button class="tjw-accordion-button">保養週期</button>
+<div class="tjw-accordion-content">
     <div class="table-container-NO">
         {{ table2 | safe }}
     </div>
 </div>
 
-<!-- 第三區塊（客戶資訊表格） -->
 <h3>客戶資訊</h3>
 
-<!-- 搜尋功能 -->
 <input
     type="text"
     id="tableSearch"
@@ -98,7 +93,7 @@
         {% endfor %}
     </tbody>
 </table>
-<!-- 全域 Loading 遮罩 -->
+
 <div id="global-loading" style="
     display:none;
     position:fixed;
@@ -122,6 +117,7 @@
         ⏳ 加載中...請稍後
     </div>
 </div>
+
 <script>
 function showGlobalLoading() {
     const loading = document.getElementById("global-loading");
@@ -132,7 +128,6 @@ function showGlobalLoading() {
 
 /* 只監聽真正會跳轉頁面的 <a> */
 document.addEventListener("click", function (e) {
-
     const link = e.target.closest("a");
     if (!link) return;
 
@@ -157,15 +152,12 @@ document.addEventListener("submit", function () {
 <script>
 window.addEventListener("pageshow", function (event) {
     const loading = document.getElementById("global-loading");
-
     if (loading) {
         loading.style.display = "none";
     }
 });
 </script>
 
-
-<!-- 🔹 自動儲存 JS -->
 <script>
 document.querySelectorAll('.gs-input').forEach(el => {
     el.addEventListener('change', () => {
@@ -182,17 +174,17 @@ document.querySelectorAll('.gs-input').forEach(el => {
     });
 });
 
-// Accordion 展開/收合 JS
-document.querySelectorAll('.accordion-button').forEach(btn => {
+// 🚀【核心修復】：手風琴按鈕綁定完全改為 tjw- 專屬元件名稱，防止污染影響 billing_personal.html
+document.querySelectorAll('.tjw-accordion-button').forEach(btn => {
     btn.addEventListener('click', () => {
         const content = btn.nextElementSibling;
 
-        // 收起其他內容
-        document.querySelectorAll('.accordion-content').forEach(c => {
+        // 只收起當前 tjw 頁面內部的其餘手風琴內容
+        document.querySelectorAll('.tjw-accordion-content').forEach(c => {
             if (c !== content) c.classList.remove('show');
         });
 
-        // 切換目前內容
+        // 切換目前點選內容的顯示狀態
         content.classList.toggle('show');
     });
 });
@@ -209,9 +201,8 @@ document.getElementById('tableSearch').addEventListener('keyup', function () {
 });
 </script>
 
-<!-- Accordion CSS -->
 <style>
-.accordion-button {
+.tjw-accordion-button {
     padding: 6px 14px;
     font-size: 18px;
     font-weight: normal;
@@ -223,22 +214,25 @@ document.getElementById('tableSearch').addEventListener('keyup', function () {
     text-align: left;
     transition: all 0.2s ease;
     margin-top: 10px;
+    display: block;
+    width: auto;
 }
 
-.accordion-button:hover {
+.tjw-accordion-button:hover {
     background: linear-gradient(135deg, #00AEAE, #3BC6C6);
     color: white;
 }
 
-.accordion-content {
+.tjw-accordion-content {
     display: none;           /* 預設收起 */
     flex-direction: column;
     gap: 5px;
     padding: 10px 0;
+    position: static !important; /* 確保保持靜態佔位空間，展開時往下推 */
 }
 
-.accordion-content.show {
-    display: flex;
+.tjw-accordion-content.show {
+    display: flex !important;
 }
 </style>
 

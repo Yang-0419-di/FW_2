@@ -1,47 +1,94 @@
 {% extends "layout.html" %}
 
 {% block content %}
-    <!-- === Billing 個人查詢頁 billing_personal.html === -->
+<style>
+/* ===== 🚀 核心修復：強制解除 layout.html 寫死的 .table-container table { position: absolute; } ===== */
+#billing-personal-content table {
+    position: static !important;  /* 👈 關鍵：強迫進度表表格回到地面，不准浮空，一定要原地佔空間！ */
+    width: 100% !important;
+}
 
-    {% if show_top %}
-        <h2 id="season-title">{{ personal_page }} - 保養進度</h2>
-        <div class="table-container">
-            <table>
-                <thead>
-                    <tr>
-                        {% for key in tables_top[0].keys() %}
-                            <th>{{ key }}</th>
-                        {% endfor %}
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in tables_top %}
-                        <tr {% if loop.index == 4 %}class="highlight-row"{% endif %}>
-                            {% for value in row.values() %}
-                                <td>{{ value }}</td>
-                            {% endfor %}
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    {% endif %}
+/* ===== 🚀 下方客戶資料大表格專用：完美鎖死一頁寬 + 開啟上下垂直捲動 ===== */
+.personal-scroll-table {
+    width: 100% !important;
+    max-height: 550px;              /* 限制大表格最高高度，超出時自動產生上下捲動軸 */
+    overflow-y: auto !important;    /* 開啟垂直上下滾動功能 */
+    overflow-x: hidden !important;  /* 徹底鎖死左右，保證維持一頁寬不爆版 */
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    margin-top: 15px;
+    position: relative !important;  /* 建立獨立排版上下文 */
+    clear: both !important;         /* 雙重保險：清除上方排版任何浮動干擾 */
+}
 
-    <h2>客戶資料</h2>
-    <div class="table-container">
+.personal-main-table {
+    width: 100% !important;
+    table-layout: fixed !important; /* 嚴格限制總寬度為 100% */
+    border-collapse: collapse !important;
+    position: static !important;    /* 👈 關鍵：強迫客戶大表格也回到地面，絕對配合下移！ */
+}
+
+.personal-main-table th,
+.personal-main-table td {
+    text-align: left !important;
+    vertical-align: middle;
+    padding: 8px 6px; 
+    font-size: 11px;                /* 緊湊字體，確保長文字完美塞入 */
+    border: 1px solid #edf2f7;
+    word-break: break-all;          /* 允許文字與英文內斷行，絕不撐開欄位 */
+    white-space: normal;   
+}
+
+/* 讓大表格標頭固定在最頂端 (Sticky) */
+.personal-main-table th {
+    background-color: #f1f5f9;
+    font-weight: bold;
+    color: #4a5568;
+    position: sticky !important;
+    top: 0;
+    z-index: 10;
+    box-shadow: inset 0 -1px 0 #edf2f7; 
+}
+
+.personal-main-table tr:hover td {
+    background-color: #f8fafc;
+}
+
+/* ===== 標題按鈕樣式美化 ===== */
+.section-toggle-btn {
+    margin-right: 8px;
+    font-size: 14px;
+    padding: 4px 10px;
+    background-color: #007BFF;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.section-toggle-btn:hover {
+    background-color: #0056b3;
+}
+</style>
+
+{% if show_top %}
+    <h2>
+        <button class="section-toggle-btn" onclick="toggleSection('billing-personal-content', event)">▶</button>
+        {{ personal_page }} - 保養進度
+    </h2>
+
+    <div id="billing-personal-content" class="table-container section-hidden">
         <table>
             <thead>
-                {% if tables_bottom %}
-                    <tr>
-                        {% for key in tables_bottom[0].keys() %}
-                            <th>{{ key }}</th>
-                        {% endfor %}
-                    </tr>
-                {% endif %}
+                <tr>
+                    {% for key in tables_top[0].keys() %}
+                        <th>{{ key }}</th>
+                    {% endfor %}
+                </tr>
             </thead>
             <tbody>
-                {% for row in tables_bottom %}
-                    <tr>
+                {% for row in tables_top %}
+                    <tr {% if loop.index == 4 %}class="highlight-row"{% endif %}>
                         {% for value in row.values() %}
                             <td>{{ value }}</td>
                         {% endfor %}
@@ -50,5 +97,33 @@
             </tbody>
         </table>
     </div>
+{% endif %}
+
+<div style="clear: both; height: 10px;"></div>
+
+<h2 style="color: #222; font-size: 20px; margin-top: 25px;">📄 客戶資料</h2>
+
+<div class="table-container personal-scroll-table">
+    <table class="personal-main-table">
+        <thead>
+            {% if tables_bottom %}
+                <tr>
+                    {% for key in tables_bottom[0].keys() %}
+                        <th>{{ key }}</th>
+                    {% endfor %}
+                </tr>
+            {% endif %}
+        </thead>
+        <tbody>
+            {% for row in tables_bottom %}
+                <tr>
+                    {% for value in row.values() %}
+                        <td>{{ value }}</td>
+                    {% endfor %}
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
 
 {% endblock %}
