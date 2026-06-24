@@ -10,6 +10,7 @@ from modules.gsheet import get_person_worksheet
 from modules.gsheet import get_customer_worksheet
 from modules.gsheet import get_contract_worksheet
 
+billing_bp = Blueprint('billing', __name__, url_prefix='/billing')
 
 GITHUB_XLSX_URL = 'https://raw.githubusercontent.com/Yang-0419-di/FW_2/master/MFP/MFP.xlsx'
 _cached_xls = None   # 快取避免多次下載
@@ -427,11 +428,7 @@ def get_prev_month_year(selected_year, selected_month):
     """
     依照用戶選擇的年月，計算前月年月
     """
-    
-    # 取得選擇的抄表年份與月份（POST 表單）
-    selected_year = int(request.form.get("selected_year", datetime.now().year))
-    selected_month = int(request.form.get("selected_month", datetime.now().month))
-    
+    # 移除了原先 request.form.get 的覆蓋程式碼，直接使用傳入的引數
     if selected_month == 1:
         return selected_year - 1, 12
     else:
@@ -1345,23 +1342,44 @@ def person_page(sheet):
     )
 
 
-@bp.route("/get_last_counts", methods=["GET"])
-def api_last_counts():
-    device_id = request.args.get("device_id")
-    year = int(request.args.get("year"))
-    month = int(request.args.get("month"))
-
-    color_a3, color, bw, last_date = get_last_counts(device_id, year, month)
-    prev_year, prev_month = get_prev_month_year(year, month)
-
-    return {
-        "color_a3": color_a3,
-        "color": color,
-        "bw": bw,
-        "prev_year": prev_year,
-        "prev_month": prev_month,
-        "last_date": last_date
-    }
+@billing_bp.route('/get_last_counts', methods=['GET'])
+def route_get_last_counts():
+    device_id = request.args.get('device_id')
+    
+    # 1. 透過 request.args 正確抓取前端 GET 請求帶來的參數，並給予當前時間作為預設防呆
+    selected_year = int(request.args.get('year', datetime.now().year))
+    selected_month = int(request.args.get('month', datetime.now().month))
+    
+    # 2. 呼叫修正後的 get_prev_month_year
+    prev_year, prev_month = get_prev_month_year(selected_year, selected_month)
+    
+    # 3. 接下來從資料庫（billing_summary 或 usage）撈取前次資料
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("""
+        SELECT color_a3_total, color_total, bw_total 
+        FROM billing_summary 
+        WHERE device_id=? AND year=? AND month=?
+    """, (device_id, prev_year, prev_month))
+    row = c.fetchone()
+    conn.close()
+    
+    if row:
+        return jsonify({
+            "color_a3": row[0] or 0,
+            "color": row[1] or 0,
+            "bw": row[2] or 0,
+            "prev_year": prev_year,
+            "prev_month": prev_month
+        })
+    else:
+        return jsonify({
+            "color_a3": 0,
+            "color": 0,
+            "bw": 0,
+            "prev_year": prev_year,
+            "prev_month": prev_month
+        })
 
 # ✅ 讓主程式 app.py 可以 import billing_bp
 billing_bp = bp

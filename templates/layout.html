@@ -6,7 +6,7 @@
 
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: Arial, "Microsoft JhengHei", sans-serif;
             padding: 40px;
             background-color: #f7f7f7;
         }
@@ -17,7 +17,7 @@
         }
 
         /* ======================
-           按鈕樣式
+           按鈕基礎樣式
         ====================== */
         button {
             padding: 10px 15px;
@@ -35,7 +35,7 @@
         button.button-3 { background-color: #007BFF; }
 
         /* ======================
-           導覽列
+           導覽列排版
         ====================== */
         .button-row {
             display: flex;
@@ -49,50 +49,108 @@
         }
 
 		/* ======================
-		   Accordion（收合）
+		   手風琴選單 (Accordion) 橫向同列優化
 		====================== */
+        .accordion-nav-container {
+            display: flex; /* 🚀 關鍵：改用 Flex 讓子項目橫向橫著排 */
+            gap: 12px;     /* 按鈕之間的間距 */
+            width: 100%;
+            max-width: 700px;
+            margin: 0 auto 20px 0;
+            box-sizing: border-box;
+            position: relative;
+        }
 
-		/* 主按鈕（POS / MFP / 常用連結）→ 改成 Outline 風格 */
+        .accordion-item {
+            flex: 1;       /* 🚀 關鍵：均分寬度，讓三個按鈕長度完全一樣大 */
+            background: #ffffff; 
+            border: 1px solid #e2e8f0; 
+            border-radius: 8px; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.02); 
+            position: relative; /* 為了讓下拉選單絕對定位 */
+            height: fit-content;
+        }
+
 		.accordion-button {
-			padding: 6px 14px;
-			font-size: 18px;
-			font-weight: normal;
-			border: 2px solid #00AEAE;
-			background-color: transparent;
-			color: #00AEAE;
-			border-radius: 6px;
-			cursor: pointer;
-			text-align: left;
-			transition: all 0.2s ease;
+			width: 100%; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            padding: 12px 16px; 
+            font-size: 15px; /* 微調字體大小以利橫向塞下 */
+            font-weight: bold; 
+            color: #333333; 
+            background-color: #f8fafc; 
+            border: none; 
+            cursor: pointer; 
+            text-align: left; 
+            outline: none; 
+            margin: 0;
+            border-radius: 8px;
+            transition: background-color 0.2s ease;
 		}
 
-		.accordion-button:hover {
-			background: linear-gradient(135deg, #00AEAE, #3BC6C6);
-			color: white;
+		.accordion-button:hover, .accordion-button.active {
+			background-color: #edf2f7;
 		}
 
-		/* 子選單容器（一定要留） */
+		/* 子選單容器：改為絕對定位，展開時才不會把下方的表格往下頂推開擠壓 */
 		.accordion-content {
-			display: none;           /* 預設隱藏 */
-			flex-direction: column;  /* 垂直排列 */
-			gap: 5px;
-			padding-left: 10px;
+			display: none; 
+            position: absolute;
+            top: 100%;
+            left: 0;
+            width: 100%;
+            padding: 12px; 
+            background-color: #ffffff; 
+            border: 1px solid #e2e8f0;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            z-index: 100; /* 確保選單浮在表格之上 */
+            box-sizing: border-box;
+            flex-direction: column; /* 改為垂直清單排列，在限寬格子內最整齊 */
+            gap: 8px;
 		}
 
 		/* 展開狀態 */
 		.accordion-content.show {
-			display: flex;
+			display: flex !important;
 		}
 
+        /* 精緻子選單超連結按鈕 */
+        .sub-link {
+            display: inline-flex !important;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 12px !important;
+            font-size: 14px !important;
+            font-weight: bold !important;
+            color: #ffffff !important;
+            background-color: #475569 !important; 
+            text-decoration: none !important;
+            border-radius: 6px !important;
+            transition: all 0.2s ease-in-out !important;
+            box-sizing: border-box !important;
+            min-height: 36px;
+            margin: 0 !important;
+            width: 100%; /* 寬度填滿格子 */
+        }
+
+        .sub-link:hover {
+            background-color: #1e293b !important; 
+            transform: translateY(-1px);
+        }
 
         /* ======================
-           表格與其他
+           表格與其他組件
         ====================== */
         .table-container {
             overflow-y: auto;
             max-height: 600px;
             border: 1px solid #ccc;
             background-color: white;
+            margin-top: 10px;
         }
 
         table {
@@ -132,26 +190,6 @@
             margin-bottom: 20px;
         }
 
-        /* ======================
-           POS / MFP 專用 Outline 風格
-        ====================== */
-        .nav-outline-btn {
-            padding: 6px 14px;
-            font-size: 18px;
-            font-weight: normal;
-            border: 2px solid  #00AEAE;
-            background-color: transparent;
-            color:  #00AEAE;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .nav-outline-btn:hover {
-            background-color: #20B2AA;
-            color: white;
-        }
-
         .section-hidden {
             display: none !important;
         }
@@ -182,25 +220,13 @@
 <div class="version-info">版本：{{ version }}</div>
 {% endif %}
 
-{% if not billing_page and not billing_invoice_log and not billing_mfp_summary and not billing_person and not billing_index%}
+{% if not billing_page and not billing_invoice_log and not billing_mfp_summary and not billing_person and not billing_index %}
 
-<!-- ======================
-     第一列：一般功能
-====================== -->
 <div class="button-row" role="navigation">
-
-	<a href="{{ url_for('personal', name='湯家瑋') }}">
-	<button class="button-3">湯家瑋</button>
-	</a>
-    <a href="{{ url_for('personal', name='吳宗鴻') }}">
-    <button class="button-3">吳宗鴻</button>
-	</a>
-	<a href="{{ url_for('personal', name='劉柏均') }}">
-		<button class="button-3">劉柏均</button>
-	</a>
-	<a href="{{ url_for('personal', name='狄澤洋') }}">
-		<button class="button-3">狄澤洋</button>
-	</a>
+	<a href="{{ url_for('personal', name='湯家瑋') }}"><button class="button-3">湯家瑋</button></a>
+    <a href="{{ url_for('personal', name='吳宗鴻') }}"><button class="button-3">吳宗鴻</button></a>
+	<a href="{{ url_for('personal', name='劉柏均') }}"><button class="button-3">劉柏均</button></a>
+	<a href="{{ url_for('personal', name='狄澤洋') }}"><button class="button-3">狄澤洋</button></a>
 
     <a href="{{ url_for('time_page') }}"><button class="button-1">出勤時間統計</button></a>
     <a href="{{ url_for('calendar_page') }}"><button class="button-2">排程表</button></a>
@@ -212,43 +238,48 @@
 </div>
 <hr>
 
-	<!-- 第二列：POS / MFP -->
-<!-- 第二列：POS / MFP / 常用連結 -->
-<div class="button-row accordion-nav">
+<div class="accordion-nav-container">
 
-    <!-- POS Accordion -->
-    <button class="accordion-button">POS 相關功能</button>
-    <div class="accordion-content">
-        <a href="{{ url_for('report') }}" data-section="POS 相關"><button class="button-2">報修紀錄查詢</button></a>
-        <a href="{{ url_for('countpass') }}" data-section="POS 相關"><button class="button-2">店長密碼</button></a>
-        <a href="{{ url_for('disk_page') }}" data-section="POS 相關"><button class="button-2">硬碟數量統計表</button></a>
+    <div class="accordion-item">
+        <button class="accordion-button" type="button">
+            <span>💻 POS 功能</span>
+            <span class="arrow" style="font-size: 11px; color: #94a3b8;">▼</span>
+        </button>
+        <div class="accordion-content">
+            <a href="{{ url_for('report') }}" data-section="POS 相關" class="sub-link">報修紀錄查詢</a>
+            <a href="{{ url_for('countpass') }}" data-section="POS 相關" class="sub-link">店長密碼</a>
+            <a href="{{ url_for('disk_page') }}" data-section="POS 相關" class="sub-link">硬碟數量統計</a>
+        </div>
     </div>
 
-    <!-- MFP Accordion -->
-    <button class="accordion-button">MFP 相關功能</button>
-    <div class="accordion-content">
-        <a href="{{ url_for('mfp_parts') }}" data-section="MFP 相關"><button class="button-2">MFP_零件表</button></a>
-        <a href="{{ url_for('billing.index') }}" data-section="MFP 相關"><button class="button-2">TG客戶系統</button></a>
+    <div class="accordion-item">
+        <button class="accordion-button" type="button">
+            <span>🖨️ MFP 功能</span>
+            <span class="arrow" style="font-size: 11px; color: #94a3b8;">▼</span>
+        </button>
+        <div class="accordion-content">
+            <a href="{{ url_for('mfp_parts') }}" data-section="MFP 相關" class="sub-link">MFP 零件表</a>
+            <a href="{{ url_for('billing.index') }}" data-section="MFP 相關" class="sub-link" style="background-color: #007BFF !important;">TG 客戶系統</a>
+        </div>
     </div>
 
-    <!-- 常用連結 Accordion -->
-    <button class="accordion-button">常用連結</button>
-    <div class="accordion-content">
-        <a href="https://imainte.toshibatec.com.tw/i_mainte_center2/login.cfm" target="_blank" data-section="常用連結"><button class="button-2">iMainte</button></a>
-        <a href="https://eip.toshibatec.com.tw/Main.aspx" target="_blank" data-section="常用連結"><button class="button-2">EIP</button></a>
-        <a href="https://drive.google.com/drive/folders/1AA1vj047xTfcaTuUO3SVPS1GN48xKN6I?usp=drive_link" 
-		target="_blank" data-section="常用連結"><button class="button-2">驅動&手冊下載</button></a>
-		<a href="https://drive.google.com/drive/folders/1BNnLjCUT2FO22u5ogxmHWIj3Nx8--Vwu?usp=drive_link" 
-		target="_blank" data-section="常用連結"><button class="button-2">常用文件下載</button></a>
+    <div class="accordion-item">
+        <button class="accordion-button" type="button">
+            <span>🔗 常用連結</span>
+            <span class="arrow" style="font-size: 11px; color: #94a3b8;">▼</span>
+        </button>
+        <div class="accordion-content">
+            <a href="https://imainte.toshibatec.com.tw/i_mainte_center2/login.cfm" target="_blank" data-section="常用連結" class="sub-link">iMainte</a>
+            <a href="https://eip.toshibatec.com.tw/Main.aspx" target="_blank" data-section="常用連結" class="sub-link">EIP</a>
+            <a href="https://drive.google.com/drive/folders/1AA1vj047xTfcaTuUO3SVPS1GN48xKN6I?usp=drive_link" target="_blank" data-section="常用連結" class="sub-link">驅動&手冊下載</a>
+            <a href="https://drive.google.com/drive/folders/1BNnLjCUT2FO22u5ogxmHWIj3Nx8--Vwu?usp=drive_link" target="_blank" data-section="常用連結" class="sub-link">常用文件下載</a>
+        </div>
     </div>
 
 </div>
 
 {% endif %}
 
-<!-- ======================
-     子頁內容
-====================== -->
 <main>
 {% block content %}
 <div class="table-container">
@@ -258,27 +289,9 @@
 </main>
 
 <button id="backToTop" onclick="window.scrollTo({top:0, behavior:'smooth'})">回頂部</button>
-<!-- 全域 Loading 遮罩 -->
-<div id="global-loading" style="
-    display:none;
-    position:fixed;
-    top:0;
-    left:0;
-    width:100%;
-    height:100%;
-    background:rgba(0,0,0,0.4);
-    z-index:9999;
-    justify-content:center;
-    align-items:center;
-">
-    <div style="
-        background:white;
-        padding:30px 50px;
-        border-radius:12px;
-        font-size:22px;
-        font-weight:bold;
-        box-shadow:0 4px 20px rgba(0,0,0,0.3);
-    ">
+
+<div id="global-loading" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); z-index:9999; justify-content:center; align-items:center;">
+    <div style="background:white; padding:30px 50px; border-radius:12px; font-size:22px; font-weight:bold; box-shadow:0 4px 20px rgba(0,0,0,0.3);">
         ⏳ 加載中...請稍後
     </div>
 </div>
@@ -293,39 +306,26 @@ function showGlobalLoading() {
 
 /* 只監聽真正會跳轉頁面的 <a> */
 document.addEventListener("click", function (e) {
-
     const link = e.target.closest("a");
     if (!link) return;
 
     const rawHref = link.getAttribute("href");
-
-    // 1️⃣ 沒有 href 或特殊連結
-    if (!rawHref ||
-        rawHref.startsWith("javascript") ||
-        rawHref.startsWith("#")) {
+    if (!rawHref || rawHref.startsWith("javascript") || rawHref.startsWith("#")) {
         return;
     }
-
-    // 2️⃣ 開新分頁 (target="_blank")
     if (link.target === "_blank") {
         return;
     }
-
-    // 3️⃣ 有 download 屬性
     if (link.hasAttribute("download")) {
         return;
     }
-
-    // 4️⃣ Ctrl / Cmd / Shift / 中鍵 點擊（新分頁）
     if (e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1) {
         return;
     }
-
-    // ✅ 真正會離開本頁才顯示
     showGlobalLoading();
 });
 
-/* 監聽 form submit（正常提交才顯示） */
+/* 監聽 form submit */
 document.addEventListener("submit", function () {
     showGlobalLoading();
 });
@@ -340,19 +340,42 @@ window.addEventListener("pageshow", function () {
 </script>
 
 <script>
-// Accordion 展開/收合
-document.querySelectorAll('.accordion-nav .accordion-button').forEach(btn => {
-    btn.addEventListener('click', () => {
-        const content = btn.nextElementSibling; // 緊跟的 accordion-content
+// 手風琴 橫向點擊切換邏輯
+document.querySelectorAll('.accordion-nav-container .accordion-button').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const currentItem = btn.closest('.accordion-item');
+        const content = currentItem.querySelector('.accordion-content');
+        const arrow = btn.querySelector('.arrow');
 
-        // 收起其他內容
-        btn.closest('.accordion-nav').querySelectorAll('.accordion-content').forEach(c => {
-            if (c !== content) c.classList.remove('show');
+        // 1. 收起其他選單
+        document.querySelectorAll('.accordion-nav-container .accordion-item').forEach(item => {
+            if (item !== currentItem) {
+                const c = item.querySelector('.accordion-content');
+                const b = item.querySelector('.accordion-button');
+                const a = item.querySelector('.arrow');
+                if (c) c.classList.remove('show');
+                if (b) b.classList.remove('active');
+                if (a) a.innerText = '▼';
+            }
         });
 
-        // 切換目前內容
-        content.classList.toggle('show');
+        // 2. 切換當前選單
+        const isShowing = content.classList.toggle('show');
+        btn.classList.toggle('active', isShowing);
+        
+        if (arrow) {
+            arrow.innerText = isShowing ? '▲' : '▼';
+        }
     });
+});
+
+// 點擊網頁任意空白處時，自動收合已展開的下拉選單
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.accordion-item')) {
+        document.querySelectorAll('.accordion-nav-container .accordion-content').forEach(c => c.classList.remove('show'));
+        document.querySelectorAll('.accordion-nav-container .accordion-button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.accordion-nav-container .arrow').forEach(a => a.innerText = '▼');
+    }
 });
 </script>
 
