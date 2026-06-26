@@ -62,7 +62,7 @@ def home():
     xls = load_excel_from_github(GITHUB_XLSX_URL)
 
     # ====== 原本首頁資料 ======
-    df_department = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:D", skiprows=4, nrows=1))
+    df_department = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:E", skiprows=4, nrows=1))
     df_seasons = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:D", skiprows=8, nrows=2))
     df_project1 = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:E", skiprows=12, nrows=5))
 
