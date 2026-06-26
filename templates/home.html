@@ -3,18 +3,26 @@
 {% block content %}
     <!-- === 首頁：部門總覽（原主框架中的 default 區塊） === -->
 
-		<h2>部門數量</h2>
+	<h2>部門數量</h2>
 
     <div class="table-container">
-        <table>
+        <table style="table-layout: fixed; width: 100%; border-collapse: collapse;">
             <thead>
                 {% if department_table %}
-                    <tr>{% for key in department_table[0].keys() %}<th>{{ key }}</th>{% endfor %}</tr>
+                    <tr>
+                        {% for key in department_table[0].keys() %}
+                            <th style="width: 20%; text-align: center;">{{ key }}</th>
+                        {% endfor %}
+                    </tr>
                 {% endif %}
             </thead>
             <tbody>
                 {% for row in department_table %}
-                    <tr>{% for value in row.values() %}<td>{{ value }}</td>{% endfor %}</tr>
+                    <tr>
+                        {% for value in row.values() %}
+                            <td style="text-align: center; word-wrap: break-word;">{{ value }}</td>
+                        {% endfor %}
+                    </tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -116,20 +124,28 @@
         </table>
     </div>
 
-    <h2>
+	<h2>
         <button onclick="toggleSection('project1-content', event)" style="margin-right: 8px;">▶</button>
         專案項目
     </h2>
     <div id="project1-content" style="display: block;" class="table-container">
-        <table>
+        <table style="table-layout: fixed; width: 100%; border-collapse: collapse;">
             <thead>
                 {% if project1_table %}
-                    <tr>{% for key in project1_table[0].keys() %}<th>{{ key }}</th>{% endfor %}</tr>
+                    <tr>
+                        {% for key in project1_table[0].keys() %}
+                            <th style="width: 20%; text-align: center;">{{ key }}</th>
+                        {% endfor %}
+                    </tr>
                 {% endif %}
             </thead>
             <tbody>
                 {% for row in project1_table %}
-                    <tr>{% for value in row.values() %}<td>{{ value }}</td>{% endfor %}</tr>
+                    <tr>
+                        {% for value in row.values() %}
+                            <td style="text-align: center; word-wrap: break-word;">{{ value }}</td>
+                        {% endfor %}
+                    </tr>
                 {% endfor %}
             </tbody>
         </table>
