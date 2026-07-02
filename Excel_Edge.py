@@ -14,15 +14,18 @@ from datetime import datetime
 # ===============================
 yyyymm = datetime.now().strftime("%Y%m")
 
+# Edge 實際下載位置（IM 保留）
 download_path = r"D:\flask2\IM"
+
+# Synology 同步位置（複製一份）
 synology_im_path = r"D:\SynologyDrive\TOSHIBA\HL\保養\IM"
 
 os.makedirs(download_path, exist_ok=True)
 os.makedirs(synology_im_path, exist_ok=True)
 
-# 💡 修正：瀏覽器剛下載時的可能檔名關鍵字（請依據網頁實際下載的檔名修改）
-pos_download_pattern = os.path.join(download_path, "*Report*.xlsx") 
-mfp_download_pattern = os.path.join(download_path, "*統計表*.xlsx") 
+# 檔案樣式
+pos_pattern = os.path.join(download_path, f"{yyyymm}_HL_Maintain_Report*.xlsx")
+mfp_pattern = os.path.join(download_path, f"{yyyymm}_Service_Count_Report*.xlsx")
 
 pos_final = os.path.join(download_path, f"{yyyymm}_HL_Maintain_Report.xlsx")
 mfp_final = os.path.join(download_path, f"{yyyymm}_Service_Count_Report.xlsx")
@@ -35,30 +38,12 @@ mfp_synology = os.path.join(synology_im_path, f"{yyyymm}_Service_Count_Report.xl
 # ===============================
 options = webdriver.EdgeOptions()
 options.use_chromium = True
-
-# 💡 修正：隱藏 DevTools 提示與過濾無用 ERROR 日誌
-options.add_experimental_option("excludeSwitches", ["enable-logging"])
-options.add_argument('--log-level=3')
-
 options.add_experimental_option("prefs", {
     "download.default_directory": download_path,
     "download.prompt_for_download": False,
     "download.directory_upgrade": True,
     "safebrowsing.enabled": True
 })
-
-def wait_for_download_ready(directory, pattern, timeout=30):
-    """確保檔案下載完成，且沒有 .crdownload 暫存檔"""
-    for _ in range(timeout):
-        # 檢查是否有未完成的暫存檔
-        if glob.glob(os.path.join(directory, "*.crdownload")):
-            time.sleep(1)
-            continue
-        files = glob.glob(pattern)
-        if files:
-            return max(files, key=os.path.getctime)
-        time.sleep(1)
-    return None
 
 try:
     driver = webdriver.Edge(options=options)
@@ -97,20 +82,29 @@ try:
     if "Warning: mysql" in driver.page_source:
         raise Exception("Warning: mysql detected")
 
-    wait.until(EC.element_to_be_clickable((By.XPATH, '//option[contains(text(),"萊爾富")]'))).click()
+    wait.until(EC.element_to_be_clickable(
+        (By.XPATH, '//option[contains(text(),"萊爾富")]'))).click()
     time.sleep(0.5)
-    wait.until(EC.element_to_be_clickable((By.XPATH, '//option[contains(text(),"新北勤務一部")]'))).click()
+    wait.until(EC.element_to_be_clickable(
+        (By.XPATH, '//option[contains(text(),"新北勤務一部")]'))).click()
 
     driver.find_element(By.XPATH, '//input[@type="submit" and @value="查詢"]').click()
-    wait.until(EC.presence_of_element_located((By.XPATH, '//input[@type="submit" and @value="匯出成EXCEL"]')))
+    wait.until(EC.presence_of_element_located(
+        (By.XPATH, '//input[@type="submit" and @value="匯出成EXCEL"]')))
 
-    # 刪除舊的 final 檔案防止衝突
-    if os.path.exists(pos_final): os.remove(pos_final)
+    # 刪除舊檔
+    for f in glob.glob(pos_pattern):
+        os.remove(f)
 
     driver.find_element(By.XPATH, '//input[@type="submit" and @value="匯出成EXCEL"]').click()
 
-    # 💡 使用改良後的下載等待機制
-    downloaded_pos = wait_for_download_ready(download_path, pos_download_pattern)
+    downloaded_pos = None
+    for _ in range(30):
+        files = glob.glob(pos_pattern)
+        if files:
+            downloaded_pos = max(files, key=os.path.getctime)
+            break
+        time.sleep(1)
 
     if downloaded_pos:
         shutil.move(downloaded_pos, pos_final)
@@ -141,17 +135,25 @@ try:
     if "Warning: mysql" in driver.page_source:
         raise Exception("Warning: mysql detected")
 
-    wait.until(EC.element_to_be_clickable((By.XPATH, '//option[contains(text(),"新北勤務一部")]'))).click()
+    wait.until(EC.element_to_be_clickable(
+        (By.XPATH, '//option[contains(text(),"新北勤務一部")]'))).click()
 
     driver.find_element(By.XPATH, '//input[@type="submit" and @value="查詢"]').click()
-    wait.until(EC.presence_of_element_located((By.XPATH, '//input[@type="submit" and @value="匯出成EXCEL"]')))
+    wait.until(EC.presence_of_element_located(
+        (By.XPATH, '//input[@type="submit" and @value="匯出成EXCEL"]')))
 
-    if os.path.exists(mfp_final): os.remove(mfp_final)
+    for f in glob.glob(mfp_pattern):
+        os.remove(f)
 
     driver.find_element(By.XPATH, '//input[@type="submit" and @value="匯出成EXCEL"]').click()
 
-    # 💡 使用改良後的下載等待機制
-    downloaded_mfp = wait_for_download_ready(download_path, mfp_download_pattern)
+    downloaded_mfp = None
+    for _ in range(30):
+        files = glob.glob(mfp_pattern)
+        if files:
+            downloaded_mfp = max(files, key=os.path.getctime)
+            break
+        time.sleep(1)
 
     if downloaded_mfp:
         shutil.move(downloaded_mfp, mfp_final)
