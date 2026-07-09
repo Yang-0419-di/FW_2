@@ -2,6 +2,8 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.edge.service import Service as EdgeService
+from webdriver_manager.microsoft import EdgeChromiumDriverManager
 from selenium.common.exceptions import TimeoutException
 import os
 import time
@@ -44,9 +46,13 @@ options.add_experimental_option("prefs", {
     "download.directory_upgrade": True,
     "safebrowsing.enabled": True
 })
+# 穩定性優化參數
+options.add_argument('--disable-gpu')
+options.add_argument('--no-sandbox')
 
 try:
-    driver = webdriver.Edge(options=options)
+    # 使用 webdriver_manager 自動管理驅動版本，避免未來手動更新麻煩
+    driver = webdriver.Edge(service=EdgeService(EdgeChromiumDriverManager().install()), options=options)
     wait = WebDriverWait(driver, 30)
 
     # ===============================
@@ -98,9 +104,12 @@ try:
 
     driver.find_element(By.XPATH, '//input[@type="submit" and @value="匯出成EXCEL"]').click()
 
+    # 偵測下載是否完成
     downloaded_pos = None
     for _ in range(30):
         files = glob.glob(pos_pattern)
+        # 排除 Edge 的暫存檔以確保下載完成
+        files = [f for f in files if not f.endswith('.crdownload')]
         if files:
             downloaded_pos = max(files, key=os.path.getctime)
             break
@@ -119,7 +128,36 @@ try:
     else:
         print("❌ POS 報表未下載完成")
 
-    wait.until(EC.element_to_be_clickable((By.ID, "back"))).click()
+    # ==================================================
+    # 強力返回主選單機制
+    # ==================================================
+    print("🔄 正在嘗試返回主選單...")
+    driver.switch_to.default_content() # 確保跳出 iframe
+    time.sleep(1)
+
+    try:
+        # 嘗試方法 1：使用原本的 ID 定位（縮短等待到 5 秒，失敗立刻換方法）
+        WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.ID, "back"))).click()
+        print("▶️ 透過 ID 成功點擊返回")
+    except Exception:
+        try:
+            # 嘗試方法 2：如果它是 <input type="button" value="返回"> 或類似的中文字按鈕
+            back_btn = WebDriverWait(driver, 5).until(
+                EC.element_to_be_clickable((By.XPATH, '//input[@value="返回" or @value="回上一頁" or contains(@value,"回")]'))
+            )
+            back_btn.click()
+            print("▶️ 透過 XPATH 中文按鈕成功點擊返回")
+        except Exception:
+            try:
+                # 嘗試方法 3：使用 JavaScript 強行引發網頁的 back 函數（通常後台系統都有掛 window.history.back 或自訂 back 函式）
+                driver.execute_script("if(typeof(back) === 'function'){ back(); } else { window.history.back(); }")
+                print("▶️ 透過 JavaScript 強制返回成功")
+            except Exception as e:
+                print(f"❌ 所有返回方法皆失敗，錯誤資訊: {e}")
+                # 如果真的都回不去，直接讓瀏覽器重新填寫網址進入「台芝技術服務分析系統」的首頁
+                driver.get("http://eip.toshibatec.com.tw/Main.aspx") # 或者是分析系統的那個新視窗網址
+                time.sleep(3)
+
     time.sleep(2)
 
     # ==================================================
@@ -147,9 +185,12 @@ try:
 
     driver.find_element(By.XPATH, '//input[@type="submit" and @value="匯出成EXCEL"]').click()
 
+    # 偵測下載是否完成
     downloaded_mfp = None
     for _ in range(30):
         files = glob.glob(mfp_pattern)
+        # 排除 Edge 的暫存檔以確保下載完成
+        files = [f for f in files if not f.endswith('.crdownload')]
         if files:
             downloaded_mfp = max(files, key=os.path.getctime)
             break
