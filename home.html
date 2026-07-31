@@ -3,53 +3,6 @@
 {% block content %}
     <!-- === 首頁：部門總覽（原主框架中的 default 區塊） === -->
 
-
-	<!-- === 🆕 SC硬碟檢測 區塊（放在部門數量上方） === -->
-	<h2>SC硬碟檢測 (最新5筆)</h2>
-	<div class="table-container">
-		<table>
-			<thead>
-				<tr>
-					<th>離場時間</th>
-					<th>門店編號</th>
-					<th>門店名稱</th>
-					<th>報修類別</th>
-					<th>工作內容</th>
-					<th>SC(1)</th>
-					<th>SC(2)</th>
-					<th>TM(1)</th>
-					<th>TM(2)</th>
-					<th>操作</th>
-				</tr>
-			</thead>
-			<tbody>
-				{% for row in sc_disk_data %}
-				<tr data-store-id="{{ row['門店編號'] }}">
-					<td>{{ row['離場時間'] }}</td>
-					<td>{{ row['門店編號'] }}</td>
-					<td>{{ row['門店名稱'] }}</td>
-					<td>{{ row['報修類別'] }}</td>
-					<td style="max-width: 200px; text-align: left;">{{ row['工作內容'] }}</td>
-					<td><input type="text" class="disk-input sc1" value="{{ row['SC1'] }}" style="width: 50px;"></td>
-					<td><input type="text" class="disk-input sc2" value="{{ row['SC2'] }}" style="width: 50px;"></td>
-					<td><input type="text" class="disk-input tm1" value="{{ row['TM1'] }}" style="width: 50px;"></td>
-					<td><input type="text" class="disk-input tm2" value="{{ row['TM2'] }}" style="width: 50px;"></td>
-					<td>
-						<button type="button" onclick="saveDiskRow(this)" style="background-color: #28a745; font-size: 14px; padding: 4px 8px;">儲存</button>
-						<button type="button" onclick="deleteDiskRow(this)" style="background-color: #dc3545; font-size: 14px; padding: 4px 8px;">刪除</button>
-					</td>
-				</tr>
-				{% else %}
-				<tr>
-					<td colspan="10" style="text-align: center; color: gray;">目前無符合條件的硬碟更換紀錄</td>
-				</tr>
-				{% endfor %}
-			</tbody>
-		</table>
-	</div>
-
-<br>
-
 	<h2>部門數量</h2>
 
     <div class="table-container">
@@ -315,58 +268,6 @@
 			});
 		});
 	}
-
-// 儲存 SC/TM 數值至 Google Sheet
-function saveDiskRow(btn) {
-    const tr = btn.closest('tr');
-    
-    // 取得 td 內容 (請根據您 HTML <td> 的實際位置調整索引)
-    const tds = tr.querySelectorAll('td');
-    
-    const payload = {
-        action: 'save',
-        leave_time: tds[0].innerText.trim(),    // A欄: 離場時間
-        store_id: tds[1].innerText.trim(),      // B欄: 門店編號
-        store_name: tds[2].innerText.trim(),    // C欄: 門店名稱
-        repair_cat: tds[3].innerText.trim(),    // D欄: 報修類別
-        work_content: tds[4].innerText.trim(),  // E欄: 工作內容
-        sc1: tr.querySelector('.sc1').value.trim(), // F欄: SC(1)
-        sc2: tr.querySelector('.sc2').value.trim(), // G欄: SC(2)
-        tm1: tr.querySelector('.tm1').value.trim(), // H欄: TM(1)
-        tm2: tr.querySelector('.tm2').value.trim()  // I欄: TM(2)
-    };
-
-    fetch('/sc_disk/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-    })
-    .then(res => res.json())
-    .then(data => {
-        alert(data.message);
-    })
-    .catch(err => alert('儲存失敗: ' + err));
-}
-
-// 刪除該筆資料（同步刪除 Google Sheet）
-function deleteDiskRow(btn) {
-    if (!confirm("確定要刪除此筆記錄並同步刪除 Google 試算表中的資料嗎？")) return;
-    
-    const tr = btn.closest('tr');
-    const store_id = tr.children[1].innerText.trim();
-
-    fetch('/sc_disk/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'delete', store_id: store_id })
-    })
-    .then(res => res.json())
-    .then(data => {
-        alert(data.message);
-        tr.remove(); // 成功後將畫面的 Row 移除
-    })
-    .catch(err => alert('刪除失敗: ' + err));
-}
-
+	
 </script>
 {% endblock %}

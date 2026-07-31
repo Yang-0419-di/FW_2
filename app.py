@@ -61,56 +61,93 @@ def clean_df(df):
 def home():
     xls = load_excel_from_github(GITHUB_XLSX_URL)
 
-    # ====== 原本首頁資料 ======
+    # ======================================================
+    # 🆕 SC硬碟檢測：資料篩選與 Google Sheet 串接
+    # ======================================================
+    sc_disk_data = []
+    try:
+        df_im = clean_df(pd.read_excel(xls, sheet_name='IM'))
+
+        # 1. 條件一：報修類別為 HL-TM主機 或 HL-SC主機
+        cond_category = df_im['報修類別'].astype(str).isin(['HL-TM主機', 'HL-SC主機'])
+
+        # 2. 條件二：工作內容 (AC欄位) 包含 "更換" 與 "硬碟"
+        content_col = '工作內容' if '工作內容' in df_im.columns else df_im.columns[28]
+        cond_content = (
+            df_im[content_col].astype(str).str.contains('更換', case=False) & 
+            df_im[content_col].astype(str).str.contains('硬碟', case=False)
+        )
+
+        df_filtered = df_im[cond_category & cond_content].copy()
+
+        # 3. 依據 離場時間 排序並取最新前 5 筆
+        if '離場時間' in df_filtered.columns:
+            df_filtered['離場時間_dt'] = pd.to_datetime(df_filtered['離場時間'], errors='coerce')
+            df_filtered = df_filtered.sort_values(by='離場時間_dt', ascending=False).head(5)
+        else:
+            df_filtered = df_filtered.head(5)
+
+        # 4. 從 Google Sheet「硬碟檢測」分頁讀取填寫紀錄
+        try:
+            sh = client.open_by_key(SHEET_ID)
+            ws_disk = sh.worksheet("硬碟檢測")
+            gs_df = pd.DataFrame(ws_disk.get_all_records())
+        except Exception:
+            gs_df = pd.DataFrame()
+
+        for _, row in df_filtered.iterrows():
+            store_id = str(row.get('門店編號', ''))
+            
+            matched = pd.DataFrame()
+            if not gs_df.empty and '門店編號' in gs_df.columns:
+                matched = gs_df[gs_df['門店編號'].astype(str) == store_id]
+
+            sc_disk_data.append({
+                '離場時間': str(row.get('離場時間', '')),
+                '門店編號': store_id,
+                '門店名稱': str(row.get('門店名稱', '')),
+                '報修類別': str(row.get('報修類別', '')),
+                '工作內容': str(row.get(content_col, '')),
+                'SC1': matched.iloc[0]['SC(1)'] if not matched.empty and 'SC(1)' in matched.columns else '',
+                'SC2': matched.iloc[0]['SC(2)'] if not matched.empty and 'SC(2)' in matched.columns else '',
+                'TM1': matched.iloc[0]['TM(1)'] if not matched.empty and 'TM(1)' in matched.columns else '',
+                'TM2': matched.iloc[0]['TM(2)'] if not matched.empty and 'TM(2)' in matched.columns else ''
+            })
+    except Exception as e:
+        print(f"⚠️ SC硬碟檢測載入失敗: {e}")
+
+    # ======================================================
+    #                 原本首頁的頁面資料處理
+    # ======================================================
     df_department = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:E", skiprows=4, nrows=1))
     df_seasons = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:D", skiprows=8, nrows=2))
     df_project1 = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:E", skiprows=12, nrows=5))
 
-    
-    # ===== HUB 前段統計 =====
-    # 假設你的前段統計在 Excel 第 19 列開始 (A19:C19 為標題，A20:C21 為數據)
+    # HUB 前段統計
     df_HUB_top_raw = pd.read_excel(
-        xls,
-        sheet_name='首頁',
-        header=None,       # 不用把第 19 列當作 header
-        usecols="A:C",     # 只抓 A~C
-        skiprows=20,       # 跳過前 18 列
-        nrows=2            # 讀 2 列數據（標題列 + 1列數據，依實際需要調整）
+        xls, sheet_name='首頁', header=None, usecols="A:C", skiprows=20, nrows=2
     )
-
-    # 取第一列當欄位名稱
     df_HUB_top_raw.columns = df_HUB_top_raw.iloc[0].str.strip()
-    df_HUB_top = df_HUB_top_raw[1:]  # 只取數據列
+    df_HUB_top = df_HUB_top_raw[1:]
 
-    # 只選需要欄位
     cols = ['HUB檢查', 'HUB完工', 'HUB進度']
     existing_cols = [c for c in cols if c in df_HUB_top.columns]
     df_HUB_top = df_HUB_top[existing_cols]
-    
+
     if 'HUB進度' in df_HUB_top.columns:
         df_HUB_top['HUB進度'] = (
-            pd.to_numeric(df_HUB_top['HUB進度'], errors='coerce')  # 轉數字，錯誤變 NaN
-            .fillna(0)                                             # NaN → 0
+            pd.to_numeric(df_HUB_top['HUB進度'], errors='coerce')
+            .fillna(0)
             .mul(100)
             .round(0)
             .astype(int)
             .astype(str) + '%'
         )
 
-    # 🔹 原本那段改成 header=20
-    df_HUB = clean_df(
-        pd.read_excel(
-            xls,
-            sheet_name='首頁',
-            header=22,
-            usecols="A:E"
-        )
-    )
-
+    df_HUB = clean_df(pd.read_excel(xls, sheet_name='首頁', header=22, usecols="A:E"))
     df_HUB = df_HUB[df_HUB['門市編號'].astype(str).str.strip() != '']
     df_HUB['門市編號'] = df_HUB['門市編號'].astype(str).str.replace(r'\.0$', '', regex=True)
     df_HUB = df_HUB[['門市編號', '門市名稱', 'HUB規格', '異常原因', '完工確認']]
-
 
     df = clean_df(pd.read_excel(xls, sheet_name=0, header=20, nrows=500, usecols="A:O"))
     df = df[['門市編號', '門市名稱', 'PMQ_檢核', '專案檢核', 'HUB', '完工檢核']]
@@ -121,79 +158,36 @@ def home():
         df = df[df.apply(lambda r: r.astype(str).str.contains(keyword, case=False).any(), axis=1)]
         no_data_found = df.empty
 
-
-    # ======================================================
-    #                 區域數量（三段）- 都在「首頁」
-    # ======================================================
-
-    # === 第一段 A55:G55 標題，A56:G57 內容 ===
-    df1 = pd.read_excel(
-        xls,
-        sheet_name='首頁',
-        header=None,
-        usecols="E:K",
-        skiprows=56,
-        nrows=3
-    )
-
+    # 區域數量（三段）
+    df1 = pd.read_excel(xls, sheet_name='首頁', header=None, usecols="E:K", skiprows=56, nrows=3)
     headers1 = df1.iloc[0].tolist()
-    area_table_1 = []
-    for i in range(1, 3):
-        area_table_1.append(dict(zip(headers1, df1.iloc[i].tolist())))
+    area_table_1 = [dict(zip(headers1, df1.iloc[i].tolist())) for i in range(1, 3)]
 
-
-    # === 第二段 A59:L59 標題，A60:L61 內容 ===
-    df2 = pd.read_excel(
-        xls,
-        sheet_name='首頁',
-        header=None,
-        usecols="E:P",
-        skiprows=60,
-        nrows=3
-    )
-
+    df2 = pd.read_excel(xls, sheet_name='首頁', header=None, usecols="E:P", skiprows=60, nrows=3)
     headers2 = df2.iloc[0].tolist()
-    area_table_2 = []
-    for i in range(1, 3):
-        area_table_2.append(dict(zip(headers2, df2.iloc[i].tolist())))
+    area_table_2 = [dict(zip(headers2, df2.iloc[i].tolist())) for i in range(1, 3)]
 
-
-    # === 第三段 A63:G63 標題，A64:G65 內容 ===
-    df3 = pd.read_excel(
-        xls,
-        sheet_name='首頁',
-        header=None,
-        usecols="E:L",
-        skiprows=64,
-        nrows=3
-    )
-
+    df3 = pd.read_excel(xls, sheet_name='首頁', header=None, usecols="E:L", skiprows=64, nrows=3)
     headers3 = df3.iloc[0].tolist()
-    area_table_3 = []
-    for i in range(1, 3):
-        area_table_3.append(dict(zip(headers3, df3.iloc[i].tolist())))
-
+    area_table_3 = [dict(zip(headers3, df3.iloc[i].tolist())) for i in range(1, 3)]
 
     # ======================================================
     #                 回傳到 home.html
     # ======================================================
-
     return render_template(
         'home.html',
         version=version_time,
-
+        sc_disk_data=sc_disk_data,  # 🆕 把這個帶給前端
         area_table_1=area_table_1,
         area_table_2=area_table_2,
         area_table_3=area_table_3,
-
         keyword=keyword,
         tables=df.to_dict(orient='records'),
         department_table=df_department.to_dict(orient='records'),
         seasons_table=df_seasons.to_dict(orient='records'),
         project1_table=df_project1.to_dict(orient='records'),
-        HUB_top_table=df_HUB_top.to_dict(orient='records'), 
+        HUB_top_table=df_HUB_top.to_dict(orient='records'),
         HUB_table=df_HUB.to_dict(orient='records'),
-
         no_data_found=no_data_found,
         billing_invoice_log=False,
         home_page=True
@@ -669,6 +663,58 @@ def worktime():
         billing_worktime=True
     )
 
+# 🆕 SC硬碟檢測 儲存/刪除同步 API
+# 🆕 SC硬碟檢測 儲存/刪除同步 API (修復錯位問題)
+@app.route('/sc_disk/update', methods=['POST'])
+def update_sc_disk():
+    data = request.json
+    action = data.get('action')
+    store_id = str(data.get('store_id', '')).strip()
+
+    try:
+        sh = client.open_by_key(SHEET_ID)
+        ws = sh.worksheet("硬碟檢測")
+        records = ws.get_all_records()
+        
+        # 尋找目標列 (比對 門店編號)
+        row_idx = None
+        for idx, r in enumerate(records, start=2): # header 佔據第 1 列
+            if str(r.get('門店編號')).strip() == store_id:
+                row_idx = idx
+                break
+
+        if action == 'delete':
+            if row_idx:
+                ws.delete_rows(row_idx)
+            return jsonify({'status': 'success', 'message': '已同步刪除 Google Sheet 資料'})
+
+        elif action == 'save':
+            # 🚀 關鍵修復：這裡嚴格按照 Google 試算表 A~I 欄位順序組成陣列
+            # A: 離場時間, B: 門店編號, C: 門店名稱, D: 報修類別, E: 工作內容
+            # F: SC(1), G: SC(2), H: TM(1), I: TM(2)
+            row_data = [
+                data.get('leave_time', ''),
+                store_id,
+                data.get('store_name', ''),
+                data.get('repair_cat', ''),
+                data.get('work_content', ''),
+                data.get('sc1', ''),
+                data.get('sc2', ''),
+                data.get('tm1', ''),
+                data.get('tm2', '')
+            ]
+            
+            if row_idx:
+                # 更新已有列 (A 欄到 I 欄)
+                ws.update(f'A{row_idx}:I{row_idx}', [row_data])
+            else:
+                # 新增一列
+                ws.append_row(row_data)
+                
+            return jsonify({'status': 'success', 'message': '資料已同步至 Google Sheet'})
+
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 # ====== 啟動 Flask ======
