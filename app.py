@@ -1,4 +1,5 @@
-from flask import Flask, render_template, request, jsonify, abort
+from flask import Flask, render_template, request, jsonify, abort, redirect, url_for
+from flask_login import LoginManager, UserMixin
 import pandas as pd
 import requests
 import sqlite3
@@ -9,24 +10,47 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.font_manager import FontProperties
-from flask import redirect, url_for
 import gspread
 from google.oauth2.service_account import Credentials
 from modules.gsheet import client, SHEET_ID
 
-
-# ====== 新增：引入 billing 模組 ======
-from modules.billing import billing_bp   # ✅ 新增這一行
+# ====== 引入 billing 模組 ======
+from modules.billing import billing_bp
 
 # ====== 基本設定 ======
 app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', 'your_default_secret_key_here')  # Flask 密鑰設定
+
 GITHUB_XLSX_URL = 'https://raw.githubusercontent.com/Yang-0419-di/FW_2/master/data.xlsx'
 cached_xls = None
 version_time = None
 app.config['VERSION_TIME'] = version_time
 
-# ====== 新增：註冊 billing 藍圖 ======
-app.register_blueprint(billing_bp)  # ✅ 新增這一行
+# ====== 初始化 Flask-Login ======
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'billing.login'  # 未登入時自動重定向之登入頁面路由
+
+# ====== User 模型類別 ======
+class User(UserMixin):
+    def __init__(self, id, username):
+        self.id = id
+        self.username = username
+
+@login_manager.user_loader
+def load_user(user_id):
+    conn = sqlite3.connect('billing.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT id, username FROM users WHERE id = ?', (user_id,))
+    user_row = cursor.fetchone()
+    conn.close()
+    
+    if user_row:
+        return User(id=user_row[0], username=user_row[1])
+    return None
+
+# ====== 註冊 billing 藍圖 ======
+app.register_blueprint(billing_bp)
 
 # ====== 字型設定（支援中文） ======
 matplotlib.rcParams['font.sans-serif'] = ['Microsoft JhengHei']
@@ -50,20 +74,18 @@ def load_excel_from_github(url):
             return cached_xls
     except Exception as e:
         print(f"❌ Excel 下載失敗: {e}")
-    abort(500, description="⚠️ 無法從 GitHub 載入 Excel 檔案")
+    abort(500, description="⚠️ 無發從 GitHub 載入 Excel 檔案")
 
 def clean_df(df):
     df.columns = df.columns.astype(str).str.replace('\n', '', regex=False)
     return df.fillna('')
 
-# ====== 以下為原有功能（完全不變） ======
+# ====== 首頁路由 ======
 @app.route('/')
 def home():
     xls = load_excel_from_github(GITHUB_XLSX_URL)
 
-    # ======================================================
-    # 🆕 SC硬碟檢測：資料篩選與 Google Sheet 串接
-    # ======================================================
+    # SC硬碟檢測：資料篩選與 Google Sheet 串接
     sc_disk_data = []
     try:
         df_im = clean_df(pd.read_excel(xls, sheet_name='IM'))
@@ -116,9 +138,7 @@ def home():
     except Exception as e:
         print(f"⚠️ SC硬碟檢測載入失敗: {e}")
 
-    # ======================================================
-    #                 原本首頁的頁面資料處理
-    # ======================================================
+    # 首頁其他表格處理
     df_department = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:E", skiprows=4, nrows=1))
     df_seasons = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:D", skiprows=8, nrows=2))
     df_project1 = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:E", skiprows=12, nrows=5))
@@ -171,13 +191,10 @@ def home():
     headers3 = df3.iloc[0].tolist()
     area_table_3 = [dict(zip(headers3, df3.iloc[i].tolist())) for i in range(1, 3)]
 
-    # ======================================================
-    #                 回傳到 home.html
-    # ======================================================
     return render_template(
         'home.html',
         version=version_time,
-        sc_disk_data=sc_disk_data,  # 🆕 把這個帶給前端
+        sc_disk_data=sc_disk_data,
         area_table_1=area_table_1,
         area_table_2=area_table_2,
         area_table_3=area_table_3,
@@ -193,31 +210,24 @@ def home():
         home_page=True
     )
 
-from flask import redirect, url_for
-
-
 @app.route("/disk", methods=["GET"])
 def disk_page():
-    # 讀取 Google Sheet
     try:
         sh = client.open_by_key(SHEET_ID)
-        sheet = sh.worksheet("硬碟統計")  # ← 指定硬碟統計分頁
+        sheet = sh.worksheet("硬碟統計")
     except gspread.exceptions.APIError as e:
         return f"⚠️ 無法讀取 Google Sheet: {e}", 500
 
-    # 讀取所有資料
-    all_rows = sheet.get_all_records()  # list of dict
+    all_rows = sheet.get_all_records()
 
-    # 只取每個 user 最新一筆資料
     latest_data = {}
     for row in all_rows:
         user = row.get('user')
         if user:
-            latest_data[user] = row  # 後面會覆蓋前面，保留最後一筆
+            latest_data[user] = row
 
     rows = list(latest_data.values())
 
-    # 計算總計
     total_keys = [
         'sc_128_new','sc_128_old','sc_240_new','sc_240_old',
         'sc_256_new','sc_256_old','sc_500_new','sc_500_old',
@@ -227,8 +237,6 @@ def disk_page():
 
     return render_template("disk.html", page_header="POS 相關", rows=rows, total=total)
 
-
-# ====== /disk/save 儲存 ======
 @app.route("/disk/save", methods=["POST"])
 def disk_save():
     data = {
@@ -252,10 +260,9 @@ def disk_save():
     if not data['user']:
         return "⚠️ 必須選擇使用者", 400
 
-    # 直接 append 一列到硬碟統計分頁
     try:
         sh = client.open_by_key(SHEET_ID)
-        sheet = sh.worksheet("硬碟統計")  # ← 指定硬碟統計分頁
+        sheet = sh.worksheet("硬碟統計")
         row = [
             data["user"], data["sc_128_new"], data["sc_128_old"],
             data["sc_240_new"], data["sc_240_old"],
@@ -271,7 +278,6 @@ def disk_save():
 
     return redirect(url_for('disk_page'))
 
-
 @app.route('/countpass')
 def countpass():
     return render_template('countpass.html', 
@@ -280,11 +286,8 @@ def countpass():
                            home_page=False, 
                            billing_invoice_log=False)
 
-
-
 @app.route('/personal/<name>')
 def personal(name):
-    version = version_time,
     sheet_map = {'吳宗鴻': '吳宗鴻', '湯家瑋': '湯家瑋', '狄澤洋': '狄澤洋','劉柏均': '劉柏均'}
     sheet_name = sheet_map.get(name)
     if not sheet_name:
@@ -292,41 +295,33 @@ def personal(name):
 
     xls = load_excel_from_github(GITHUB_XLSX_URL)
 
-    # --- 其他表格 ---
     df_top = clean_df(pd.read_excel(xls, sheet_name=sheet_name, usecols="A:G", nrows=5))
     df_project = clean_df(pd.read_excel(xls, sheet_name=sheet_name, usecols="H:L", nrows=5))
     df_bottom = clean_df(pd.read_excel(xls, sheet_name=sheet_name, usecols="A:K", skiprows=6))
-    df_ads = clean_df(pd.read_excel(xls,sheet_name=sheet_name,usecols="A,B,S",skiprows=6))
+    df_ads = clean_df(pd.read_excel(xls, sheet_name=sheet_name, usecols="A,B,S", skiprows=6))
 
-    # --- 正確讀取區域數量 W1:AE2 ---
     df_area = pd.read_excel(
         xls,
         sheet_name=sheet_name,
         usecols="W:AE",
-        nrows=1,        # ← 標題 + 數值
-        header=0        # ← 第一列當標題
+        nrows=1,
+        header=0
     )
 
-    # ★★★★★ 強制還原 '-' 欄名 ★★★★★
     df_area.columns = df_area.columns.map(
         lambda x: "-" if str(x).strip().startswith("-") else str(x)
     )
 
-    # === ✅ 新增這段（未完工清單） ===
     df_unfinished = pd.read_excel(
         xls,
         sheet_name="未完工清單",
         usecols="A:K"
     )
-
     df_unfinished = clean_df(df_unfinished)
-
     df_unfinished = df_unfinished[
         df_unfinished.iloc[:, 0].astype(str).str.strip() == name
     ]
 
-
-    # ---- 搜尋功能 for 下方門市 ----
     keyword = request.args.get('keyword', '').strip()
     no_data_found = False
     if keyword:
@@ -337,34 +332,26 @@ def personal(name):
 
     return render_template(
         "personal.html",
-
         personal_page=name,
         show_top=not df_top.empty,
         show_area=not df_area.empty,
         show_project=not df_project.empty,
         show_ads=not df_ads.empty,
         show_unfinished=not df_unfinished.empty,
-
         tables_unfinished=df_unfinished.to_dict(orient="records"),
         tables_top=df_top.to_dict(orient="records"),
         tables_project=df_project.to_dict(orient="records"),
         tables_bottom=df_bottom.to_dict(orient="records"),
         tables_ads=df_ads.to_dict(orient="records"),
-
-        # 區域數量（直接給 dataframe）
         tables_area=df_area.to_dict(orient="records"),
-        
         version=version_time,
         billing_invoice_log=False,
         home_page=False
     )
 
-
-
 @app.route('/report')
 def report():
     xls = load_excel_from_github(GITHUB_XLSX_URL)
-    version=version_time,
     df = clean_df(pd.read_excel(xls, sheet_name='IM'))
     df = df[['案件類別', '門店編號', '門店名稱', '報修時間', '報修類別', '報修項目', '報修說明', '設備號碼', '服務人員', '工作內容']]
     keyword = request.args.get('keyword', '').strip()
@@ -397,8 +384,7 @@ def report():
 
 @app.route('/sm_web')
 def sm_web_page():
-    
-        return render_template(
+    return render_template(
         'sm_web.html',
         sm_web=True,
         version=version_time,
@@ -406,74 +392,48 @@ def sm_web_page():
         home_page=False
     )
 
-
 @app.route('/time')
 def time_page():
     xls = pd.ExcelFile("MFP/MFP.xlsx")
 
-    # ======================================================
-    # 區塊一：摘要 A1:F1 / A2:F2
-    # ======================================================
     df_summary = pd.read_excel(
         xls,
         sheet_name='出勤時間',
         usecols="A:F",
-        header=0,   # A1:F1
-        nrows=1     # A2:F2
+        header=0,
+        nrows=1
     )
 
-    # ======================================================
-    # 區塊二：A4:Q4 / A5:Q8
-    # ======================================================
     detail_1 = pd.read_excel(
         xls,
         sheet_name='出勤時間',
         usecols="A:Q",
-        header=3,   # A4:Q4
-        nrows=4     # A5:Q8
+        header=3,
+        nrows=4
     )
 
-    # ======================================================
-    # 區塊三：A9:Q9 / A10:Q13
-    # ======================================================
     detail_2 = pd.read_excel(
         xls,
         sheet_name='出勤時間',
         usecols="A:Q",
-        header=8,   # A9:Q9
-        nrows=4     # A10:Q13
+        header=8,
+        nrows=4
     )
 
-    # ======================================================
-    # 區塊四：A14:Q14 / A15:Q18
-    # ======================================================
     detail_3 = pd.read_excel(
         xls,
         sheet_name='出勤時間',
         usecols="A:Q",
-        header=13,  # A14:Q14
-        nrows=4     # A15:Q18
+        header=13,
+        nrows=4
     )
 
-    # ======================================================
-    # 圖表資料（4 人）
-    # ======================================================
     df_chart = pd.read_excel(xls, sheet_name='出勤時間', header=None)
 
-    # =============================
-    # X 軸：B14:P14
-    # =============================
     x = [str(v) for v in df_chart.iloc[13, 1:16].tolist()]
-
-    # =============================
-    # Y 軸：B15:P18（4 個人）
-    # =============================
     names = df_chart.iloc[14:18, 0].tolist()
     y_data = df_chart.iloc[14:18, 1:16].values.tolist()
 
-    # =============================
-    # 畫圖
-    # =============================
     fig, ax = plt.subplots(figsize=(10, 5))
 
     for i, y in enumerate(y_data):
@@ -491,19 +451,13 @@ def time_page():
     plot_url = base64.b64encode(img.read()).decode('utf-8')
     plt.close()
 
-
-    # ======================================================
-    # 回傳頁面
-    # ======================================================
     return render_template(
         'time.html',
         version=version_time,
-
         summary_table=df_summary.to_html(index=False, classes='dataframe'),
         detail_table_1=detail_1.to_html(index=False, classes='dataframe'),
         detail_table_2=detail_2.to_html(index=False, classes='dataframe'),
         detail_table_3=detail_3.to_html(index=False, classes='dataframe'),
-
         plot_url=plot_url,
         df_summary=df_summary,
         time_page=True,
@@ -511,11 +465,9 @@ def time_page():
         home_page=False
     )
 
-
 @app.route('/mfp_parts', methods=['GET', 'POST'])
 def mfp_parts():
     xls = load_excel_from_github(GITHUB_XLSX_URL)
-    version=version_time,
     df = pd.read_excel(xls, sheet_name='MFP_零件表')
     model = request.form.get('model', '')
     part = request.form.get('part', '')
@@ -582,77 +534,56 @@ def calendar_events():
                 }
             })
     return jsonify(events)
-    
+
 @app.route("/worktime")
 def worktime():
-    import pandas as pd
-
     path = "MFP/MFP.xlsx"
 
-    # ================================
-    # 區塊 1：計算基礎、單位(min)
-    # A2:F3 → A2 是標題列
-    # ================================
     df_1 = pd.read_excel(
         path,
         sheet_name="工時計算",
         header=None,
         usecols="A:F",
-        skiprows=1,     # 從 A2 開始
+        skiprows=1,
         nrows=2
     )
     block1_header = df_1.iloc[0].tolist()
     block1_body = df_1.iloc[1:].values.tolist()
 
-    # ================================
-    # 區塊 2：跑勤統計（多一列）
-    # A5:J9 → A5 標題、A9 說明
-    # ================================
     df_2 = pd.read_excel(
         path,
         sheet_name="工時計算",
         header=None,
         usecols="A:J",
-        skiprows=4,     # A5
-        nrows=5         # A5～A9（比原本多 1 列）
+        skiprows=4,
+        nrows=5
     )
-
     block2_header = df_2.iloc[0].tolist()
-    block2_body = df_2.iloc[1:-1].values.tolist()   # A6～A8（3 列）
-    block2_note = df_2.iloc[-1].tolist()            # A9 說明列
+    block2_body = df_2.iloc[1:-1].values.tolist()
+    block2_note = df_2.iloc[-1].tolist()
 
-    # ================================
-    # 區塊 3：維修統計（多一列）
-    # A10:H13 → A10 標題
-    # ================================
     df_3 = pd.read_excel(
         path,
         sheet_name="工時計算",
         header=None,
         usecols="A:H",
-        skiprows=9,     # A10
-        nrows=4         # A10～A13（比原本多 1 列）
+        skiprows=9,
+        nrows=4
     )
-
     block3_header = df_3.iloc[0].tolist()
-    block3_body = df_3.iloc[1:].values.tolist()     # A11～A13（3 列）
+    block3_body = df_3.iloc[1:].values.tolist()
 
-    # ================================
-    # 區塊 4：工時計算（多一列）
-    # A14:K18 → A18 說明列
-    # ================================
     df_4 = pd.read_excel(
         path,
         sheet_name="工時計算",
         header=None,
         usecols="A:K",
-        skiprows=13,    # A14
-        nrows=5         # A14～A18（比原本多 1 列）
+        skiprows=13,
+        nrows=5
     )
-
     block4_header = df_4.iloc[0].tolist()
-    block4_body = df_4.iloc[1:-1].values.tolist()   # A15～A17（3 列）
-    block4_note = df_4.iloc[-1].tolist()            # A18 說明列
+    block4_body = df_4.iloc[1:-1].values.tolist()
+    block4_note = df_4.iloc[-1].tolist()
 
     return render_template(
         "worktime.html",
@@ -663,8 +594,7 @@ def worktime():
         billing_worktime=True
     )
 
-# 🆕 SC硬碟檢測 儲存/刪除同步 API
-# 🆕 SC硬碟檢測 儲存/刪除同步 API (修復錯位問題)
+# SC硬碟檢測 儲存/刪除同步 API
 @app.route('/sc_disk/update', methods=['POST'])
 def update_sc_disk():
     data = request.json
@@ -676,9 +606,8 @@ def update_sc_disk():
         ws = sh.worksheet("硬碟檢測")
         records = ws.get_all_records()
         
-        # 尋找目標列 (比對 門店編號)
         row_idx = None
-        for idx, r in enumerate(records, start=2): # header 佔據第 1 列
+        for idx, r in enumerate(records, start=2):
             if str(r.get('門店編號')).strip() == store_id:
                 row_idx = idx
                 break
@@ -689,9 +618,6 @@ def update_sc_disk():
             return jsonify({'status': 'success', 'message': '已同步刪除 Google Sheet 資料'})
 
         elif action == 'save':
-            # 🚀 關鍵修復：這裡嚴格按照 Google 試算表 A~I 欄位順序組成陣列
-            # A: 離場時間, B: 門店編號, C: 門店名稱, D: 報修類別, E: 工作內容
-            # F: SC(1), G: SC(2), H: TM(1), I: TM(2)
             row_data = [
                 data.get('leave_time', ''),
                 store_id,
@@ -705,17 +631,14 @@ def update_sc_disk():
             ]
             
             if row_idx:
-                # 更新已有列 (A 欄到 I 欄)
                 ws.update(f'A{row_idx}:I{row_idx}', [row_data])
             else:
-                # 新增一列
                 ws.append_row(row_data)
                 
             return jsonify({'status': 'success', 'message': '資料已同步至 Google Sheet'})
 
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
-
 
 # ====== 啟動 Flask ======
 if __name__ == '__main__':
