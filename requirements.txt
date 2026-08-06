@@ -5,3 +5,4 @@ gunicorn
 gspread
 oauth2client
 matplotlib
+flask-login
