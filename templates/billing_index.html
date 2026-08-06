@@ -12,6 +12,7 @@ body {
     padding: 20px; 
     background-color: #fcfcfc;
     color: #333;
+    position: relative;
 }
 .content-wrap {
     max-width: 700px; /* 📊 強制整頁核心元素最大寬度統一，視覺完美對齊 */
@@ -19,6 +20,42 @@ body {
 }
 h1 { text-align: center; color: #333; margin-bottom: 20px; }
 h3 { margin-top: 25px; margin-bottom: 12px; font-size: 20px; color: #222; }
+
+/* ===== 右上角登出資訊區塊 ===== */
+.user-header-info {
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background-color: #ffffff;
+    padding: 6px 14px;
+    border-radius: 20px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    border: 1px solid #e2e8f0;
+    font-size: 14px;
+}
+
+.user-header-info .username {
+    color: #334155;
+    font-weight: bold;
+}
+
+.logout-btn {
+    padding: 5px 12px !important;
+    font-size: 13px !important;
+    background-color: #dc2626 !important;
+    color: white !important;
+    border-radius: 6px !important;
+    text-decoration: none !important;
+    font-weight: bold;
+    transition: background-color 0.2s ease;
+}
+
+.logout-btn:hover {
+    background-color: #b91c1c !important;
+}
 
 /* ===== 導覽列按鈕 ===== */
 .nav-buttons {
@@ -184,6 +221,15 @@ table input:focus, table select:focus {
 </head>
 
 <body>
+
+<!-- 右上角登出按鈕與使用者狀態 -->
+{% if current_user.is_authenticated %}
+<div class="user-header-info">
+    <span>👤 <span class="username">{{ current_user.username }}</span></span>
+    <a href="{{ url_for('billing.logout') }}" class="logout-btn">登出</a>
+</div>
+{% endif %}
+
 <div class="content-wrap">
     <h1>TG客戶系統</h1>
 
@@ -196,6 +242,7 @@ table input:focus, table select:focus {
         <a href="{{ url_for('billing.person_page', sheet='湯家瑋') }}" class="nav-btn-green">湯家瑋</a>
         <a href="{{ url_for('billing.person_page', sheet='吳宗鴻') }}" class="nav-btn-green">吳宗鴻</a>
         <a href="{{ url_for('billing.person_page', sheet='劉柏均') }}" class="nav-btn-green">劉柏均</a>
+        <a href="{{ url_for('billing.person_page', sheet='狄澤洋') }}" class="nav-btn-green">狄澤洋</a>
         <button type="button" onclick="history.back()" class="nav-btn-gray">← 返回上一頁</button>
         <a href="/" class="nav-btn-gray">回首頁</a>
     </div>
@@ -481,9 +528,35 @@ function updateLastCounts() {
     .catch(err => console.error(err));
 }
 
-document.getElementById('selected_month').addEventListener('change', updateLastCounts);
-document.getElementById('selected_year').addEventListener('change', updateLastCounts);
+if (document.getElementById('selected_month')) {
+    document.getElementById('selected_month').addEventListener('change', updateLastCounts);
+}
+if (document.getElementById('selected_year')) {
+    document.getElementById('selected_year').addEventListener('change', updateLastCounts);
+}
 </script>
+
+{% if current_user.is_authenticated %}
+<script>
+  // 10 分鐘無動作前端自動登出重導向 (10 分鐘 = 600,000 毫秒)
+  let idleTimeout;
+  const timeoutTime = 10 * 60 * 1000;
+
+  function resetTimer() {
+    clearTimeout(idleTimeout);
+    idleTimeout = setTimeout(function() {
+      alert("由於您已超過 10 分鐘未操作，系統已自動登出。");
+      window.location.href = "{{ url_for('billing.logout') }}";
+    }, timeoutTime);
+  }
+
+  window.onload = resetTimer;
+  document.onmousemove = resetTimer;
+  document.onkeydown = resetTimer;
+  document.onclick = resetTimer;
+  document.onscroll = resetTimer;
+</script>
+{% endif %}
 
 </body>
 </html>

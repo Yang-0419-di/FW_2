@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>系統登入日誌 - TG客戶系統</title>
+
+<style>
+/* ===== 全域與版面基礎 ===== */
+body { 
+    font-family: Arial, "Microsoft JhengHei", sans-serif; 
+    padding: 20px; 
+    background-color: #fcfcfc;
+    color: #333;
+    position: relative;
+}
+.content-wrap {
+    max-width: 800px;
+    margin: 0 auto;
+}
+h1 { text-align: center; color: #333; margin-bottom: 20px; }
+
+/* ===== 右上角登出資訊區塊 ===== */
+.user-header-info {
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background-color: #ffffff;
+    padding: 6px 14px;
+    border-radius: 20px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    border: 1px solid #e2e8f0;
+    font-size: 14px;
+}
+.user-header-info .username {
+    color: #334155;
+    font-weight: bold;
+}
+.logout-btn {
+    padding: 5px 12px !important;
+    font-size: 13px !important;
+    background-color: #dc2626 !important;
+    color: white !important;
+    border-radius: 6px !important;
+    text-decoration: none !important;
+    font-weight: bold;
+    transition: background-color 0.2s ease;
+}
+.logout-btn:hover { background-color: #b91c1c !important; }
+
+/* ===== 導覽列按鈕 ===== */
+.nav-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+.nav-buttons a, .nav-buttons button {
+    display: inline-block;
+    padding: 8px 16px;
+    color: #fff;
+    text-decoration: none;
+    border-radius: 6px;
+    font-size: 14px;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.nav-btn-blue { background-color: #007BFF; }
+.nav-btn-blue:hover { background-color: #0056b3; }
+.nav-btn-gray { background-color: #6c757d; }
+.nav-btn-gray:hover { background-color: #495057; }
+
+/* ===== 表格樣式 ===== */
+table { 
+    border-collapse: collapse;
+    margin: 12px 0; 
+    width: 100%; 
+    box-sizing: border-box;
+    background-color: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    border-radius: 6px;
+    overflow: hidden;
+}
+th, td { 
+    border: 1px solid #e2e8f0; 
+    padding: 12px 14px; 
+    text-align: center;
+    font-size: 15px;
+}
+th { 
+    background-color: #007BFF; 
+    color: white; 
+    font-weight: bold; 
+}
+tr:nth-child(even) { background-color: #f8fafc; }
+tr:hover { background-color: #f1f5f9; }
+
+.badge-ip {
+    background-color: #e2e8f0;
+    color: #334155;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 14px;
+}
+</style>
+</head>
+
+<body>
+
+<!-- 右上角登出按鈕與使用者狀態 -->
+{% if current_user.is_authenticated %}
+<div class="user-header-info">
+    <span>👤 <span class="username">{{ current_user.username }}</span></span>
+    <a href="{{ url_for('billing.logout') }}" class="logout-btn">登出</a>
+</div>
+{% endif %}
+
+<div class="content-wrap">
+    <h1>📜 系統登入日誌</h1>
+
+    <div class="nav-buttons">
+        <a href="{{ url_for('billing.index') }}" class="nav-btn-blue">回 TG 客戶系統</a>
+        <button type="button" onclick="history.back()" class="nav-btn-gray">← 返回上一頁</button>
+        <a href="/" class="nav-btn-gray">回首頁</a>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 10%;">流水號</th>
+                <th style="width: 25%;">登入帳號</th>
+                <th style="width: 25%;">IP 位址</th>
+                <th style="width: 20%;">登入日期</th>
+                <th style="width: 20%;">登入時間</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if logs %}
+                {% for log in logs %}
+                <tr>
+                    <td>{{ log.id }}</td>
+                    <td style="font-weight: bold; color: #0f172a;">{{ log.username }}</td>
+                    <td><span class="badge-ip">{{ log.ip_address }}</span></td>
+                    <td>{{ log.login_date }}</td>
+                    <td>{{ log.login_time }}</td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="5" style="color: #64748b; padding: 20px;">尚無登入紀錄</td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<div id="global-loading" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); z-index:9999; justify-content:center; align-items:center;">
+    <div style="background:white; padding:30px 50px; border-radius:12px; font-size:22px; font-weight:bold; box-shadow:0 4px 20px rgba(0,0,0,0.3);">
+        ⏳ 加載中...請稍後
+    </div>
+</div>
+
+<script>
+function showGlobalLoading() {
+    const loading = document.getElementById("global-loading");
+    if (loading) { loading.style.display = "flex"; }
+}
+
+document.addEventListener("click", function (e) {
+    const link = e.target.closest("a");
+    if (!link) return;
+    const rawHref = link.getAttribute("href");
+    if (!rawHref || rawHref.startsWith("javascript") || rawHref.startsWith("#")) { return; }
+    showGlobalLoading();
+});
+
+window.addEventListener("pageshow", function () {
+    const loading = document.getElementById("global-loading");
+    if (loading) { loading.style.display = "none"; }
+});
+</script>
+
+{% if current_user.is_authenticated %}
+<script>
+  // 10 分鐘無動作前端自動登出重導向
+  let idleTimeout;
+  const timeoutTime = 10 * 60 * 1000;
+
+  function resetTimer() {
+    clearTimeout(idleTimeout);
+    idleTimeout = setTimeout(function() {
+      alert("由於您已超過 10 分鐘未操作，系統已自動登出。");
+      window.location.href = "{{ url_for('billing.logout') }}";
+    }, timeoutTime);
+  }
+
+  window.onload = resetTimer;
+  document.onmousemove = resetTimer;
+  document.onkeydown = resetTimer;
+  document.onclick = resetTimer;
+  document.onscroll = resetTimer;
+</script>
+{% endif %}
+
+</body>
+</html>

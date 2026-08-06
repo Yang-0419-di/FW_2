@@ -42,7 +42,7 @@
       {% endif %}
     {% endwith %}
 
-    <form action="{{ url_for('login', next=request.args.get('next', '')) }}" method="POST">
+    <form action="{{ url_for('billing.login', next=request.args.get('next', '')) }}" method="POST">
         <div class="mb-3">
             <label for="username" class="form-label">帳號</label>
             <input type="text" class="form-length form-control" id="username" name="username" required autofocus>

@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, jsonify, abort, redirect, url_for
-from flask_login import LoginManager, UserMixin
+from flask_login import LoginManager, login_required
 import pandas as pd
 import requests
 import sqlite3
@@ -13,13 +13,21 @@ from matplotlib.font_manager import FontProperties
 import gspread
 from google.oauth2.service_account import Credentials
 from modules.gsheet import client, SHEET_ID
+from datetime import timedelta
+from flask import session
 
-# ====== 引入 billing 模組 ======
-from modules.billing import billing_bp
+# ====== 引入 billing 模組與 User 類別 ======
+from modules.billing import billing_bp, User
+
+# 取得當前 app.py 所在的目錄，並指到 billing.db
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_FILE = os.path.join(BASE_DIR, 'billing.db')
 
 # ====== 基本設定 ======
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'your_default_secret_key_here')  # Flask 密鑰設定
+# 設定 Session 存活時間為 10 分鐘
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=10)
 
 GITHUB_XLSX_URL = 'https://raw.githubusercontent.com/Yang-0419-di/FW_2/master/data.xlsx'
 cached_xls = None
@@ -30,12 +38,6 @@ app.config['VERSION_TIME'] = version_time
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'billing.login'  # 未登入時自動重定向之登入頁面路由
-
-# ====== User 模型類別 ======
-class User(UserMixin):
-    def __init__(self, id, username):
-        self.id = id
-        self.username = username
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -82,6 +84,7 @@ def clean_df(df):
 
 # ====== 首頁路由 ======
 @app.route('/')
+@login_required
 def home():
     xls = load_excel_from_github(GITHUB_XLSX_URL)
 
@@ -211,6 +214,7 @@ def home():
     )
 
 @app.route("/disk", methods=["GET"])
+@login_required
 def disk_page():
     try:
         sh = client.open_by_key(SHEET_ID)
@@ -238,6 +242,7 @@ def disk_page():
     return render_template("disk.html", page_header="POS 相關", rows=rows, total=total)
 
 @app.route("/disk/save", methods=["POST"])
+@login_required
 def disk_save():
     data = {
         "user": request.form.get("user"),
@@ -279,6 +284,7 @@ def disk_save():
     return redirect(url_for('disk_page'))
 
 @app.route('/countpass')
+@login_required
 def countpass():
     return render_template('countpass.html', 
                            page_header="POS 相關",
@@ -287,6 +293,7 @@ def countpass():
                            billing_invoice_log=False)
 
 @app.route('/personal/<name>')
+@login_required
 def personal(name):
     sheet_map = {'吳宗鴻': '吳宗鴻', '湯家瑋': '湯家瑋', '狄澤洋': '狄澤洋','劉柏均': '劉柏均'}
     sheet_name = sheet_map.get(name)
@@ -350,6 +357,7 @@ def personal(name):
     )
 
 @app.route('/report')
+@login_required
 def report():
     xls = load_excel_from_github(GITHUB_XLSX_URL)
     df = clean_df(pd.read_excel(xls, sheet_name='IM'))
@@ -383,6 +391,7 @@ def report():
     )
 
 @app.route('/sm_web')
+@login_required
 def sm_web_page():
     return render_template(
         'sm_web.html',
@@ -392,7 +401,30 @@ def sm_web_page():
         home_page=False
     )
 
+@app.route('/inspection_log')
+@login_required
+def inspection_log():
+    logs = []
+    try:
+        # 改為讀取 Google Sheet 的 log 分頁
+        sh = client.open_by_key(SHEET_ID)
+        ws = sh.worksheet("log")
+        logs = ws.get_all_records()
+        logs.reverse()  # 倒序排列，讓最新登入紀錄顯示在最上方
+    except Exception as e:
+        print(f"⚠️ 檢視日誌載入失敗: {e}")
+
+    return render_template(
+        'inspection_log.html',
+        page_header="檢視日誌",
+        version=version_time,
+        logs=logs,
+        billing_invoice_log=False,
+        home_page=False
+    )
+
 @app.route('/time')
+@login_required
 def time_page():
     xls = pd.ExcelFile("MFP/MFP.xlsx")
 
@@ -466,6 +498,7 @@ def time_page():
     )
 
 @app.route('/mfp_parts', methods=['GET', 'POST'])
+@login_required
 def mfp_parts():
     xls = load_excel_from_github(GITHUB_XLSX_URL)
     df = pd.read_excel(xls, sheet_name='MFP_零件表')
@@ -498,6 +531,7 @@ def mfp_parts():
     )
 
 @app.route('/calendar')
+@login_required
 def calendar_page():
     return render_template(
         'calendar.html',
@@ -506,6 +540,7 @@ def calendar_page():
     )
 
 @app.route('/calendar/events')
+@login_required
 def calendar_events():
     try:
         xls = load_excel_from_github(GITHUB_XLSX_URL)
@@ -536,6 +571,7 @@ def calendar_events():
     return jsonify(events)
 
 @app.route("/worktime")
+@login_required
 def worktime():
     path = "MFP/MFP.xlsx"
 
@@ -596,6 +632,7 @@ def worktime():
 
 # SC硬碟檢測 儲存/刪除同步 API
 @app.route('/sc_disk/update', methods=['POST'])
+@login_required
 def update_sc_disk():
     data = request.json
     action = data.get('action')
@@ -639,6 +676,11 @@ def update_sc_disk():
 
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.before_request
+def make_session_permanent():
+    # 每次使用者發送請求時，重新刷新 10 分鐘的倒數計時
+    session.permanent = True
 
 # ====== 啟動 Flask ======
 if __name__ == '__main__':
