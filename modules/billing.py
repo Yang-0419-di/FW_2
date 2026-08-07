@@ -6,6 +6,7 @@ from datetime import datetime
 import requests
 from io import BytesIO
 import pandas as pd
+from zoneinfo import ZoneInfo
 from modules.gsheet import (
     client, 
     SHEET_ID, 
@@ -68,7 +69,7 @@ def login():
 
                 if is_valid:
                     user = User(id=user_id, username=db_username)
-                    login_user(user, remember=True)  # 保持登入 Session
+                    login_user(user)
                     
                     # 🌐 抓取使用者 IP 位址 (考慮代理伺服器情況)
                     ip_address = request.headers.get('X-Forwarded-For', request.remote_addr)
@@ -76,7 +77,8 @@ def login():
                         ip_address = ip_address.split(',')[0].strip()
 
                     # 📅 取得當前日期與時間
-                    now = datetime.now()
+                    # 📅 取得當前台灣時間 (Asia/Taipei)
+                    now = datetime.now(ZoneInfo("Asia/Taipei"))
                     login_date = now.strftime('%Y-%m-%d')
                     login_time = now.strftime('%H:%M:%S')
                     created_at = now.strftime('%Y-%m-%d %H:%M:%S')

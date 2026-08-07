@@ -423,7 +423,7 @@ document.addEventListener('click', function(e) {
 <script>
   // 10 分鐘無動作前端自動登出重導向 (10 分鐘 = 600,000 毫秒)
   let idleTimeout;
-  const timeoutTime = 10 * 60 * 1000;
+  const timeoutTime = 3 * 60 * 1000;
 
   function resetTimer() {
     clearTimeout(idleTimeout);
