@@ -1,0 +1,372 @@
+{% extends "layout.html" %}
+
+{% block content %}
+    <!-- === 首頁：部門總覽（原主框架中的 default 區塊） === -->
+
+
+	<!-- === 🆕 SC硬碟檢測 區塊（放在部門數量上方） === -->
+	<h2>硬碟檢測繳回 (最新5筆)</h2>
+	<div class="table-container">
+		<table>
+			<thead>
+				<tr>
+					<th>離場時間</th>
+					<th>門店編號</th>
+					<th>門店名稱</th>
+					<th>報修類別</th>
+					<th>工作內容</th>
+					<th>SC(1)</th>
+					<th>SC(2)</th>
+					<th>TM(1)</th>
+					<th>TM(2)</th>
+					<th>操作</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for row in sc_disk_data %}
+				<tr data-store-id="{{ row['門店編號'] }}">
+					<td>{{ row['離場時間'] }}</td>
+					<td>{{ row['門店編號'] }}</td>
+					<td>{{ row['門店名稱'] }}</td>
+					<td>{{ row['報修類別'] }}</td>
+					<td style="max-width: 200px; text-align: left;">{{ row['工作內容'] }}</td>
+					<td><input type="text" class="disk-input sc1" value="{{ row['SC1'] }}" style="width: 50px;"></td>
+					<td><input type="text" class="disk-input sc2" value="{{ row['SC2'] }}" style="width: 50px;"></td>
+					<td><input type="text" class="disk-input tm1" value="{{ row['TM1'] }}" style="width: 50px;"></td>
+					<td><input type="text" class="disk-input tm2" value="{{ row['TM2'] }}" style="width: 50px;"></td>
+					<td>
+						<button type="button" onclick="saveDiskRow(this)" style="background-color: #28a745; font-size: 14px; padding: 4px 8px;">儲存</button>
+						<button type="button" onclick="deleteDiskRow(this)" style="background-color: #dc3545; font-size: 14px; padding: 4px 8px;">刪除</button>
+					</td>
+				</tr>
+				{% else %}
+				<tr>
+					<td colspan="10" style="text-align: center; color: gray;">目前無符合條件的硬碟更換紀錄</td>
+				</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+
+<br>
+
+	<h2>部門數量</h2>
+
+    <div class="table-container">
+        <table style="table-layout: fixed; width: 100%; border-collapse: collapse;">
+            <thead>
+                {% if department_table %}
+                    <tr>
+                        {% for key in department_table[0].keys() %}
+                            <th style="width: 20%; text-align: center;">{{ key }}</th>
+                        {% endfor %}
+                    </tr>
+                {% endif %}
+            </thead>
+            <tbody>
+                {% for row in department_table %}
+                    <tr>
+                        {% for value in row.values() %}
+                            <td style="text-align: center; word-wrap: break-word;">{{ value }}</td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+	
+	<h2>
+    <button onclick="toggleSection('area-content', event)" style="margin-right: 8px;">▶</button>
+		區域數量
+	</h2>
+
+	<div id="area-content" class="table-container section-hidden">
+
+		<!-- === 第一段：C2:H3 === -->
+		<table>
+			<thead>
+				{% if area_table_1 %}
+					<tr>
+						{% for key in area_table_1[0].keys() %}
+							<th>{{ key }}</th>
+						{% endfor %}
+					</tr>
+				{% endif %}
+			</thead>
+			<tbody>
+				{% for row in area_table_1 %}
+					<tr>
+						{% for value in row.values() %}
+							<td>{{ value }}</td>
+						{% endfor %}
+					</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+
+		<br>
+
+		<!-- === 第二段：J2:O3 === -->
+		<table>
+			<thead>
+				{% if area_table_2 %}
+					<tr>
+						{% for key in area_table_2[0].keys() %}
+							<th>{{ key }}</th>
+						{% endfor %}
+					</tr>
+				{% endif %}
+			</thead>
+			<tbody>
+				{% for row in area_table_2 %}
+					<tr>
+						{% for value in row.values() %}
+							<td>{{ value }}</td>
+						{% endfor %}
+					</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+
+		<br>
+
+		<!-- === 第三段：P2:Q3 === -->
+		<table>
+			<thead>
+				{% if area_table_3 %}
+					<tr>
+						{% for key in area_table_3[0].keys() %}
+							<th>{{ key }}</th>
+						{% endfor %}
+					</tr>
+				{% endif %}
+			</thead>
+			<tbody>
+				{% for row in area_table_3 %}
+					<tr>
+						{% for value in row.values() %}
+							<td>{{ value }}</td>
+						{% endfor %}
+					</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+
+	</div>
+
+	
+    <h2>季保養進度</h2>
+    <div class="table-container">
+        <table>
+            <thead>
+                {% if seasons_table %}
+                    <tr>{% for key in seasons_table[0].keys() %}<th>{{ key }}</th>{% endfor %}</tr>
+                {% endif %}
+            </thead>
+            <tbody>
+                {% for row in seasons_table %}
+                    <tr>{% for value in row.values() %}<td>{{ value }}</td>{% endfor %}</tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+	<h2>
+        <button onclick="toggleSection('project1-content', event)" style="margin-right: 8px;">▶</button>
+        專案項目
+    </h2>
+    <div id="project1-content" style="display: block;" class="table-container">
+        <table style="table-layout: fixed; width: 100%; border-collapse: collapse;">
+            <thead>
+                {% if project1_table %}
+                    <tr>
+                        {% for key in project1_table[0].keys() %}
+                            <th style="width: 20%; text-align: center;">{{ key }}</th>
+                        {% endfor %}
+                    </tr>
+                {% endif %}
+            </thead>
+            <tbody>
+                {% for row in project1_table %}
+                    <tr>
+                        {% for value in row.values() %}
+                            <td style="text-align: center; word-wrap: break-word;">{{ value }}</td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+	<h2>
+		<button onclick="toggleHUB()" style="margin-right: 8px;">▶</button>
+		HUB異常檢查
+	</h2>
+
+	<!-- 前段統計 -->
+	<div id="HUB-top" class="table-container section-hidden">
+		<table>
+			<thead>
+				{% if HUB_top_table and HUB_top_table|length > 0 %}
+					<tr>
+						{% for key in HUB_top_table[0].keys() %}
+							<th>{{ key }}</th>
+						{% endfor %}
+					</tr>
+				{% endif %}
+			</thead>
+			<tbody>
+				{% for row in HUB_top_table %}
+					<tr>
+						{% for value in row.values() %}
+							<td>{{ value }}</td>
+						{% endfor %}
+					</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+	<br>
+	<!-- 後段明細 -->
+	<div id="HUB-content" class="table-container section-hidden">
+		<table>
+			<thead>
+				{% if HUB_table %}
+					<tr>
+						{% for key in HUB_table[0].keys() %}
+							<th>{{ key }}</th>
+						{% endfor %}
+					</tr>
+				{% endif %}
+			</thead>
+			<tbody>
+				{% for row in HUB_table %}
+					<tr>
+						{% for value in row.values() %}
+							<td>{{ value }}</td>
+						{% endfor %}
+					</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+
+    <h2>門市資料</h2>
+    <div class="table-container">
+	
+		<div style="margin:10px 0;">
+			<input type="text" id="storeSearchBottom" placeholder="搜尋門市資料..." style="width:300px;padding:6px;font-size:14px;">
+		</div>
+	
+        <table id="store">
+            <thead>
+                {% if tables %}
+                    <tr>{% for key in tables[0].keys() %}<th>{{ key }}</th>{% endfor %}</tr>
+                {% endif %}
+            </thead>
+            <tbody>
+                {% for row in tables %}
+                <tr {% if row['PMQ_檢核'] == 'PM' %} class="highlight-row" {% endif %}>
+                    {% for key, value in row.items() %}
+                        {% if key == 'PMQ_檢核' and value == 'PM' %}
+                            <td class="status-pm">{{ value }}</td>
+                        {% elif key == '專案檢核' and value == '已更換' %}
+                            <td class="status-replaced">{{ value }}</td>
+                        {% elif key == '專案檢核' and value == '未更換' %}
+                            <td class="status-not-replaced">{{ value }}</td>
+                        {% elif key == '完工檢核' and value in ['PEP未完工','TVV未完工','EDC未完工','HUB未完工'] %}
+                            <td class="status-repair">{{ value }}</td>
+                        {% else %}
+                            <td>{{ value }}</td>
+                        {% endif %}
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // 切換顯示/隱藏任意區塊（可重複使用）
+	function toggleSection(id, ev) {
+		ev && ev.preventDefault && ev.preventDefault();
+		const el = document.getElementById(id);
+		if (!el) return;
+		el.classList.toggle('section-hidden');
+	}
+
+	function toggleHUB() {
+	    toggleSection('HUB-top');
+		toggleSection('HUB-content');
+	}
+	
+	// ===== 門市資料搜尋 =====
+	const storeSearchBottom = document.getElementById("storeSearchBottom");
+	if (storeSearchBottom) {
+		storeSearchBottom.addEventListener("input", function () {
+			const keyword = this.value.toLowerCase();
+
+			document.querySelectorAll("#store tbody tr").forEach(row => {
+				row.style.display =
+					row.innerText.toLowerCase().includes(keyword) ? "" : "none";
+			});
+		});
+	}
+
+// 儲存 SC/TM 數值至 Google Sheet
+function saveDiskRow(btn) {
+    const tr = btn.closest('tr');
+    
+    // 取得 td 內容 (請根據您 HTML <td> 的實際位置調整索引)
+    const tds = tr.querySelectorAll('td');
+    
+    const payload = {
+        action: 'save',
+        leave_time: tds[0].innerText.trim(),    // A欄: 離場時間
+        store_id: tds[1].innerText.trim(),      // B欄: 門店編號
+        store_name: tds[2].innerText.trim(),    // C欄: 門店名稱
+        repair_cat: tds[3].innerText.trim(),    // D欄: 報修類別
+        work_content: tds[4].innerText.trim(),  // E欄: 工作內容
+        sc1: tr.querySelector('.sc1').value.trim(), // F欄: SC(1)
+        sc2: tr.querySelector('.sc2').value.trim(), // G欄: SC(2)
+        tm1: tr.querySelector('.tm1').value.trim(), // H欄: TM(1)
+        tm2: tr.querySelector('.tm2').value.trim()  // I欄: TM(2)
+    };
+
+    fetch('/sc_disk/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+    .then(res => res.json())
+    .then(data => {
+        alert(data.message);
+    })
+    .catch(err => alert('儲存失敗: ' + err));
+}
+
+// 刪除該筆資料（同步刪除 Google Sheet）
+function deleteDiskRow(btn) {
+    if (!confirm("確定要刪除此筆記錄並同步刪除 Google 試算表中的資料嗎？")) return;
+    
+    const tr = btn.closest('tr');
+    const store_id = tr.children[1].innerText.trim();
+
+    fetch('/sc_disk/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', store_id: store_id })
+    })
+    .then(res => res.json())
+    .then(data => {
+        alert(data.message);
+        tr.remove(); // 成功後將畫面的 Row 移除
+    })
+    .catch(err => alert('刪除失敗: ' + err));
+}
+
+</script>
+{% endblock %}

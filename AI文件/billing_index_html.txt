@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>列印計費系統</title>
+
+<style>
+/* ===== 全域與版面基礎 ===== */
+body { 
+    font-family: Arial, "Microsoft JhengHei", sans-serif; 
+    padding: 20px; 
+    background-color: #fcfcfc;
+    color: #333;
+}
+.content-wrap {
+    max-width: 700px; /* 📊 強制整頁核心元素最大寬度統一，視覺完美對齊 */
+    margin: 0 auto;
+}
+h1 { text-align: center; color: #333; margin-bottom: 20px; }
+h3 { margin-top: 25px; margin-bottom: 12px; font-size: 20px; color: #222; }
+
+/* ===== 導覽列按鈕 ===== */
+.nav-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+.nav-buttons a, .nav-buttons button {
+    display: inline-block;
+    padding: 8px 16px;
+    color: #fff;
+    text-decoration: none;
+    border-radius: 6px;
+    font-size: 14px;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.nav-btn-blue { background-color: #007BFF; }
+.nav-btn-blue:hover { background-color: #0056b3; }
+.nav-btn-green { background-color: #20c997; }
+.nav-btn-green:hover { background-color: #198754; }
+.nav-btn-gray { background-color: #6c757d; }
+.nav-btn-gray:hover { background-color: #495057; }
+
+/* ===== 統一搜尋與表單元件 ===== */
+.search-block {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 15px;
+    width: 100%;
+}
+.search-input {
+    flex: 1;
+    font-size: 16px; 
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    box-sizing: border-box;
+}
+.search-btn { 
+    font-size: 16px; 
+    padding: 8px 20px; 
+    cursor: pointer; 
+    background-color: #007BFF; 
+    color: white; 
+    border: none; 
+    border-radius: 6px;
+}
+.search-btn:hover { background-color: #0056b3; }
+
+/* ===== 統一表格樣式 ===== */
+table { 
+    border-collapse: collapse;
+    margin: 12px 0; 
+    width: 100%; 
+    box-sizing: border-box;
+    background-color: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    border-radius: 6px;
+    overflow: hidden;
+}
+th, td { 
+    border: 1px solid #e2e8f0; 
+    padding: 10px 14px; 
+    text-align: left;
+    font-size: 15px;
+}
+th { background-color: #edf2f7; font-weight: bold; }
+
+.contract-table th { 
+    text-align: center; 
+    background-color: #007BFF; 
+    color: white; 
+    border-color: #007BFF;
+}
+
+/* 讓表格內的所有輸入欄位寬度與高度100%填滿，格式一致化 */
+table input[type="text"], 
+table input[type="number"], 
+table select { 
+    width: 100%; 
+    padding: 6px 10px; 
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    box-sizing: border-box;
+    font-size: 14px;
+    font-family: inherit;
+}
+table input:focus, table select:focus {
+    border-color: #007BFF;
+    outline: none;
+    background-color: #f8fafc;
+}
+
+/* ===== 提示訊息 ===== */
+.version-info { text-align: center; margin-bottom: 15px; font-size: 14px; color: #666; }
+.msg { margin: 10px 0; padding: 10px; background: #f0fdf4; border-left: 4px solid #16a34a; color: #16a34a; font-weight: bold; border-radius: 4px; }
+.err { margin: 10px 0; padding: 10px; background: #fef2f2; border-left: 4px solid #dc2626; color: #dc2626; font-weight: bold; border-radius: 4px; }
+
+/* ===== 抄表卡片區塊 ===== */
+.billing-card {
+    padding: 20px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    margin-top: 20px;
+    background: #ffffff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+.form-row-flex {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 15px;
+}
+.form-row-flex > div {
+    flex: 1;
+}
+.form-row-flex label {
+    font-weight: bold;
+    font-size: 14px;
+    color: #4a5568;
+    display: inline-block;
+    margin-bottom: 4px;
+}
+
+/* 備註大文字框統一寬度 */
+.custom-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 15px;
+    font-family: 'Microsoft JhengHei', sans-serif;
+    resize: vertical;
+}
+.custom-textarea:focus {
+    border-color: #007BFF;
+    outline: none;
+}
+
+/* 專門為一般表格內更新資料設計的精美按鈕 */
+.action-btn-container {
+    margin-top: 12px;
+    margin-bottom: 20px;
+}
+.action-btn-container button {
+    padding: 10px 20px;
+    font-size: 15px;
+    font-weight: bold;
+    color: white;
+    background-color: #007BFF;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.action-btn-container button:hover {
+    background-color: #0056b3;
+}
+</style>
+</head>
+
+<body>
+<div class="content-wrap">
+    <h1>TG客戶系統</h1>
+
+    {% if version %}
+        <div class="version-info">版本：{{ version }}</div>
+    {% endif %}
+
+    <div class="nav-buttons">
+        <a href="{{ url_for('billing.mfp_summary') }}" class="nav-btn-blue">客戶總表</a>
+        <a href="{{ url_for('billing.person_page', sheet='湯家瑋') }}" class="nav-btn-green">湯家瑋</a>
+        <a href="{{ url_for('billing.person_page', sheet='吳宗鴻') }}" class="nav-btn-green">吳宗鴻</a>
+        <a href="{{ url_for('billing.person_page', sheet='劉柏均') }}" class="nav-btn-green">劉柏均</a>
+        <button type="button" onclick="history.back()" class="nav-btn-gray">← 返回上一頁</button>
+        <a href="/" class="nav-btn-gray">回首頁</a>
+    </div>
+
+    <form method="POST">
+        <input type="hidden" name="mode" value="query">
+        <div class="search-block">
+            <input type="text" name="device_id" placeholder="請輸入 設備編號 / 客戶名稱(概略)..." required class="search-input">
+            <button type="submit" class="search-btn">查詢</button>
+        </div>
+    </form>
+
+    {% if message %}
+        <div class="{{ 'msg' if message.startswith('✅') else 'err' }}">{{ message }}</div>
+    {% endif %}
+
+    {% if matches %}
+    <div>
+        <h3>🔍 找到多筆相符的客戶，請選擇：</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>設備編號</th>
+                    <th>客戶名稱</th>
+                    <th style="width: 100px; text-align: center;">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in matches %}
+                <tr>
+                    <td>
+                        <a href="{{ url_for('billing.index') }}?device_id={{m.device_id}}" style="text-decoration: none; color: #007BFF; font-weight: bold;">
+                            {{m.device_id}}
+                        </a>
+                    </td>
+                    <td>{{m.customer_name}}</td>
+                    <td style="text-align: center;">
+                        <form method="post" action="{{ url_for('billing.index') }}" style="display:inline;">
+                            <input type="hidden" name="mode" value="delete_customer">
+                            <input type="hidden" name="device_id" value="{{ m.device_id }}">
+                            <button type="submit" style="background-color: #e74c3c; color: white; border: none; padding: 4px 12px; font-size: 14px; border-radius: 4px; cursor: pointer;"
+                                onclick="return confirm('確定要刪除 {{ m.customer_name }}（設備編號：{{ m.device_id }}）嗎？');">
+                                🗑 刪除
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if customer %}
+    <h3>客戶資料</h3>
+    <form method="post" action="{{ url_for('billing.index') }}">
+        <table class="contract-table">
+            <input type="hidden" name="device_id" value="{{ customer.device_id }}">
+            <tr><th style="width: 30%;">項目</th><th>內容</th></tr>
+            <tr><td>設備編號</td><td><input type="text" name="device_id" value="{{ customer.device_id }}"></td></tr>
+            <tr><td>客戶名稱</td><td><input type="text" name="customer_name" value="{{ customer.customer_name }}"></td></tr>
+			<tr><td>新設備編號</td><td><input type="text" name="device_id_new" value="" placeholder="若欲變更設備編號請填寫於此"></td></tr>
+            <tr><td>保養週期</td><td><input type="text" name="pm" value="{{ customer.pm }}"></td></tr>
+            <tr><td>設備機號</td><td><input type="text" name="device_number" value="{{ customer.device_number }}"></td></tr>
+            <tr><td>機型</td><td><input type="text" name="machine_model" value="{{ customer.machine_model }}"></td></tr>
+            <tr><td>統一編號</td><td><input type="text" name="tax_id" value="{{ customer.tax_id }}"></td></tr>
+            <tr><td>裝機地址</td><td><input type="text" name="install_address" value="{{ customer.install_address }}"></td></tr>
+            <tr><td>服務人員</td><td><input type="text" name="service_person" value="{{ customer.service_person }}"></td></tr>
+            <tr><td>契約編號</td><td><input type="text" name="contract_number" value="{{ customer.contract_number }}"></td></tr>
+            <tr><td>合約開始日</td><td><input type="text" name="contract_start" value="{{ customer.contract_start }}"></td></tr>
+            <tr><td>合約到期日</td><td><input type="text" name="contract_end" value="{{ customer.contract_end }}"></td></tr>
+        </table>
+        <div class="action-btn-container">
+            <button type="submit" name="mode" value="update_customer">💾 更新客戶資料</button>
+            <button type="submit" name="mode" value="new_customer" style="margin-left:10px; background-color: #20c997;">🆕 新客戶建檔</button>
+        </div>
+    </form>
+    {% endif %}
+
+    {% if contract %}
+	<div class="billing-card">
+		<h3 style="margin-top:0; color:#007BFF; font-size: 22px;">📊 本月抄表 — 設備：{{ contract.device_id }}</h3>
+
+		<form method="POST">
+			<input type="hidden" name="device_id" value="{{ contract.device_id }}">
+			<input type="hidden" name="mode" value="calculate">
+
+			{% if related_devices and related_devices|length > 1 %}
+			<p style="font-size:16px; color:#333; font-weight: bold; margin-bottom: 8px;">📦 合開群組（主機：{{ related_devices[0] }}），共 {{ related_devices|length }} 台</p>
+			<table class="contract-table" style="width:100%;">
+				<thead>
+					<tr>
+						<th>設備編號</th>
+						<th>本月彩色張數</th>
+						<th>本月黑白張數</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for dev in related_devices %}
+					<tr>
+						<td style="font-weight:bold; text-align: center; background-color: #f8fafc;">{{ dev }}</td>
+						<td><input type="number" name="curr_color_{{ dev }}" required></td>
+						<td><input type="number" name="curr_bw_{{ dev }}" required></td>
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+			{% if last_time %}
+			<p style="color:#666; font-size:14px; margin-top: 8px;">📅 前次抄表月份：{{ last_time }}</p>
+			{% endif %}
+
+			{% else %}
+			<div>
+				<div class="form-row-flex">
+					<div>
+						<label for="selected_year">抄表年份：</label>
+						<select name="selected_year" id="selected_year" required>
+							{% for y in range(current_year - 2, current_year + 2) %}
+							<option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }} 年</option>
+							{% endfor %}
+						</select>
+					</div>
+					<div>
+						<label for="selected_month">抄表月份：</label>
+						<select name="selected_month" id="selected_month" required>
+							{% for m in range(1,13) %}
+							<option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ m }} 月</option>
+							{% endfor %}
+						</select>
+					</div>
+				</div>
+
+				<table style="margin-top: 15px;">
+					<thead>
+						<tr>
+							<th style="width: 40%;">項目規格</th>
+							<th style="width: 30%;">前次抄表紀錄</th>
+							<th style="width: 30%;">本月抄表登記</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td style="font-weight: bold;">彩色 A3 張數</td>
+							<td><input id="prev-color-a3" type="text" value="{{ last_color_a3 }}" readonly style="background-color: #f1f5f9; color: #64748b; font-weight: bold; text-align: center;"></td>
+							<td><input type="number" name="curr_color_a3" required style="text-align: center;"></td>
+						</tr>
+						<tr>
+							<td style="font-weight: bold;">彩色 (A4) 張數</td>
+							<td><input id="prev-color" type="text" value="{{ last_color }}" readonly style="background-color: #f1f5f9; color: #64748b; font-weight: bold; text-align: center;"></td>
+							<td><input type="number" name="curr_color" required style="text-align: center;"></td>
+						</tr>
+						<tr>
+							<td style="font-weight: bold;">黑白張數</td>
+							<td><input id="prev-bw" type="text" value="{{ last_bw }}" readonly style="background-color: #f1f5f9; color: #64748b; font-weight: bold; text-align: center;"></td>
+							<td><input type="number" name="curr_bw" required style="text-align: center;"></td>
+						</tr>
+					</tbody>
+				</table>
+
+			</div>
+			{% endif %}
+
+			<table style="width: 100% !important; border-collapse: collapse !important; table-layout: fixed !important; margin-top: 24px !important; margin-bottom: 15px !important; border: none !important; background: none !important; box-shadow: none !important;">
+				<tr style="border: none !important; background: none !important;">
+					<td style="width: 50% !important; padding: 0 6px 0 0 !important; border: none !important; background: none !important;">
+						<button type="submit" style="width: 100% !important; height: 42px !important; border: none !important; border-radius: 6px !important; font-size: 15px !important; cursor: pointer !important; white-space: nowrap !important; margin: 0 !important; display: block !important; background-color: #007BFF !important; color: #ffffff !important; font-weight: bold !important; padding: 0 !important;">
+							計算並儲存抄表
+						</button>
+					</td>
+					<td style="width: 50% !important; padding: 0 0 0 6px !important; border: none !important; background: none !important;">
+						<button type="button" onclick="location.href='/billing/invoice_log/{{ contract.device_id }}'" style="width: 100% !important; height: 42px !important; border: none !important; border-radius: 6px !important; font-size: 15px !important; cursor: pointer !important; white-space: nowrap !important; margin: 0 !important; display: block !important; background-color: #007BFF !important; color: #ffffff !important; font-weight: bold !important; padding: 0 !important;">
+							發票紀錄
+						</button>
+					</td>
+				</tr>
+			</table>
+		</form>
+	</div>
+    {% endif %}
+	
+    {% if result %}
+    <h3>計算結果</h3>
+    <table class="contract-table">
+        <tr><th style="width: 50%;">項目</th><th>數值</th></tr>
+        {% for k, v in result.items() %}
+        <tr {% if k in ["未稅小計", "稅額", "含稅總額"] %} style="background-color: #ecfdf5; font-weight: bold;" {% endif %}>
+            <td>{{ k }}</td>
+            <td>{{ v }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% endif %}
+	
+	{% if contract %}
+    <h3>契約條件</h3>
+    <form method="POST">
+        <input type="hidden" name="device_id" value="{{ contract.device_id }}">
+        <input type="hidden" name="mode" value="update_contract">
+		
+		<div style="margin-bottom:12px;">
+			<textarea name="contra" rows="4" class="custom-textarea" placeholder="請輸入契約備註說明內容...">{{ contra_text }}</textarea>
+		</div>
+		
+        <table class="contract-table">
+            <tr><th style="width: 50%;">項目</th><th>數值</th></tr>
+            <tr><td>月租金</td><td><input type="number" step="0.01" name="monthly_rent" value="{{ contract.monthly_rent }}"></td></tr>
+            <tr><td>彩色單價 (A3)</td><td><input type="number" step="0.01" name="color_a3_unit_price" value="{{ contract.color_a3_unit_price }}"></td></tr>
+            <tr><td>彩色A3基本張數</td><td><input type="number" name="color_a3_basic" value="{{ contract.color_a3_basic }}"></td></tr>
+            <tr><td>彩色A3贈送張數</td><td><input type="number" name="color_a3_giveaway" value="{{ contract.color_a3_giveaway }}"></td></tr>
+            <tr><td>彩色A3誤印率 (小數)</td><td><input type="number" step="0.0001" name="color_a3_error_rate" value="{{ contract.color_a3_error_rate }}"></td></tr>
+            <tr><td>彩色單價 (A4)</td><td><input type="number" step="0.01" name="color_unit_price" value="{{ contract.color_unit_price }}"></td></tr>
+            <tr><td>彩色基本張數</td><td><input type="number" name="color_basic" value="{{ contract.color_basic }}"></td></tr>
+            <tr><td>彩色贈送張數</td><td><input type="number" name="color_giveaway" value="{{ contract.color_giveaway }}"></td></tr>
+            <tr><td>彩色誤印率 (小數)</td><td><input type="number" step="0.0001" name="color_error_rate" value="{{ contract.color_error_rate }}"></td></tr>
+            <tr><td>黑白單價</td><td><input type="number" step="0.01" name="bw_unit_price" value="{{ contract.bw_unit_price }}"></td></tr>
+            <tr><td>黑白基本張數</td><td><input type="number" name="bw_basic" value="{{ contract.bw_basic }}"></td></tr>
+            <tr><td>黑白贈送張數</td><td><input type="number" name="bw_giveaway" value="{{ contract.bw_giveaway }}"></td></tr>
+            <tr><td>黑白誤印率 (小數)</td><td><input type="number" step="0.0001" name="bw_error_rate" value="{{ contract.bw_error_rate }}"></td></tr>
+            <tr>
+                <td>稅別</td>
+                <td>
+                    <select name="tax_type">
+                        <option value="未稅" {% if contract.tax_type == "未稅" %}selected{% endif %}>未稅</option>
+                        <option value="含稅" {% if contract.tax_type == "含稅" %}selected{% endif %}>含稅</option>
+                    </select>
+                </td>
+            </tr>
+            <tr>
+                <td>合開設備編號（主要設備）</td>
+                <td><input type="text" name="master_device_id" value="{{ contract.master_device_id if contract.master_device_id else '' }}" placeholder="若為主機留空，子機請填主機設備編號"></td>
+            </tr>
+        </table>
+
+        <div class="action-btn-container">
+            <button type="submit">💾 更新契約條件</button>
+        </div>
+		{% endif %}
+    </form>
+</div>
+
+<div id="global-loading" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); z-index:9999; justify-content:center; align-items:center;">
+    <div style="background:white; padding:30px 50px; border-radius:12px; font-size:22px; font-weight:bold; box-shadow:0 4px 20px rgba(0,0,0,0.3);">
+        ⏳ 加載中...請稍後
+    </div>
+</div>
+
+<script>
+function showGlobalLoading() {
+    const loading = document.getElementById("global-loading");
+    if (loading) { loading.style.display = "flex"; }
+}
+
+document.addEventListener("click", function (e) {
+    const link = e.target.closest("a");
+    if (!link) return;
+    const rawHref = link.getAttribute("href");
+    if (!rawHref || rawHref.startsWith("javascript") || rawHref.startsWith("#")) { return; }
+    showGlobalLoading();
+});
+
+document.addEventListener("submit", function () { showGlobalLoading(); });
+
+window.addEventListener("pageshow", function (event) {
+    const loading = document.getElementById("global-loading");
+    if (loading) { loading.style.display = "none"; }
+});
+</script>
+
+<script>
+function updateLastCounts() {
+    const month = document.getElementById('selected_month').value;
+    const year = document.getElementById('selected_year').value;
+    const device_id = "{{ contract.device_id }}";
+
+    fetch(`/billing/get_last_counts?device_id=${device_id}&year=${year}&month=${month}`)
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById('prev-color-a3').value = data.color_a3;
+        document.getElementById('prev-color').value = data.color;
+        document.getElementById('prev-bw').value = data.bw;
+        document.getElementById('prev-date').innerText = `📅 前次抄表月份：${data.prev_year} 年 ${data.prev_month} 月`;
+    })
+    .catch(err => console.error(err));
+}
+
+document.getElementById('selected_month').addEventListener('change', updateLastCounts);
+document.getElementById('selected_year').addEventListener('change', updateLastCounts);
+</script>
+
+</body>
+</html>

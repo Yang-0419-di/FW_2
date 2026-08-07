@@ -19,10 +19,6 @@ from flask import session
 # ====== 引入 billing 模組與 User 類別 ======
 from modules.billing import billing_bp, User
 
-# 取得當前 app.py 所在的目錄，並指到 billing.db
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_FILE = os.path.join(BASE_DIR, 'billing.db')
-
 # ====== 基本設定 ======
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'your_default_secret_key_here')  # Flask 密鑰設定
@@ -105,10 +101,12 @@ def home():
 
         df_filtered = df_im[cond_category & cond_content].copy()
 
-        # 3. 依據 離場時間 排序（先不限定只取前 5 筆，留給後續過濾被刪除的資料）
+        # 3. 依據 離場時間 排序並取最新前 5 筆
         if '離場時間' in df_filtered.columns:
             df_filtered['離場時間_dt'] = pd.to_datetime(df_filtered['離場時間'], errors='coerce')
-            df_filtered = df_filtered.sort_values(by='離場時間_dt', ascending=False)
+            df_filtered = df_filtered.sort_values(by='離場時間_dt', ascending=False).head(5)
+        else:
+            df_filtered = df_filtered.head(5)
 
         # 4. 從 Google Sheet「硬碟檢測」分頁讀取填寫紀錄
         try:
@@ -118,21 +116,13 @@ def home():
         except Exception:
             gs_df = pd.DataFrame()
 
-        # 5. 走訪資料並過濾標記為 DELETED 的紀錄，湊滿 5 筆即止
         for _, row in df_filtered.iterrows():
-            store_id = str(row.get('門店編號', '')).strip()
+            store_id = str(row.get('門店編號', ''))
             
             matched = pd.DataFrame()
             if not gs_df.empty and '門店編號' in gs_df.columns:
-                matched = gs_df[gs_df['門店編號'].astype(str).str.strip() == store_id]
+                matched = gs_df[gs_df['門店編號'].astype(str) == store_id]
 
-            # 🚀 關鍵修改：檢查 Google Sheet 是否將此筆紀錄標記為已刪除
-            if not matched.empty and 'SC(1)' in matched.columns:
-                sc1_status = str(matched.iloc[0]['SC(1)']).strip()
-                if sc1_status == 'DELETED':
-                    continue  # 這筆資料已被刪除，跳過不處理
-
-            # 正常資料加入顯示清單
             sc_disk_data.append({
                 '離場時間': str(row.get('離場時間', '')),
                 '門店編號': store_id,
@@ -144,11 +134,6 @@ def home():
                 'TM1': matched.iloc[0]['TM(1)'] if not matched.empty and 'TM(1)' in matched.columns else '',
                 'TM2': matched.iloc[0]['TM(2)'] if not matched.empty and 'TM(2)' in matched.columns else ''
             })
-
-            # 湊滿最新的 5 筆有效資料後停止搜尋
-            if len(sc_disk_data) >= 5:
-                break
-
     except Exception as e:
         print(f"⚠️ SC硬碟檢測載入失敗: {e}")
 
@@ -417,11 +402,9 @@ def sm_web_page():
 def inspection_log():
     logs = []
     try:
-        # 改為讀取 Google Sheet 的 log 分頁
         sh = client.open_by_key(SHEET_ID)
-        ws = sh.worksheet("log")
+        ws = sh.worksheet("硬碟檢測")
         logs = ws.get_all_records()
-        logs.reverse()  # 倒序排列，讓最新登入紀錄顯示在最上方
     except Exception as e:
         print(f"⚠️ 檢視日誌載入失敗: {e}")
 
@@ -641,8 +624,9 @@ def worktime():
         billing_worktime=True
     )
 
-# 🆕 SC硬碟檢測 儲存/刪除同步 API
+# SC硬碟檢測 儲存/刪除同步 API
 @app.route('/sc_disk/update', methods=['POST'])
+@login_required
 def update_sc_disk():
     data = request.json
     action = data.get('action')
@@ -653,33 +637,16 @@ def update_sc_disk():
         ws = sh.worksheet("硬碟檢測")
         records = ws.get_all_records()
         
-        # 尋找目標列 (比對 門店編號)
         row_idx = None
-        for idx, r in enumerate(records, start=2): # header 佔據第 1 列
+        for idx, r in enumerate(records, start=2):
             if str(r.get('門店編號')).strip() == store_id:
                 row_idx = idx
                 break
 
         if action == 'delete':
-            # 🚀 關鍵修改：刪除時，在 Google 試算表記錄「已刪除」狀態 (例如寫入 'DELETED' 或 註記)
-            # 這樣後端讀取時才知道這筆被刪除了，不會再從 Excel 抓出來
-            row_data = [
-                data.get('leave_time', ''),
-                store_id,
-                data.get('store_name', ''),
-                data.get('repair_cat', ''),
-                data.get('work_content', ''),
-                'DELETED', # SC(1) 設為 DELETED 做為已刪除標記
-                'DELETED',
-                'DELETED',
-                'DELETED'
-            ]
             if row_idx:
-                ws.update(f'A{row_idx}:I{row_idx}', [row_data])
-            else:
-                ws.append_row(row_data)
-                
-            return jsonify({'status': 'success', 'message': '已標記為刪除，頁面重新整理後將不再顯示'})
+                ws.delete_rows(row_idx)
+            return jsonify({'status': 'success', 'message': '已同步刪除 Google Sheet 資料'})
 
         elif action == 'save':
             row_data = [
@@ -693,8 +660,9 @@ def update_sc_disk():
                 data.get('tm1', ''),
                 data.get('tm2', '')
             ]
+            
             if row_idx:
-                ws.update(f me:A{row_idx}:I{row_idx}', [row_data])
+                ws.update(f'A{row_idx}:I{row_idx}', [row_data])
             else:
                 ws.append_row(row_data)
                 
