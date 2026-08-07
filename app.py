@@ -694,7 +694,7 @@ def update_sc_disk():
                 data.get('tm2', '')
             ]
             if row_idx:
-                ws.update(f me:A{row_idx}:I{row_idx}', [row_data])
+                ws.update(f'A{row_idx}:I{row_idx}', [row_data])
             else:
                 ws.append_row(row_data)
                 
