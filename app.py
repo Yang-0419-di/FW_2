@@ -105,9 +105,19 @@ def home():
 
         df_filtered = df_im[cond_category & cond_content].copy()
 
-        # 3. 依據 離場時間 排序（先不限定只取前 5 筆，留給後續過濾被刪除的資料）
+        # 3. 條件三：日期處理與限制僅抓取「當月」資料
         if '離場時間' in df_filtered.columns:
             df_filtered['離場時間_dt'] = pd.to_datetime(df_filtered['離場時間'], errors='coerce')
+            
+            # 🚀 關鍵修改：取得今天的年月，並只保留「當月」的資料
+            now = pd.Timestamp.now()
+            cond_current_month = (
+                (df_filtered['離場時間_dt'].dt.year == now.year) & 
+                (df_filtered['離場時間_dt'].dt.month == now.month)
+            )
+            df_filtered = df_filtered[cond_current_month]
+
+            # 依離場時間倒序排列（最新在前）
             df_filtered = df_filtered.sort_values(by='離場時間_dt', ascending=False)
 
         # 4. 從 Google Sheet「硬碟檢測」分頁讀取填寫紀錄
@@ -118,7 +128,7 @@ def home():
         except Exception:
             gs_df = pd.DataFrame()
 
-        # 5. 走訪資料並過濾標記為 DELETED 的紀錄，湊滿 5 筆即止
+        # 5. 走訪當月資料、過濾 DELETED 紀錄，最多顯示 5 筆
         for _, row in df_filtered.iterrows():
             store_id = str(row.get('門店編號', '')).strip()
             
@@ -126,13 +136,12 @@ def home():
             if not gs_df.empty and '門店編號' in gs_df.columns:
                 matched = gs_df[gs_df['門店編號'].astype(str).str.strip() == store_id]
 
-            # 🚀 關鍵修改：檢查 Google Sheet 是否將此筆紀錄標記為已刪除
+            # 檢查是否已標記為刪除
             if not matched.empty and 'SC(1)' in matched.columns:
                 sc1_status = str(matched.iloc[0]['SC(1)']).strip()
                 if sc1_status == 'DELETED':
-                    continue  # 這筆資料已被刪除，跳過不處理
+                    continue
 
-            # 正常資料加入顯示清單
             sc_disk_data.append({
                 '離場時間': str(row.get('離場時間', '')),
                 '門店編號': store_id,
@@ -145,7 +154,6 @@ def home():
                 'TM2': matched.iloc[0]['TM(2)'] if not matched.empty and 'TM(2)' in matched.columns else ''
             })
 
-            # 湊滿最新的 5 筆有效資料後停止搜尋
             if len(sc_disk_data) >= 5:
                 break
 
