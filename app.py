@@ -1,22 +1,35 @@
-from flask import Flask, render_template, request, jsonify, abort, redirect, url_for
-from flask_login import LoginManager, login_required
-import pandas as pd
-import requests
-import sqlite3
+# 1. Python 標準庫 (Standard Library)
+import base64
+from datetime import datetime, timedelta
+import io
 from io import BytesIO
-import os, io, base64
-from datetime import datetime
+import math
+import os
+import sqlite3
+
+# 2. 第三方套件 (Third-Party Packages)
+from flask import (
+    Flask, 
+    render_template, 
+    request, 
+    jsonify, 
+    abort, 
+    redirect, 
+    url_for, 
+    session
+)
+from flask_login import LoginManager, login_required, current_user
+import gspread
+from google.oauth2.service_account import Credentials
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.font_manager import FontProperties
-import gspread
-from google.oauth2.service_account import Credentials
-from modules.gsheet import client, SHEET_ID
-from datetime import timedelta
-from flask import session
+import pandas as pd
+import requests
 
-# ====== 引入 billing 模組與 User 類別 ======
+# 3. 本地自訂模組 (Local Application Imports)
+from modules.gsheet import client, SHEET_ID
 from modules.billing import billing_bp, User
 
 # 取得當前 app.py 所在的目錄，並指到 billing.db
@@ -423,21 +436,44 @@ def sm_web_page():
 @app.route('/inspection_log')
 @login_required
 def inspection_log():
+    # 限制僅 yang.di 可存取
+    if current_user.username != 'yang.di':
+        abort(403)
+
     logs = []
     try:
-        # 改為讀取 Google Sheet 的 log 分頁
         sh = client.open_by_key(SHEET_ID)
         ws = sh.worksheet("log")
         logs = ws.get_all_records()
-        logs.reverse()  # 倒序排列，讓最新登入紀錄顯示在最上方
+        logs.reverse()  # 讓最新的登入紀錄排在前面
     except Exception as e:
         print(f"⚠️ 檢視日誌載入失敗: {e}")
+
+    # --- 📄 分頁邏輯 ---
+    page = request.args.get('page', 1, type=int)  # 取得當前頁碼，預設為第 1 頁
+    per_page = 12                                  # 每頁顯示 12 筆
+    total_logs = len(logs)
+    total_pages = math.ceil(total_logs / per_page) if total_logs > 0 else 1
+
+    # 確保頁碼範圍正確
+    if page < 1:
+        page = 1
+    elif page > total_pages:
+        page = total_pages
+
+    # 裁切當頁資料
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    paginated_logs = logs[start_idx:end_idx]
 
     return render_template(
         'inspection_log.html',
         page_header="檢視日誌",
         version=version_time,
-        logs=logs,
+        logs=paginated_logs,       # 只傳送當頁的 12 筆資料
+        page=page,                 # 當前頁碼
+        total_pages=total_pages,   # 總頁數
+        total_logs=total_logs,     # 總筆數
         billing_invoice_log=False,
         home_page=False
     )
