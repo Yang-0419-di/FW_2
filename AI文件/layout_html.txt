@@ -9,11 +9,50 @@
             font-family: Arial, "Microsoft JhengHei", sans-serif;
             padding: 40px;
             background-color: #f7f7f7;
+            position: relative;
         }
 
         h1 {
             text-align: center;
             color: #333;
+        }
+
+        /* ======================
+           右上角登出資訊區塊
+        ====================== */
+        .user-header-info {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background-color: #ffffff;
+            padding: 6px 14px;
+            border-radius: 20px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+            border: 1px solid #e2e8f0;
+            font-size: 14px;
+        }
+
+        .user-header-info .username {
+            color: #334155;
+            font-weight: bold;
+        }
+
+        .logout-btn {
+            padding: 5px 12px !important;
+            font-size: 13px !important;
+            background-color: #dc2626 !important;
+            color: white !important;
+            border-radius: 6px !important;
+            text-decoration: none !important;
+            font-weight: bold;
+            transition: background-color 0.2s ease;
+        }
+
+        .logout-btn:hover {
+            background-color: #b91c1c !important;
         }
 
         /* ======================
@@ -23,7 +62,7 @@
             padding: 10px 15px;
             font-size: 20px;
             margin: 5px;
-			background: #007BFF;
+            background: #007BFF;
             color: white;
             border: none;
             border-radius: 5px;
@@ -48,12 +87,12 @@
             text-decoration: none;
         }
 
-		/* ======================
-		   手風琴選單 (Accordion) 橫向同列優化
-		====================== */
+        /* ======================
+           手風琴選單 (Accordion) 橫向同列優化
+        ====================== */
         .accordion-nav-container {
-            display: flex; /* 🚀 關鍵：改用 Flex 讓子項目橫向橫著排 */
-            gap: 12px;     /* 按鈕之間的間距 */
+            display: flex; 
+            gap: 12px;     
             width: 100%;
             max-width: 700px;
             margin: 0 auto 20px 0;
@@ -62,22 +101,22 @@
         }
 
         .accordion-item {
-            flex: 1;       /* 🚀 關鍵：均分寬度，讓三個按鈕長度完全一樣大 */
+            flex: 1;       
             background: #ffffff; 
             border: 1px solid #e2e8f0; 
             border-radius: 8px; 
             box-shadow: 0 1px 3px rgba(0,0,0,0.02); 
-            position: relative; /* 為了讓下拉選單絕對定位 */
+            position: relative; 
             height: fit-content;
         }
 
-		.accordion-button {
-			width: 100%; 
+        .accordion-button {
+            width: 100%; 
             display: flex; 
             justify-content: space-between; 
             align-items: center; 
             padding: 12px 16px; 
-            font-size: 15px; /* 微調字體大小以利橫向塞下 */
+            font-size: 15px; 
             font-weight: bold; 
             color: #333333; 
             background-color: #f8fafc; 
@@ -88,15 +127,14 @@
             margin: 0;
             border-radius: 8px;
             transition: background-color 0.2s ease;
-		}
+        }
 
-		.accordion-button:hover, .accordion-button.active {
-			background-color: #edf2f7;
-		}
+        .accordion-button:hover, .accordion-button.active {
+            background-color: #edf2f7;
+        }
 
-		/* 子選單容器：改為絕對定位，展開時才不會把下方的表格往下頂推開擠壓 */
-		.accordion-content {
-			display: none; 
+        .accordion-content {
+            display: none; 
             position: absolute;
             top: 100%;
             left: 0;
@@ -107,18 +145,16 @@
             border-top: none;
             border-radius: 0 0 8px 8px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-            z-index: 100; /* 確保選單浮在表格之上 */
+            z-index: 100; 
             box-sizing: border-box;
-            flex-direction: column; /* 改為垂直清單排列，在限寬格子內最整齊 */
+            flex-direction: column; 
             gap: 8px;
-		}
+        }
 
-		/* 展開狀態 */
-		.accordion-content.show {
-			display: flex !important;
-		}
+        .accordion-content.show {
+            display: flex !important;
+        }
 
-        /* 精緻子選單超連結按鈕 */
         .sub-link {
             display: inline-flex !important;
             align-items: center;
@@ -134,7 +170,7 @@
             box-sizing: border-box !important;
             min-height: 36px;
             margin: 0 !important;
-            width: 100%; /* 寬度填滿格子 */
+            width: 100%; 
         }
 
         .sub-link:hover {
@@ -198,6 +234,14 @@
 
 <body>
 
+<!-- 右上角登出按鈕與使用者狀態 -->
+{% if current_user.is_authenticated %}
+<div class="user-header-info">
+    <span>👤 <span class="username">{{ current_user.username }}</span></span>
+    <a href="{{ url_for('billing.logout') }}" class="logout-btn">登出</a>
+</div>
+{% endif %}
+
 <h1>
 {% if page_header %}
   {{ page_header }}
@@ -223,14 +267,17 @@
 {% if not billing_page and not billing_invoice_log and not billing_mfp_summary and not billing_person and not billing_index %}
 
 <div class="button-row" role="navigation">
-	<a href="{{ url_for('personal', name='湯家瑋') }}"><button class="button-3">湯家瑋</button></a>
+    <a href="{{ url_for('personal', name='湯家瑋') }}"><button class="button-3">湯家瑋</button></a>
     <a href="{{ url_for('personal', name='吳宗鴻') }}"><button class="button-3">吳宗鴻</button></a>
-	<a href="{{ url_for('personal', name='劉柏均') }}"><button class="button-3">劉柏均</button></a>
-	<a href="{{ url_for('personal', name='狄澤洋') }}"><button class="button-3">狄澤洋</button></a>
+    <a href="{{ url_for('personal', name='劉柏均') }}"><button class="button-3">劉柏均</button></a>
+    <a href="{{ url_for('personal', name='狄澤洋') }}"><button class="button-3">狄澤洋</button></a>
 
     <a href="{{ url_for('time_page') }}"><button class="button-1">出勤時間統計</button></a>
     <a href="{{ url_for('calendar_page') }}"><button class="button-2">排程表</button></a>
-	<a href="{{ url_for('sm_web_page') }}"><button class="button-2">報修刊版</button></a>
+    <a href="{{ url_for('sm_web_page') }}"><button class="button-2">報修刊版</button></a>
+	{% if current_user.is_authenticated and current_user.username == 'yang.di' %}
+		<a href="{{ url_for('inspection_log') }}"><button class="button-2">檢視日誌</button></a>
+	{% endif %}
 
     {% if not home_page and not billing_mfp_summary %}
     <a href="/"><button class="button-3">回首頁</button></a>
@@ -304,7 +351,6 @@ function showGlobalLoading() {
     }
 }
 
-/* 只監聽真正會跳轉頁面的 <a> */
 document.addEventListener("click", function (e) {
     const link = e.target.closest("a");
     if (!link) return;
@@ -325,12 +371,10 @@ document.addEventListener("click", function (e) {
     showGlobalLoading();
 });
 
-/* 監聽 form submit */
 document.addEventListener("submit", function () {
     showGlobalLoading();
 });
 
-/* 頁面回來時隱藏 loading */
 window.addEventListener("pageshow", function () {
     const loading = document.getElementById("global-loading");
     if (loading) {
@@ -340,14 +384,12 @@ window.addEventListener("pageshow", function () {
 </script>
 
 <script>
-// 手風琴 橫向點擊切換邏輯
 document.querySelectorAll('.accordion-nav-container .accordion-button').forEach(btn => {
     btn.addEventListener('click', function() {
         const currentItem = btn.closest('.accordion-item');
         const content = currentItem.querySelector('.accordion-content');
         const arrow = btn.querySelector('.arrow');
 
-        // 1. 收起其他選單
         document.querySelectorAll('.accordion-nav-container .accordion-item').forEach(item => {
             if (item !== currentItem) {
                 const c = item.querySelector('.accordion-content');
@@ -359,7 +401,6 @@ document.querySelectorAll('.accordion-nav-container .accordion-button').forEach(
             }
         });
 
-        // 2. 切換當前選單
         const isShowing = content.classList.toggle('show');
         btn.classList.toggle('active', isShowing);
         
@@ -369,7 +410,6 @@ document.querySelectorAll('.accordion-nav-container .accordion-button').forEach(
     });
 });
 
-// 點擊網頁任意空白處時，自動收合已展開的下拉選單
 document.addEventListener('click', function(e) {
     if (!e.target.closest('.accordion-item')) {
         document.querySelectorAll('.accordion-nav-container .accordion-content').forEach(c => c.classList.remove('show'));
@@ -378,6 +418,28 @@ document.addEventListener('click', function(e) {
     }
 });
 </script>
+
+{% if current_user.is_authenticated %}
+<script>
+  // 10 分鐘無動作前端自動登出重導向 (10 分鐘 = 600,000 毫秒)
+  let idleTimeout;
+  const timeoutTime = 3 * 60 * 1000;
+
+  function resetTimer() {
+    clearTimeout(idleTimeout);
+    idleTimeout = setTimeout(function() {
+      alert("由於您已超過 10 分鐘未操作，系統已自動登出。");
+      window.location.href = "{{ url_for('billing.logout') }}";
+    }, timeoutTime);
+  }
+
+  window.onload = resetTimer;
+  document.onmousemove = resetTimer;
+  document.onkeydown = resetTimer;
+  document.onclick = resetTimer;
+  document.onscroll = resetTimer;
+</script>
+{% endif %}
 
 {% block extra_scripts %}{% endblock %}
 </body>
