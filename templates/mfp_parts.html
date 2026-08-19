@@ -4,34 +4,25 @@
 <!-- === MFP 零件表頁 mfp_parts.html === -->
 
 <form method="POST" action="/mfp_parts" class="mfp-form">
-<label>選擇機型:</label>
-<select name="model" required>
-    <option value="">--請選擇--</option>
-    <option value="2500AC/2510AC/2610AC" {% if selected_model=="2500AC/2510AC/2610AC" %}selected{% endif %}>2500AC/2510AC/2610AC</option>
-    <option value="2505AC/2515AC/2615AC" {% if selected_model=="2505AC/2515AC/2615AC" %}selected{% endif %}>2505AC/2515AC/2615AC</option>
-    <option value="2508A/2518A/2618A" {% if selected_model=="2508A/2518A/2618A" %}selected{% endif %}>2508A/2518A/2618A</option>
-    <option value="2520AC" {% if selected_model=="2520AC" %}selected{% endif %}>2520AC</option>
-    <option value="2809A, 2823AM/2829A/2823AMW" {% if selected_model=="2809A, 2823AM/2829A/2823AMW" %}selected{% endif %}>2809A, 2823AM/2829A/2823AMW</option>
-    <option value="3008A/3018A(AG)/3118A(AG)" {% if selected_model=="3008A/3018A(AG)/3118A(AG)" %}selected{% endif %}>3008A/3018A(AG)/3118A(AG)</option>
-    <option value="3025AC" {% if selected_model=="3025AC" %}selected{% endif %}>3025AC</option>
-    <option value="3028A" {% if selected_model=="3028A" %}selected{% endif %}>3028A</option>
-    <option value="3505AC/3515AC/3615AC" {% if selected_model=="3505AC/3515AC/3615AC" %}selected{% endif %}>3505AC/3515AC/3615AC</option>
-    <option value="3508A/3518A(AG)/3618A(AG)" {% if selected_model=="3508A/3518A(AG)/3618A(AG)" %}selected{% endif %}>3508A/3518A(AG)/3618A(AG)</option>
-    <option value="3525AC/ACG" {% if selected_model=="3525AC/ACG" %}selected{% endif %}>3525AC/ACG</option>
-    <option value="3528A/AG" {% if selected_model=="3528A/AG" %}selected{% endif %}>3528A/AG</option>
-    <option value="4505AC/4515AC/4615AC" {% if selected_model=="4505AC/4515AC/4615AC" %}selected{% endif %}>4505AC/4515AC/4615AC</option>
-    <option value="4508A/4518A(AG)/4618A(AG)" {% if selected_model=="4508A/4518A(AG)/4618A(AG)" %}selected{% endif %}>4508A/4518A(AG)/4618A(AG)</option>
-    <option value="4525AC/ACG" {% if selected_model=="4525AC/ACG" %}selected{% endif %}>4525AC/ACG</option>
-    <option value="4528A(AG)" {% if selected_model=="4528A(AG)" %}selected{% endif %}>4528A(AG)</option>
-    <option value="5005AC/5015AC/5115AC" {% if selected_model=="5005AC/5015AC/5115AC" %}selected{% endif %}>5005AC/5015AC/5115AC</option>
-    <option value="5008A/5018A/5118A" {% if selected_model=="5008A/5018A/5118A" %}selected{% endif %}>5008A/5018A/5118A</option>
-    <option value="5506AC/5516AC/5616AC/6526AC" {% if selected_model=="5506AC/5516AC/5616AC/6526AC" %}selected{% endif %}>5506AC/5516AC/5616AC/6526AC</option>
-    <option value="5508A/5518A/5618A" {% if selected_model=="5508A/5518A/5618A" %}selected{% endif %}>5508A/5518A/5618A</option>
-    <option value="6506AC/6516AC/6616AC//6527AC" {% if selected_model=="6506AC/6516AC/6616AC//6527AC" %}selected{% endif %}>6506AC/6516AC/6616AC//6527AC</option>
-    <option value="6508A/6518A/6618A/6529A" {% if selected_model=="6508A/6518A/6618A/6529A" %}selected{% endif %}>6508A/6518A/6618A/6529A</option>
-    <option value="6525AC/ACG" {% if selected_model=="6525AC/ACG" %}selected{% endif %}>6525AC/ACG</option>
-    <option value="6528A" {% if selected_model=="6528A" %}selected{% endif %}>6528A</option>
-</select>
+    <label>選擇機型:</label>
+
+    <select name="model" required>
+
+        <option value="">--請選擇--</option>
+
+        <option value="08、18A" {% if selected_model=="08、18A" %}selected{% endif %}>08、18A</option>
+
+        <option value="28A" {% if selected_model=="28A" %}selected{% endif %}>28A</option>
+
+        <option value="00、10AC" {% if selected_model=="00、10AC" %}selected{% endif %}>00、10AC</option>
+
+        <option value="05AC" {% if selected_model=="05AC" %}selected{% endif %}>05AC</option>
+
+        <option value="15AC" {% if selected_model=="15AC" %}selected{% endif %}>15AC</option>
+
+        <option value="20AC" {% if selected_model=="20AC" %}selected{% endif %}>25AC</option>
+
+    </select>
 
     <label>選擇部件:</label>
     <select name="part">
@@ -41,10 +32,8 @@
         <option value="定著組" {% if selected_part=="定著組" %}selected{% endif %}>定著組</option>
         <option value="取紙組" {% if selected_part=="取紙組" %}selected{% endif %}>取紙組</option>
         <option value="轉寫組" {% if selected_part=="轉寫組" %}selected{% endif %}>轉寫組</option>
-		<option value="送稿機" {% if selected_part=="送稿機" %}selected{% endif %}>送稿機</option>
-		<option value="手送台" {% if selected_part=="手送台" %}selected{% endif %}>手送台</option>
-		<option value="大容量取紙組" {% if selected_part=="大容量取紙組" %}selected{% endif %}>大容量取紙組</option>
-		<option value="其他" {% if selected_part=="其他" %}selected{% endif %}>其他</option>
+        <option value="送稿機" {% if selected_part=="送稿機" %}selected{% endif %}>送稿機</option>
+
     </select>
 
     <button type="submit">搜尋</button>
@@ -55,7 +44,7 @@
 {% endif %}
 
 {% if table_html %}
-<div class="table-container">
+<div class="table-container" id="partsTableContainer">
     {{ table_html|safe }}
 </div>
 {% endif %}
@@ -104,4 +93,32 @@
     background-color: white;
 }
 </style>
+
+<!-- === JavaScript 清理表格文字內容 === -->
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const container = document.getElementById("partsTableContainer");
+    if (!container) return;
+
+    // 取得表格內所有儲存格 (td, th)
+    const cells = container.querySelectorAll("td, th");
+
+    cells.forEach(cell => {
+        let text = cell.innerText.trim();
+
+        // 1. 若內容包含 NaN、nan 或 None，將其設為空白
+        if (text === "NaN" || text === "nan" || text === "None" || text === "null") {
+            cell.innerText = "";
+            return;
+        }
+
+        // 2. 若為純數字（包含純整數或帶小數點的數字）
+        if (!isNaN(text) && text !== "") {
+            const num = parseFloat(text);
+            // 四捨五入轉為整數顯示
+            cell.innerText = Math.round(num);
+        }
+    });
+});
+</script>
 {% endblock %}
