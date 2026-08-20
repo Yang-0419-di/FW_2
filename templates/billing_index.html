@@ -542,13 +542,15 @@ if (document.getElementById('selected_year')) {
   let idleTimeout;
   const timeoutTime = 10 * 60 * 1000;
 
-  function resetTimer() {
-    clearTimeout(idleTimeout);
-    idleTimeout = setTimeout(function() {
-      alert("由於您已超過 10 分鐘未操作，系統已自動登出。");
-      window.location.href = "{{ url_for('billing.logout') }}";
-    }, timeoutTime);
-  }
+  // 修改前端自動登出觸發邏輯
+	function resetTimer() {
+		clearTimeout(idleTimeout);
+		idleTimeout = setTimeout(function() {
+			alert("由於您已超過 10 分鐘未操作，系統已自動登出。");
+			// 使用 replace 避免留有歷史舊紀錄，並直接跳轉
+			window.location.replace("{{ url_for('billing.logout') }}");
+		}, timeoutTime);
+	}
 
   window.onload = resetTimer;
   document.onmousemove = resetTimer;
