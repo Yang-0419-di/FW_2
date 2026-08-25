@@ -122,13 +122,16 @@ def home():
         if '離場時間' in df_filtered.columns:
             df_filtered['離場時間_dt'] = pd.to_datetime(df_filtered['離場時間'], errors='coerce')
             
-            # 🚀 關鍵修改：取得今天的年月，並只保留「當月」的資料
-            now = pd.Timestamp.now()
-            cond_current_month = (
-                (df_filtered['離場時間_dt'].dt.year == now.year) & 
-                (df_filtered['離場時間_dt'].dt.month == now.month)
-            )
-            df_filtered = df_filtered[cond_current_month]
+            # 取得今天的 00:00:00
+            today = pd.Timestamp.now().normalize()
+            
+            # 設定範圍：前 5 天的 00:00:00 到 後 5 天的 23:59:59
+            start_date = today - pd.Timedelta(days=5)
+            end_date = today + pd.Timedelta(days=6) - pd.Timedelta(seconds=1)
+            
+            # 篩選前後 5 天內的資料（使用 between）
+            cond_5days = df_filtered['離場時間_dt'].between(start_date, end_date)
+            df_filtered = df_filtered[cond_5days]
 
             # 依離場時間倒序排列（最新在前）
             df_filtered = df_filtered.sort_values(by='離場時間_dt', ascending=False)
