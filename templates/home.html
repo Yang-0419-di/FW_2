@@ -3,8 +3,7 @@
 {% block content %}
     <!-- === 首頁：部門總覽（原主框架中的 default 區塊） === -->
 
-
-	<!-- === 🆕 SC硬碟檢測 區塊（放在部門數量上方） === -->
+	<!-- === 🆕 SC硬碟檢測 區塊（非同步 AJAX 動態載入） === -->
 	<h2>硬碟檢測繳回 (最新5筆)</h2>
 	<div class="table-container">
 		<table>
@@ -22,28 +21,10 @@
 					<th>操作</th>
 				</tr>
 			</thead>
-			<tbody>
-				{% for row in sc_disk_data %}
-				<tr data-store-id="{{ row['門店編號'] }}">
-					<td>{{ row['離場時間'] }}</td>
-					<td>{{ row['門店編號'] }}</td>
-					<td>{{ row['門店名稱'] }}</td>
-					<td>{{ row['報修類別'] }}</td>
-					<td style="max-width: 200px; text-align: left;">{{ row['工作內容'] }}</td>
-					<td><input type="text" class="disk-input sc1" value="{{ row['SC1'] }}" style="width: 50px;"></td>
-					<td><input type="text" class="disk-input sc2" value="{{ row['SC2'] }}" style="width: 50px;"></td>
-					<td><input type="text" class="disk-input tm1" value="{{ row['TM1'] }}" style="width: 50px;"></td>
-					<td><input type="text" class="disk-input tm2" value="{{ row['TM2'] }}" style="width: 50px;"></td>
-					<td>
-						<button type="button" onclick="saveDiskRow(this)" style="background-color: #28a745; font-size: 14px; padding: 4px 8px;">儲存</button>
-						<button type="button" onclick="deleteDiskRow(this)" style="background-color: #dc3545; font-size: 14px; padding: 4px 8px;">刪除</button>
-					</td>
-				</tr>
-				{% else %}
+			<tbody id="sc-disk-tbody">
 				<tr>
-					<td colspan="10" style="text-align: center; color: gray;">目前無符合條件的硬碟更換紀錄</td>
+					<td colspan="10" style="text-align: center; color: gray;">⏳ 資料載入中，請稍候...</td>
 				</tr>
-				{% endfor %}
 			</tbody>
 		</table>
 	</div>
@@ -290,6 +271,46 @@
 
 {% block extra_scripts %}
 <script>
+    // ===== 頁面載入後，非同步向後端 API 取得硬碟檢測資料 =====
+    document.addEventListener("DOMContentLoaded", function() {
+        fetch('/api/sc_disk_data')
+            .then(res => res.json())
+            .then(data => {
+                const tbody = document.getElementById('sc-disk-tbody');
+                tbody.innerHTML = ''; // 清空載入中提示
+
+                if (!data || data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: gray;">目前無符合條件的硬碟更換紀錄</td></tr>';
+                    return;
+                }
+
+                data.forEach(row => {
+                    const tr = document.createElement('tr');
+                    tr.setAttribute('data-store-id', row['門店編號'] || '');
+                    tr.innerHTML = `
+                        <td>${row['離場時間'] || ''}</td>
+                        <td>${row['門店編號'] || ''}</td>
+                        <td>${row['門店名稱'] || ''}</td>
+                        <td>${row['報修類別'] || ''}</td>
+                        <td style="max-width: 200px; text-align: left;">${row['工作內容'] || ''}</td>
+                        <td><input type="text" class="disk-input sc1" value="${row['SC1'] || ''}" style="width: 50px;"></td>
+                        <td><input type="text" class="disk-input sc2" value="${row['SC2'] || ''}" style="width: 50px;"></td>
+                        <td><input type="text" class="disk-input tm1" value="${row['TM1'] || ''}" style="width: 50px;"></td>
+                        <td><input type="text" class="disk-input tm2" value="${row['TM2'] || ''}" style="width: 50px;"></td>
+                        <td>
+                            <button type="button" onclick="saveDiskRow(this)" style="background-color: #28a745; font-size: 14px; padding: 4px 8px;">儲存</button>
+                            <button type="button" onclick="deleteDiskRow(this)" style="background-color: #dc3545; font-size: 14px; padding: 4px 8px;">刪除</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            })
+            .catch(err => {
+                console.error("硬碟檢測載入錯誤:", err);
+                document.getElementById('sc-disk-tbody').innerHTML = '<tr><td colspan="10" style="text-align: center; color: red;">⚠️ 載入資料失敗，請重新整理頁面</td></tr>';
+            });
+    });
+
     // 切換顯示/隱藏任意區塊（可重複使用）
 	function toggleSection(id, ev) {
 		ev && ev.preventDefault && ev.preventDefault();
@@ -299,7 +320,7 @@
 	}
 
 	function toggleHUB() {
-	    toggleSection('HUB-top');
+		toggleSection('HUB-top');
 		toggleSection('HUB-content');
 	}
 	
@@ -320,7 +341,7 @@
 function saveDiskRow(btn) {
     const tr = btn.closest('tr');
     
-    // 取得 td 內容 (請根據您 HTML <td> 的實際位置調整索引)
+    // 取得 td 內容 (根據 HTML <td> 的實際位置調整索引)
     const tds = tr.querySelectorAll('td');
     
     const payload = {

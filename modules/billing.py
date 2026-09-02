@@ -7,6 +7,7 @@ import requests
 from io import BytesIO
 import pandas as pd
 from zoneinfo import ZoneInfo
+import threading  # 🚀 新增：匯入背景線程模組
 from modules.gsheet import (
     client, 
     SHEET_ID, 
@@ -42,6 +43,25 @@ class User(UserMixin):
         self.id = str(id)
         self.username = username
 
+# 🚀 方案二：背景寫入 Google Sheet Log 任務
+def log_to_google_sheet_async(db_username, ip_address, login_date, login_time, created_at):
+    try:
+        sh = client.open_by_key(SHEET_ID)
+        ws = sh.worksheet("log")
+        
+        # 避開 len(ws.get_all_values()) 下載整張大表帶來的耗時
+        # 直接使用空字串作為 ID（或由 Sheet 公式自動帶入），大幅提昇網路寫入效率
+        ws.append_row([
+            "",              # id (由試算表自動處理或留空)
+            db_username,     # username
+            ip_address,      # ip_address
+            login_date,      # login_date
+            login_time,      # login_time
+            created_at       # created_at
+        ])
+    except Exception as e:
+        print(f"⚠️ 背景寫入登入日誌至 Google Sheet 失敗: {e}")
+
 # modules/billing.py
 
 @billing_bp.route('/login', methods=['GET', 'POST'])
@@ -76,31 +96,18 @@ def login():
                     if ip_address and ',' in ip_address:
                         ip_address = ip_address.split(',')[0].strip()
 
-                    # 📅 取得當前日期與時間
                     # 📅 取得當前台灣時間 (Asia/Taipei)
                     now = datetime.now(ZoneInfo("Asia/Taipei"))
                     login_date = now.strftime('%Y-%m-%d')
                     login_time = now.strftime('%H:%M:%S')
                     created_at = now.strftime('%Y-%m-%d %H:%M:%S')
 
-                    # 📝 寫入登入日誌至 Google Sheet 的 log 分頁
-                    try:
-                        sh = client.open_by_key(SHEET_ID)
-                        ws = sh.worksheet("log")
-                        
-                        # 自動計算遞增 ID (總筆數扣除標題列 + 1)
-                        new_id = len(ws.get_all_values())
-                        
-                        ws.append_row([
-                            new_id,          # id
-                            db_username,     # username
-                            ip_address,      # ip_address
-                            login_date,      # login_date
-                            login_time,      # login_time
-                            created_at       # created_at
-                        ])
-                    except Exception as e:
-                        print(f"⚠️ 寫入登入日誌至 Google Sheet 失敗: {e}")
+                    # 🚀 方案二修改：開啟背景執行緒非同步寫入 Google Sheet，不阻斷主程序
+                    threading.Thread(
+                        target=log_to_google_sheet_async,
+                        args=(db_username, ip_address, login_date, login_time, created_at),
+                        daemon=True
+                    ).start()
 
                     # 嚴格檢查 next_page 是否為無效的空值/空字串
                     next_page = request.args.get('next')
@@ -1184,4 +1191,3 @@ def logout():
     logout_user()
     flash('您已成功登出', 'info')
     return redirect(url_for('billing.login'))
-    

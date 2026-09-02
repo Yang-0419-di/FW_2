@@ -101,81 +101,6 @@ def clean_df(df):
 def home():
     xls = load_excel_from_github(GITHUB_XLSX_URL)
 
-    # SC硬碟檢測：資料篩選與 Google Sheet 串接
-    sc_disk_data = []
-    try:
-        df_im = clean_df(pd.read_excel(xls, sheet_name='IM'))
-
-        # 1. 條件一：報修類別為 HL-TM主機 或 HL-SC主機
-        cond_category = df_im['報修類別'].astype(str).isin(['HL-TM主機', 'HL-SC主機'])
-
-        # 2. 條件二：工作內容 (AC欄位) 包含 "更換" 與 "硬碟"
-        content_col = '工作內容' if '工作內容' in df_im.columns else df_im.columns[28]
-        cond_content = (
-            df_im[content_col].astype(str).str.contains('更換', case=False) & 
-            df_im[content_col].astype(str).str.contains('硬碟', case=False)
-        )
-
-        df_filtered = df_im[cond_category & cond_content].copy()
-
-        # 3. 條件三：日期處理與限制僅抓取「當月」資料
-        if '離場時間' in df_filtered.columns:
-            df_filtered['離場時間_dt'] = pd.to_datetime(df_filtered['離場時間'], errors='coerce')
-            
-            # 取得今天的 00:00:00
-            today = pd.Timestamp.now().normalize()
-            
-            # 設定範圍：前 5 天的 00:00:00 到 後 5 天的 23:59:59
-            start_date = today - pd.Timedelta(days=5)
-            end_date = today + pd.Timedelta(days=6) - pd.Timedelta(seconds=1)
-            
-            # 篩選前後 5 天內的資料（使用 between）
-            cond_5days = df_filtered['離場時間_dt'].between(start_date, end_date)
-            df_filtered = df_filtered[cond_5days]
-
-            # 依離場時間倒序排列（最新在前）
-            df_filtered = df_filtered.sort_values(by='離場時間_dt', ascending=False)
-
-        # 4. 從 Google Sheet「硬碟檢測」分頁讀取填寫紀錄
-        try:
-            sh = client.open_by_key(SHEET_ID)
-            ws_disk = sh.worksheet("硬碟檢測")
-            gs_df = pd.DataFrame(ws_disk.get_all_records())
-        except Exception:
-            gs_df = pd.DataFrame()
-
-        # 5. 走訪當月資料、過濾 DELETED 紀錄，最多顯示 5 筆
-        for _, row in df_filtered.iterrows():
-            store_id = str(row.get('門店編號', '')).strip()
-            
-            matched = pd.DataFrame()
-            if not gs_df.empty and '門店編號' in gs_df.columns:
-                matched = gs_df[gs_df['門店編號'].astype(str).str.strip() == store_id]
-
-            # 檢查是否已標記為刪除
-            if not matched.empty and 'SC(1)' in matched.columns:
-                sc1_status = str(matched.iloc[0]['SC(1)']).strip()
-                if sc1_status == 'DELETED':
-                    continue
-
-            sc_disk_data.append({
-                '離場時間': str(row.get('離場時間', '')),
-                '門店編號': store_id,
-                '門店名稱': str(row.get('門店名稱', '')),
-                '報修類別': str(row.get('報修類別', '')),
-                '工作內容': str(row.get(content_col, '')),
-                'SC1': matched.iloc[0]['SC(1)'] if not matched.empty and 'SC(1)' in matched.columns else '',
-                'SC2': matched.iloc[0]['SC(2)'] if not matched.empty and 'SC(2)' in matched.columns else '',
-                'TM1': matched.iloc[0]['TM(1)'] if not matched.empty and 'TM(1)' in matched.columns else '',
-                'TM2': matched.iloc[0]['TM(2)'] if not matched.empty and 'TM(2)' in matched.columns else ''
-            })
-
-            if len(sc_disk_data) >= 5:
-                break
-
-    except Exception as e:
-        print(f"⚠️ SC硬碟檢測載入失敗: {e}")
-
     # 首頁其他表格處理
     df_department = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:E", skiprows=4, nrows=1))
     df_seasons = clean_df(pd.read_excel(xls, sheet_name='首頁', usecols="A:D", skiprows=8, nrows=2))
@@ -232,7 +157,6 @@ def home():
     return render_template(
         'home.html',
         version=version_time,
-        sc_disk_data=sc_disk_data,
         area_table_1=area_table_1,
         area_table_2=area_table_2,
         area_table_3=area_table_3,
@@ -247,6 +171,69 @@ def home():
         billing_invoice_log=False,
         home_page=True
     )
+
+# 2. 新增獨立 API 路由：專門提供 SC 硬碟檢測資料
+@app.route('/api/sc_disk_data')
+@login_required
+def get_sc_disk_data():
+    xls = load_excel_from_github(GITHUB_XLSX_URL)
+    sc_disk_data = []
+    try:
+        df_im = clean_df(pd.read_excel(xls, sheet_name='IM'))
+
+        cond_category = df_im['報修類別'].astype(str).isin(['HL-TM主機', 'HL-SC主機'])
+        content_col = '工作內容' if '工作內容' in df_im.columns else df_im.columns[28]
+        cond_content = (
+            df_im[content_col].astype(str).str.contains('更換', case=False) & 
+            df_im[content_col].astype(str).str.contains('硬碟', case=False)
+        )
+
+        df_filtered = df_im[cond_category & cond_content].copy()
+
+        if '離場時間' in df_filtered.columns:
+            df_filtered['離場時間_dt'] = pd.to_datetime(df_filtered['離場時間'], errors='coerce')
+            today = pd.Timestamp.now().normalize()
+            start_date = today - pd.Timedelta(days=5)
+            end_date = today + pd.Timedelta(days=6) - pd.Timedelta(seconds=1)
+            cond_5days = df_filtered['離場時間_dt'].between(start_date, end_date)
+            df_filtered = df_filtered[cond_5days].sort_values(by='離場時間_dt', ascending=False)
+
+        try:
+            sh = client.open_by_key(SHEET_ID)
+            ws_disk = sh.worksheet("硬碟檢測")
+            gs_df = pd.DataFrame(ws_disk.get_all_records())
+        except Exception:
+            gs_df = pd.DataFrame()
+
+        for _, row in df_filtered.iterrows():
+            store_id = str(row.get('門店編號', '')).strip()
+            matched = pd.DataFrame()
+            if not gs_df.empty and '門店編號' in gs_df.columns:
+                matched = gs_df[gs_df['門店編號'].astype(str).str.strip() == store_id]
+
+            if not matched.empty and 'SC(1)' in matched.columns:
+                if str(matched.iloc[0]['SC(1)']).strip() == 'DELETED':
+                    continue
+
+            sc_disk_data.append({
+                '離場時間': str(row.get('離場時間', '')),
+                '門店編號': store_id,
+                '門店名稱': str(row.get('門店名稱', '')),
+                '報修類別': str(row.get('報修類別', '')),
+                '工作內容': str(row.get(content_col, '')),
+                'SC1': matched.iloc[0]['SC(1)'] if not matched.empty and 'SC(1)' in matched.columns else '',
+                'SC2': matched.iloc[0]['SC(2)'] if not matched.empty and 'SC(2)' in matched.columns else '',
+                'TM1': matched.iloc[0]['TM(1)'] if not matched.empty and 'TM(1)' in matched.columns else '',
+                'TM2': matched.iloc[0]['TM(2)'] if not matched.empty and 'TM(2)' in matched.columns else ''
+            })
+
+            if len(sc_disk_data) >= 5:
+                break
+
+    except Exception as e:
+        print(f"⚠️ SC硬碟檢測載入失敗: {e}")
+
+    return jsonify(sc_disk_data)
 
 @app.route("/disk", methods=["GET"])
 @login_required
