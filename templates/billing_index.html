@@ -15,7 +15,7 @@ body {
     position: relative;
 }
 .content-wrap {
-    max-width: 700px; /* 📊 強制整頁核心元素最大寬度統一，視覺完美對齊 */
+    max-width: 700px; 
     margin: 0 auto;
 }
 h1 { text-align: center; color: #333; margin-bottom: 20px; }
@@ -134,7 +134,6 @@ th { background-color: #edf2f7; font-weight: bold; }
     border-color: #007BFF;
 }
 
-/* 讓表格內的所有輸入欄位寬度與高度100%填滿，格式一致化 */
 table input[type="text"], 
 table input[type="number"], 
 table select { 
@@ -182,7 +181,6 @@ table input:focus, table select:focus {
     margin-bottom: 4px;
 }
 
-/* 備註大文字框統一寬度 */
 .custom-textarea {
     width: 100%;
     box-sizing: border-box;
@@ -198,7 +196,6 @@ table input:focus, table select:focus {
     outline: none;
 }
 
-/* 專門為一般表格內更新資料設計的精美按鈕 */
 .action-btn-container {
     margin-top: 12px;
     margin-bottom: 20px;
@@ -222,7 +219,6 @@ table input:focus, table select:focus {
 
 <body>
 
-<!-- 右上角登出按鈕與使用者狀態 -->
 {% if current_user.is_authenticated %}
 <div class="user-header-info">
     <span>👤 <span class="username">{{ current_user.username }}</span></span>
@@ -304,7 +300,7 @@ table input:focus, table select:focus {
             <tr><th style="width: 30%;">項目</th><th>內容</th></tr>
             <tr><td>設備編號</td><td><input type="text" name="device_id" value="{{ customer.device_id }}"></td></tr>
             <tr><td>客戶名稱</td><td><input type="text" name="customer_name" value="{{ customer.customer_name }}"></td></tr>
-			<tr><td>新設備編號</td><td><input type="text" name="device_id_new" value="" placeholder="若欲變更設備編號請填寫於此"></td></tr>
+            <tr><td>新設備編號</td><td><input type="text" name="device_id_new" value="" placeholder="若欲變更設備編號請填寫於此"></td></tr>
             <tr><td>保養週期</td><td><input type="text" name="pm" value="{{ customer.pm }}"></td></tr>
             <tr><td>設備機號</td><td><input type="text" name="device_number" value="{{ customer.device_number }}"></td></tr>
             <tr><td>機型</td><td><input type="text" name="machine_model" value="{{ customer.machine_model }}"></td></tr>
@@ -323,144 +319,195 @@ table input:focus, table select:focus {
     {% endif %}
 
     {% if contract %}
-	<div class="billing-card">
-		<h3 style="margin-top:0; color:#007BFF; font-size: 22px;">📊 本月抄表 — 設備：{{ contract.device_id }}</h3>
+    <div class="billing-card">
+        <h3 style="margin-top:0; color:#007BFF; font-size: 22px;">📊 本月抄表 — 設備：{{ contract.device_id }}</h3>
 
-		<form method="POST">
-			<input type="hidden" name="device_id" value="{{ contract.device_id }}">
-			<input type="hidden" name="mode" value="calculate">
+        <form method="POST">
+            <input type="hidden" name="device_id" value="{{ contract.device_id }}">
+            <input type="hidden" name="mode" value="calculate">
 
-			{% if related_devices and related_devices|length > 1 %}
-			<p style="font-size:16px; color:#333; font-weight: bold; margin-bottom: 8px;">📦 合開群組（主機：{{ related_devices[0] }}），共 {{ related_devices|length }} 台</p>
-			<table class="contract-table" style="width:100%;">
-				<thead>
-					<tr>
-						<th>設備編號</th>
-						<th>本月彩色張數</th>
-						<th>本月黑白張數</th>
-					</tr>
-				</thead>
-				<tbody>
-					{% for dev in related_devices %}
-					<tr>
-						<td style="font-weight:bold; text-align: center; background-color: #f8fafc;">{{ dev }}</td>
-						<td><input type="number" name="curr_color_{{ dev }}" required></td>
-						<td><input type="number" name="curr_bw_{{ dev }}" required></td>
-					</tr>
-					{% endfor %}
-				</tbody>
-			</table>
-			{% if last_time %}
-			<p style="color:#666; font-size:14px; margin-top: 8px;">📅 前次抄表月份：{{ last_time }}</p>
-			{% endif %}
+            {% if related_devices and related_devices|length > 1 %}
+            <p style="font-size:16px; color:#333; font-weight: bold; margin-bottom: 8px;">📦 合開群組（主機：{{ related_devices[0] }}），共 {{ related_devices|length }} 台</p>
+            <table class="contract-table" style="width:100%;">
+                <thead>
+                    <tr>
+                        <th>設備編號</th>
+                        <th>本月彩色 A3 張數</th>
+                        <th>本月彩色張數</th>
+                        <th>本月黑白張數</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for dev in related_devices %}
+                    <tr>
+                        <td style="font-weight:bold; text-align: center; background-color: #f8fafc;">{{ dev }}</td>
+                        <td><input type="number" name="curr_color_a3_{{ dev }}" required style="text-align: center;"></td>
+                        <td><input type="number" name="curr_color_{{ dev }}" required style="text-align: center;"></td>
+                        <td><input type="number" name="curr_bw_{{ dev }}" required style="text-align: center;"></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% if last_time %}
+            <p style="color:#666; font-size:14px; margin-top: 8px;" id="prev-date">📅 前次抄表月份：{{ last_time }}</p>
+            {% endif %}
 
-			{% else %}
-			<div>
-				<div class="form-row-flex">
-					<div>
-						<label for="selected_year">抄表年份：</label>
-						<select name="selected_year" id="selected_year" required>
-							{% for y in range(current_year - 2, current_year + 2) %}
-							<option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }} 年</option>
-							{% endfor %}
-						</select>
-					</div>
-					<div>
-						<label for="selected_month">抄表月份：</label>
-						<select name="selected_month" id="selected_month" required>
-							{% for m in range(1,13) %}
-							<option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ m }} 月</option>
-							{% endfor %}
-						</select>
-					</div>
-				</div>
+            {% else %}
+            <div>
+                <div class="form-row-flex">
+                    <div>
+                        <label for="selected_year">抄表年份：</label>
+                        <select name="selected_year" id="selected_year" required>
+                            {% for y in range(current_year - 2, current_year + 2) %}
+                            <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }} 年</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="selected_month">抄表月份：</label>
+                        <select name="selected_month" id="selected_month" required>
+                            {% for m in range(1,13) %}
+                            <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ m }} 月</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
 
-				<table style="margin-top: 15px;">
-					<thead>
-						<tr>
-							<th style="width: 40%;">項目規格</th>
-							<th style="width: 30%;">前次抄表紀錄</th>
-							<th style="width: 30%;">本月抄表登記</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr>
-							<td style="font-weight: bold;">彩色 A3 張數</td>
-							<td><input id="prev-color-a3" type="text" value="{{ last_color_a3 }}" readonly style="background-color: #f1f5f9; color: #64748b; font-weight: bold; text-align: center;"></td>
-							<td><input type="number" name="curr_color_a3" required style="text-align: center;"></td>
-						</tr>
-						<tr>
-							<td style="font-weight: bold;">彩色 (A4) 張數</td>
-							<td><input id="prev-color" type="text" value="{{ last_color }}" readonly style="background-color: #f1f5f9; color: #64748b; font-weight: bold; text-align: center;"></td>
-							<td><input type="number" name="curr_color" required style="text-align: center;"></td>
-						</tr>
-						<tr>
-							<td style="font-weight: bold;">黑白張數</td>
-							<td><input id="prev-bw" type="text" value="{{ last_bw }}" readonly style="background-color: #f1f5f9; color: #64748b; font-weight: bold; text-align: center;"></td>
-							<td><input type="number" name="curr_bw" required style="text-align: center;"></td>
-						</tr>
-					</tbody>
-				</table>
+                <table style="margin-top: 15px;">
+                    <thead>
+                        <tr>
+                            <th style="width: 40%;">項目規格</th>
+                            <th style="width: 30%;">前次抄表紀錄</th>
+                            <th style="width: 30%;">本月抄表登記</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="font-weight: bold;">彩色 A3 張數</td>
+                            <td><input id="prev-color-a3" type="text" value="{{ last_color_a3 }}" readonly style="background-color: #f1f5f9; color: #64748b; font-weight: bold; text-align: center;"></td>
+                            <td><input type="number" name="curr_color_a3" required style="text-align: center;"></td>
+                        </tr>
+                        <tr>
+                            <td style="font-weight: bold;">彩色 (A4) 張數</td>
+                            <td><input id="prev-color" type="text" value="{{ last_color }}" readonly style="background-color: #f1f5f9; color: #64748b; font-weight: bold; text-align: center;"></td>
+                            <td><input type="number" name="curr_color" required style="text-align: center;"></td>
+                        </tr>
+                        <tr>
+                            <td style="font-weight: bold;">黑白張數</td>
+                            <td><input id="prev-bw" type="text" value="{{ last_bw }}" readonly style="background-color: #f1f5f9; color: #64748b; font-weight: bold; text-align: center;"></td>
+                            <td><input type="number" name="curr_bw" required style="text-align: center;"></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p style="color:#666; font-size:14px; margin-top: 8px;" id="prev-date">📅 前次抄表月份：{{ last_time if last_time else '無' }}</p>
+            </div>
+            {% endif %}
 
-			</div>
-			{% endif %}
-
-			<table style="width: 100% !important; border-collapse: collapse !important; table-layout: fixed !important; margin-top: 24px !important; margin-bottom: 15px !important; border: none !important; background: none !important; box-shadow: none !important;">
-				<tr style="border: none !important; background: none !important;">
-					<td style="width: 50% !important; padding: 0 6px 0 0 !important; border: none !important; background: none !important;">
-						<button type="submit" style="width: 100% !important; height: 42px !important; border: none !important; border-radius: 6px !important; font-size: 15px !important; cursor: pointer !important; white-space: nowrap !important; margin: 0 !important; display: block !important; background-color: #007BFF !important; color: #ffffff !important; font-weight: bold !important; padding: 0 !important;">
-							計算並儲存抄表
-						</button>
-					</td>
-					<td style="width: 50% !important; padding: 0 0 0 6px !important; border: none !important; background: none !important;">
-						<button type="button" onclick="location.href='/billing/invoice_log/{{ contract.device_id }}'" style="width: 100% !important; height: 42px !important; border: none !important; border-radius: 6px !important; font-size: 15px !important; cursor: pointer !important; white-space: nowrap !important; margin: 0 !important; display: block !important; background-color: #007BFF !important; color: #ffffff !important; font-weight: bold !important; padding: 0 !important;">
-							發票紀錄
-						</button>
-					</td>
-				</tr>
-			</table>
-		</form>
-	</div>
+            <table style="width: 100% !important; border-collapse: collapse !important; table-layout: fixed !important; margin-top: 24px !important; margin-bottom: 15px !important; border: none !important; background: none !important; box-shadow: none !important;">
+                <tr style="border: none !important; background: none !important;">
+                    <td style="width: 50% !important; padding: 0 6px 0 0 !important; border: none !important; background: none !important;">
+                        <button type="submit" style="width: 100% !important; height: 42px !important; border: none !important; border-radius: 6px !important; font-size: 15px !important; cursor: pointer !important; white-space: nowrap !important; margin: 0 !important; display: block !important; background-color: #007BFF !important; color: #ffffff !important; font-weight: bold !important; padding: 0 !important;">
+                            計算並儲存抄表
+                        </button>
+                    </td>
+                    <td style="width: 50% !important; padding: 0 0 0 6px !important; border: none !important; background: none !important;">
+                        <button type="button" onclick="location.href='/billing/invoice_log/{{ contract.device_id }}'" style="width: 100% !important; height: 42px !important; border: none !important; border-radius: 6px !important; font-size: 15px !important; cursor: pointer !important; white-space: nowrap !important; margin: 0 !important; display: block !important; background-color: #007BFF !important; color: #ffffff !important; font-weight: bold !important; padding: 0 !important;">
+                            發票紀錄
+                        </button>
+                    </td>
+                </tr>
+            </table>
+        </form>
+    </div>
     {% endif %}
-	
+    
     {% if result %}
-    <h3>計算結果</h3>
+    <h3>📊 計算結果明細</h3>
     <table class="contract-table">
-        <tr><th style="width: 50%;">項目</th><th>數值</th></tr>
-        {% for k, v in result.items() %}
-        <tr {% if k in ["未稅小計", "稅額", "含稅總額"] %} style="background-color: #ecfdf5; font-weight: bold;" {% endif %}>
-            <td>{{ k }}</td>
-            <td>{{ v }}</td>
+        <tr><th style="width: 50%;">項目規格</th><th>數值 / 金額</th></tr>
+        
+        <!-- 彩色 A3 階梯明細 -->
+        <tr><td>彩色 A3 使用張數</td><td>{{ result.get("彩色A3使用張數", 0) }} 張</td></tr>
+        <tr><td>彩色 A3 計費張數</td><td>{{ result.get("彩色A3計費張數", 0) }} 張</td></tr>
+        <tr><td> └ 第一階段張數</td><td>{{ result.get("彩色A3_第一階段張數", 0) }} 張</td></tr>
+        <tr><td> └ 第二階段張數</td><td>{{ result.get("彩色A3_第二階段張數", 0) }} 張</td></tr>
+        <tr style="background-color: #f8fafc; font-weight: bold;">
+            <td>彩色 A3 小計金額</td><td>$ {{ result.get("彩色A3金額", 0) }}</td>
         </tr>
-        {% endfor %}
+
+        <!-- 彩色 (A4) 階梯明細 -->
+        <tr><td>彩色 (A4) 使用張數</td><td>{{ result.get("彩色使用張數", 0) }} 張</td></tr>
+        <tr><td>彩色 (A4) 計費張數</td><td>{{ result.get("彩色計費張數", 0) }} 張</td></tr>
+        <tr><td> └ 第一階段張數</td><td>{{ result.get("彩色_第一階段張數", 0) }} 張</td></tr>
+        <tr><td> └ 第二階段張數</td><td>{{ result.get("彩色_第二階段張數", 0) }} 張</td></tr>
+        <tr style="background-color: #f8fafc; font-weight: bold;">
+            <td>彩色小計金額</td><td>$ {{ result.get("彩色金額", 0) }}</td>
+        </tr>
+
+        <!-- 黑白階梯明細 -->
+        <tr><td>黑白使用張數</td><td>{{ result.get("黑白使用張數", 0) }} 張</td></tr>
+        <tr><td>黑白計費張數</td><td>{{ result.get("黑白計費張數", 0) }} 張</td></tr>
+        <tr><td> └ 第一階段張數</td><td>{{ result.get("黑白_第一階段張數", 0) }} 張</td></tr>
+        <tr><td> └ 第二階段張數</td><td>{{ result.get("黑白_第二階段張數", 0) }} 張</td></tr>
+        <tr style="background-color: #f8fafc; font-weight: bold;">
+            <td>黑白小計金額</td><td>$ {{ result.get("黑白金額", 0) }}</td>
+        </tr>
+
+        <!-- 財務結算區塊 -->
+        <tr><td>月租金</td><td>$ {{ result.get("月租金", 0) }}</td></tr>
+        <tr style="background-color: #ecfdf5; font-weight: bold;">
+            <td>未稅小計</td><td>$ {{ result.get("未稅小計", 0) }}</td>
+        </tr>
+        <tr style="background-color: #ecfdf5; font-weight: bold;">
+            <td>稅額 (5%)</td><td>$ {{ result.get("稅額", 0) }}</td>
+        </tr>
+        <tr style="background-color: #ecfdf5; font-weight: bold;">
+            <td>含稅總額</td><td>$ {{ result.get("含稅總額", 0) }}</td>
+        </tr>
     </table>
     {% endif %}
-	
-	{% if contract %}
+    
+    {% if contract %}
     <h3>契約條件</h3>
     <form method="POST">
         <input type="hidden" name="device_id" value="{{ contract.device_id }}">
         <input type="hidden" name="mode" value="update_contract">
-		
-		<div style="margin-bottom:12px;">
-			<textarea name="contra" rows="4" class="custom-textarea" placeholder="請輸入契約備註說明內容...">{{ contra_text }}</textarea>
-		</div>
-		
+        
+        <div style="margin-bottom:12px;">
+            <textarea name="contra" rows="4" class="custom-textarea" placeholder="請輸入契約備註說明內容...">{{ contra_text }}</textarea>
+        </div>
+        
         <table class="contract-table">
             <tr><th style="width: 50%;">項目</th><th>數值</th></tr>
             <tr><td>月租金</td><td><input type="number" step="0.01" name="monthly_rent" value="{{ contract.monthly_rent }}"></td></tr>
-            <tr><td>彩色單價 (A3)</td><td><input type="number" step="0.01" name="color_a3_unit_price" value="{{ contract.color_a3_unit_price }}"></td></tr>
+            
+            <!-- 🟢 彩色 A3 完整階梯與計算欄位 -->
+            <tr><td>彩色單價 (A3) (預設/基本)</td><td><input type="number" step="0.01" name="color_a3_unit_price" value="{{ contract.color_a3_unit_price }}"></td></tr>
+            <tr><td>彩色A3第一階段上限張數</td><td><input type="number" name="color_a3_tier1_limit" value="{{ contract.color_a3_tier1_limit }}"></td></tr>
+            <tr><td>彩色A3第一階段單價</td><td><input type="number" step="0.01" name="color_a3_tier1_price" value="{{ contract.color_a3_tier1_price }}"></td></tr>
+            <tr><td>彩色A3第二階段單價</td><td><input type="number" step="0.01" name="color_a3_tier2_price" value="{{ contract.color_a3_tier2_price }}"></td></tr>
             <tr><td>彩色A3基本張數</td><td><input type="number" name="color_a3_basic" value="{{ contract.color_a3_basic }}"></td></tr>
             <tr><td>彩色A3贈送張數</td><td><input type="number" name="color_a3_giveaway" value="{{ contract.color_a3_giveaway }}"></td></tr>
             <tr><td>彩色A3誤印率 (小數)</td><td><input type="number" step="0.0001" name="color_a3_error_rate" value="{{ contract.color_a3_error_rate }}"></td></tr>
-            <tr><td>彩色單價 (A4)</td><td><input type="number" step="0.01" name="color_unit_price" value="{{ contract.color_unit_price }}"></td></tr>
+
+            <!-- 🟢 彩色 (A4) 完整階梯與計算欄位 -->
+            <tr><td>彩色單價 (A4) (預設/基本)</td><td><input type="number" step="0.01" name="color_unit_price" value="{{ contract.color_unit_price }}"></td></tr>
+            <tr><td>彩色第一階段上限張數</td><td><input type="number" name="color_tier1_limit" value="{{ contract.color_tier1_limit }}"></td></tr>
+            <tr><td>彩色第一階段單價</td><td><input type="number" step="0.01" name="color_tier1_price" value="{{ contract.color_tier1_price }}"></td></tr>
+            <tr><td>彩色第二階段單價</td><td><input type="number" step="0.01" name="color_tier2_price" value="{{ contract.color_tier2_price }}"></td></tr>
             <tr><td>彩色基本張數</td><td><input type="number" name="color_basic" value="{{ contract.color_basic }}"></td></tr>
             <tr><td>彩色贈送張數</td><td><input type="number" name="color_giveaway" value="{{ contract.color_giveaway }}"></td></tr>
             <tr><td>彩色誤印率 (小數)</td><td><input type="number" step="0.0001" name="color_error_rate" value="{{ contract.color_error_rate }}"></td></tr>
-            <tr><td>黑白單價</td><td><input type="number" step="0.01" name="bw_unit_price" value="{{ contract.bw_unit_price }}"></td></tr>
+            
+            <!-- 🟢 黑白完整階梯與計算欄位 -->
+            <tr><td>黑白單價 (預設/基本)</td><td><input type="number" step="0.01" name="bw_unit_price" value="{{ contract.bw_unit_price }}"></td></tr>
+            <tr><td>黑白第一階段上限張數</td><td><input type="number" name="bw_tier1_limit" value="{{ contract.bw_tier1_limit }}"></td></tr>
+            <tr><td>黑白第一階段單價</td><td><input type="number" step="0.01" name="bw_tier1_price" value="{{ contract.bw_tier1_price }}"></td></tr>
+            <tr><td>黑白第二階段單價</td><td><input type="number" step="0.01" name="bw_tier2_price" value="{{ contract.bw_tier2_price }}"></td></tr>
             <tr><td>黑白基本張數</td><td><input type="number" name="bw_basic" value="{{ contract.bw_basic }}"></td></tr>
             <tr><td>黑白贈送張數</td><td><input type="number" name="bw_giveaway" value="{{ contract.bw_giveaway }}"></td></tr>
             <tr><td>黑白誤印率 (小數)</td><td><input type="number" step="0.0001" name="bw_error_rate" value="{{ contract.bw_error_rate }}"></td></tr>
+
             <tr>
                 <td>稅別</td>
                 <td>
@@ -479,8 +526,8 @@ table input:focus, table select:focus {
         <div class="action-btn-container">
             <button type="submit">💾 更新契約條件</button>
         </div>
-		{% endif %}
     </form>
+    {% endif %}
 </div>
 
 <div id="global-loading" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); z-index:9999; justify-content:center; align-items:center;">
@@ -515,15 +562,21 @@ window.addEventListener("pageshow", function (event) {
 function updateLastCounts() {
     const month = document.getElementById('selected_month').value;
     const year = document.getElementById('selected_year').value;
-    const device_id = "{{ contract.device_id }}";
+    const device_id = "{{ contract.device_id if contract else '' }}";
+    if (!device_id) return;
 
     fetch(`/billing/get_last_counts?device_id=${device_id}&year=${year}&month=${month}`)
     .then(res => res.json())
     .then(data => {
-        document.getElementById('prev-color-a3').value = data.color_a3;
-        document.getElementById('prev-color').value = data.color;
-        document.getElementById('prev-bw').value = data.bw;
-        document.getElementById('prev-date').innerText = `📅 前次抄表月份：${data.prev_year} 年 ${data.prev_month} 月`;
+        const prevColorA3 = document.getElementById('prev-color-a3');
+        const prevColor = document.getElementById('prev-color');
+        const prevBw = document.getElementById('prev-bw');
+        const prevDate = document.getElementById('prev-date');
+
+        if (prevColorA3) prevColorA3.value = data.color_a3;
+        if (prevColor) prevColor.value = data.color;
+        if (prevBw) prevBw.value = data.bw;
+        if (prevDate) prevDate.innerText = `📅 前次抄表月份：${data.prev_year} 年 ${data.prev_month} 月`;
     })
     .catch(err => console.error(err));
 }
@@ -538,19 +591,16 @@ if (document.getElementById('selected_year')) {
 
 {% if current_user.is_authenticated %}
 <script>
-  // 10 分鐘無動作前端自動登出重導向 (10 分鐘 = 600,000 毫秒)
   let idleTimeout;
   const timeoutTime = 10 * 60 * 1000;
 
-  // 修改前端自動登出觸發邏輯
-	function resetTimer() {
-		clearTimeout(idleTimeout);
-		idleTimeout = setTimeout(function() {
-			alert("由於您已超過 10 分鐘未操作，系統已自動登出。");
-			// 使用 replace 避免留有歷史舊紀錄，並直接跳轉
-			window.location.replace("{{ url_for('billing.logout') }}");
-		}, timeoutTime);
-	}
+  function resetTimer() {
+        clearTimeout(idleTimeout);
+        idleTimeout = setTimeout(function() {
+            alert("由於您已超過 10 分鐘未操作,系統已自動登出。");
+            window.location.replace("{{ url_for('billing.logout') }}");
+        }, timeoutTime);
+    }
 
   window.onload = resetTimer;
   document.onmousemove = resetTimer;

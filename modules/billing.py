@@ -319,25 +319,33 @@ def get_contract(device_id):
 
     float_fields = [
         "monthly_rent", "color_unit_price", "bw_unit_price",
-        "color_a3_unit_price", "color_error_rate", "bw_error_rate", "color_a3_error_rate",
+        "color_a3_unit_price", "color_a3unit_price", 
+        "color_error_rate", "bw_error_rate", "color_a3_error_rate",
+        "color_tier1_price", "color_tier2_price",
+        "color_a3_tier1_price", "color_a3_tier2_price", "color_a3tier1_price",
+        "bw_tier1_price", "bw_tier2_price"
     ]
 
     int_fields = [
         "color_giveaway", "bw_giveaway", "color_a3_giveaway",
         "color_basic", "bw_basic", "color_a3_basic",
+        "color_tier1_limit", "color_a3_tier1_limit", "color_a3tier1_limit",
+        "bw_tier1_limit"
     ]
 
     for k in float_fields:
-        try:
-            contract_row[k] = float(contract_row.get(k) or 0)
-        except Exception:
-            contract_row[k] = 0.0
+        if k in contract_row:
+            try:
+                contract_row[k] = float(contract_row.get(k) or 0)
+            except Exception:
+                contract_row[k] = 0.0
 
     for k in int_fields:
-        try:
-            contract_row[k] = int(float(contract_row.get(k) or 0))
-        except Exception:
-            contract_row[k] = 0
+        if k in contract_row:
+            try:
+                contract_row[k] = int(float(contract_row.get(k) or 0))
+            except Exception:
+                contract_row[k] = 0
 
     return contract_row, contra_text
 
@@ -527,7 +535,8 @@ def get_related_devices(device_id):
 
     conn.close()
     return group
-
+    
+    
 # --- 紀錄使用量 ---
 def insert_usage(device_id, color_a3, color_count, bw_count):
     month = datetime.now().strftime("%Y%m")
@@ -541,7 +550,7 @@ def insert_usage(device_id, color_a3, color_count, bw_count):
     conn.commit()
     conn.close()
 
-# --- 計算邏輯 ---
+# --- 計算邏輯（支援黑白、彩色、彩色A3 階梯式超印費率與基礎張數） ---
 def calculate(contract, curr_color_a3, curr_color, curr_bw, last_color_a3, last_color, last_bw):
     if not contract:
         return None
@@ -551,7 +560,13 @@ def calculate(contract, curr_color_a3, curr_color, curr_bw, last_color_a3, last_
         "color_a3_giveaway", "color_giveaway", "bw_giveaway",
         "color_a3_error_rate", "color_error_rate", "bw_error_rate",
         "color_a3_basic", "color_basic", "bw_basic",
-        "monthly_rent"
+        "monthly_rent",
+        # 🟢 黑白階梯費率相關欄位
+        "bw_tier1_limit", "bw_tier1_price", "bw_tier2_price",
+        # 🟢 彩色階梯費率相關欄位
+        "color_tier1_limit", "color_tier1_price", "color_tier2_price",
+        # 🟢 彩色A3階梯費率相關欄位（統一命名規範）
+        "color_a3_tier1_limit", "color_a3_tier1_price", "color_a3_tier2_price"
     ]
     for key in keys_float:
         try:
@@ -570,24 +585,66 @@ def calculate(contract, curr_color_a3, curr_color, curr_bw, last_color_a3, last_
     used_color    = max(0, curr_color - last_color)
     used_bw       = max(0, curr_bw - last_bw)
 
-    bill_color_a3 = max(0, used_color_a3 - contract["color_a3_giveaway"])
-    bill_color_a3 = int(round(bill_color_a3 * (1 - contract["color_a3_error_rate"])))
+    # --- 彩色 A3 階梯計算 ---
+    excess_color_a3 = max(0, used_color_a3 - contract["color_a3_giveaway"])
+    excess_color_a3 = int(round(excess_color_a3 * (1 - contract["color_a3_error_rate"])))
     if contract["color_a3_basic"] > 0:
-        bill_color_a3 = max(int(contract["color_a3_basic"]), bill_color_a3)
+        excess_color_a3 = max(int(contract["color_a3_basic"]), excess_color_a3)
 
-    bill_color = max(0, used_color - contract["color_giveaway"])
-    bill_color = int(round(bill_color * (1 - contract["color_error_rate"])))
+    bill_color_a3 = excess_color_a3
+    color_a3_tier1_limit = contract.get("color_a3_tier1_limit", 0)
+    
+    tier1_a3_count = 0
+    tier2_a3_count = 0
+    if color_a3_tier1_limit > 0:
+        tier1_a3_count = min(excess_color_a3, color_a3_tier1_limit)
+        tier2_a3_count = max(0, excess_color_a3 - color_a3_tier1_limit)
+        price_a3_tier1 = contract.get("color_a3_tier1_price", contract["color_a3_unit_price"])
+        price_a3_tier2 = contract.get("color_a3_tier2_price", contract["color_a3_unit_price"])
+        color_a3_amount = (tier1_a3_count * price_a3_tier1) + (tier2_a3_count * price_a3_tier2)
+    else:
+        color_a3_amount = bill_color_a3 * contract["color_a3_unit_price"]
+
+    # --- 彩色 A4 階梯計算 ---
+    excess_color = max(0, used_color - contract["color_giveaway"])
+    excess_color = int(round(excess_color * (1 - contract["color_error_rate"])))
     if contract["color_basic"] > 0:
-        bill_color = max(int(contract["color_basic"]), bill_color)
+        excess_color = max(int(contract["color_basic"]), excess_color)
 
-    bill_bw = max(0, used_bw - contract["bw_giveaway"])
-    bill_bw = int(round(bill_bw * (1 - contract["bw_error_rate"])))
+    bill_color = excess_color
+    color_tier1_limit = contract.get("color_tier1_limit", 0)
+    
+    tier1_color_count = 0
+    tier2_color_count = 0
+    if color_tier1_limit > 0:
+        tier1_color_count = min(excess_color, color_tier1_limit)
+        tier2_color_count = max(0, excess_color - color_tier1_limit)
+        price_color_tier1 = contract.get("color_tier1_price", contract["color_unit_price"])
+        price_color_tier2 = contract.get("color_tier2_price", contract["color_unit_price"])
+        color_amount = (tier1_color_count * price_color_tier1) + (tier2_color_count * price_color_tier2)
+    else:
+        color_amount = bill_color * contract["color_unit_price"]
+
+    # --- 黑白階梯計算 ---
+    excess_bw = max(0, used_bw - contract["bw_giveaway"])
+    excess_bw = int(round(excess_bw * (1 - contract["bw_error_rate"])))
     if contract["bw_basic"] > 0:
-        bill_bw = max(int(contract["bw_basic"]), bill_bw)
+        excess_bw = max(int(contract["bw_basic"]), excess_bw)
 
-    color_a3_amount = bill_color_a3 * contract["color_a3_unit_price"]
-    color_amount    = bill_color * contract["color_unit_price"]
-    bw_amount       = bill_bw * contract["bw_unit_price"]
+    bill_bw = excess_bw
+    bw_tier1_limit = contract.get("bw_tier1_limit", 0)
+    
+    tier1_bw_count = 0
+    tier2_bw_count = 0
+    if bw_tier1_limit > 0:
+        tier1_bw_count = min(excess_bw, bw_tier1_limit)
+        tier2_bw_count = max(0, excess_bw - bw_tier1_limit)
+        price_bw_tier1 = contract.get("bw_tier1_price", contract["bw_unit_price"])
+        price_bw_tier2 = contract.get("bw_tier2_price", contract["bw_unit_price"])
+        bw_amount = (tier1_bw_count * price_bw_tier1) + (tier2_bw_count * price_bw_tier2)
+    else:
+        bw_amount = bill_bw * contract["bw_unit_price"]
+    
     subtotal = contract["monthly_rent"] + color_a3_amount + color_amount + bw_amount
 
     tax_rate = 0.05
@@ -600,16 +657,26 @@ def calculate(contract, curr_color_a3, curr_color, curr_bw, last_color_a3, last_
         untaxed = subtotal / (1 + tax_rate)
         tax = total - untaxed
 
+    # 🟢 擴充回傳的明細字典，包含各階梯張數
     return {
         "彩色A3使用張數": used_color_a3,
-        "彩色使用張數": used_color,
-        "黑白使用張數": used_bw,
         "彩色A3計費張數": bill_color_a3,
-        "彩色計費張數": bill_color,
-        "黑白計費張數": bill_bw,
+        "彩色A3_第一階段張數": tier1_a3_count,
+        "彩色A3_第二階段張數": tier2_a3_count,
         "彩色A3金額": round(color_a3_amount, 2),
+
+        "彩色使用張數": used_color,
+        "彩色計費張數": bill_color,
+        "彩色_第一階段張數": tier1_color_count,
+        "彩色_第二階段張數": tier2_color_count,
         "彩色金額": round(color_amount, 2),
+
+        "黑白使用張數": used_bw,
+        "黑白計費張數": bill_bw,
+        "黑白_第一階段張數": tier1_bw_count,
+        "黑白_第二階段張數": tier2_bw_count,
         "黑白金額": round(bw_amount, 2),
+
         "月租金": round(contract["monthly_rent"], 2),
         "未稅小計": round(untaxed, 2),
         "稅額": round(tax, 2),
@@ -733,7 +800,7 @@ def load_billing_summary(device_id, year):
         }
 
     return months
-
+    
 # --- 主頁面路由 ---
 @billing_bp.route("/", methods=["GET", "POST"])
 def index():
@@ -824,31 +891,80 @@ def index():
             else:
                 message = f"❌ 找不到設備 {device_id}"
 
-        elif mode in ["update_contract", "update_customer", "delete_customer", "new_customer"]:
-            if mode == "update_contract":
-                contract_data = {
-                    "monthly_rent": float(request.form.get("monthly_rent") or 0),
-                    "color_unit_price": float(request.form.get("color_unit_price") or 0),
-                    "bw_unit_price": float(request.form.get("bw_unit_price") or 0),
-                    "color_giveaway": to_int(request.form.get("color_giveaway")),
-                    "bw_giveaway": to_int(request.form.get("bw_giveaway")),
-                    "color_error_rate": float(request.form.get("color_error_rate") or 0),
-                    "bw_error_rate": float(request.form.get("bw_error_rate") or 0),
-                    "color_basic": to_int(request.form.get("color_basic")),
-                    "bw_basic": to_int(request.form.get("bw_basic")),
-                    "color_a3_unit_price": float(request.form.get("color_a3_unit_price") or 0),
-                    "color_a3_giveaway": to_int(request.form.get("color_a3_giveaway")),
-                    "color_a3_error_rate": float(request.form.get("color_a3_error_rate") or 0),
-                    "color_a3_basic": to_int(request.form.get("color_a3_basic")),
-                    "tax_type": request.form.get("tax_type", "含稅"),
-                    "contra": request.form.get("contra", "").strip()
-                }
+        elif mode == "update_contract":
+            contract_data = {
+                "monthly_rent": float(request.form.get("monthly_rent") or 0),
+                "tax_type": request.form.get("tax_type", "含稅"),
+                "contra": request.form.get("contra", "").strip(),
+                "master_device_id": request.form.get("master_device_id", "").strip(),
+                
+                # 黑白設定
+                "bw_unit_price": float(request.form.get("bw_unit_price") or 0),
+                "bw_giveaway": to_int(request.form.get("bw_giveaway")),
+                "bw_basic": to_int(request.form.get("bw_basic")),
+                "bw_error_rate": float(request.form.get("bw_error_rate") or 0),
+                "bw_tier1_limit": to_int(request.form.get("bw_tier1_limit")),
+                "bw_tier1_price": float(request.form.get("bw_tier1_price") or 0),
+                "bw_tier2_price": float(request.form.get("bw_tier2_price") or 0),
 
-                update_contract(device_id, contract_data)
-                return redirect(url_for("billing.index", device_id=device_id, message="✅ 契約條件已更新"))
+                # 彩色 A4 設定
+                "color_unit_price": float(request.form.get("color_unit_price") or 0),
+                "color_giveaway": to_int(request.form.get("color_giveaway")),
+                "color_basic": to_int(request.form.get("color_basic")),
+                "color_error_rate": float(request.form.get("color_error_rate") or 0),
+                "color_tier1_limit": to_int(request.form.get("color_tier1_limit")),
+                "color_tier1_price": float(request.form.get("color_tier1_price") or 0),
+                "color_tier2_price": float(request.form.get("color_tier2_price") or 0),
 
-            elif mode == "update_customer":
-                customer_data = {
+                # 彩色 A3 設定
+                "color_a3_unit_price": float(request.form.get("color_a3_unit_price") or 0),
+                "color_a3_giveaway": to_int(request.form.get("color_a3_giveaway")),
+                "color_a3_basic": to_int(request.form.get("color_a3_basic")),
+                "color_a3_error_rate": float(request.form.get("color_a3_error_rate") or 0),
+                "color_a3_tier1_limit": to_int(request.form.get("color_a3_tier1_limit")),
+                "color_a3_tier1_price": float(request.form.get("color_a3_tier1_price") or 0),
+                "color_a3_tier2_price": float(request.form.get("color_a3_tier2_price") or 0)
+            }
+        
+            update_contract(device_id, contract_data)
+            return redirect(url_for("billing.index", device_id=device_id, message="✅ 契約條件已更新"))
+
+        elif mode == "update_customer":
+            customer_data = {
+                "customer_name": request.form.get("customer_name", "").strip(),
+                "device_number": request.form.get("device_number", "").strip(),
+                "machine_model": request.form.get("machine_model", "").strip(),
+                "tax_id": request.form.get("tax_id", "").strip(),
+                "install_address": request.form.get("install_address", "").strip(),
+                "service_person": request.form.get("service_person", "").strip(),
+                "contract_number": request.form.get("contract_number", "").strip(),
+                "contract_start": request.form.get("contract_start", "").strip(),
+                "contract_end": request.form.get("contract_end", "").strip(),
+                "pm": request.form.get("pm", "").strip()
+            }
+            update_customer(device_id, customer_data)
+            return redirect(url_for("billing.index", device_id=device_id, message="✅ 客戶資料已更新"))
+
+        elif mode == "delete_customer":
+            delete_customer(device_id)
+            message = f"🗑 已刪除客戶（設備編號：{device_id}）"
+
+        elif mode == "new_customer":
+            old_id = request.form.get("device_id")
+            new_id = request.form.get("device_id_new", "").strip()
+
+            old_customer = get_customer(old_id)
+            old_contract, _ = get_contract(old_id)
+
+            if not old_customer or not old_contract:
+                message = "❌ 找不到原始客戶或契約資料，無法建檔。"
+            elif not new_id:
+                message = "⚠️ 請輸入新設備編號。"
+            elif get_customer(new_id):
+                message = "❌ 此設備編號已存在，請使用不同編號。"
+            else:
+                new_customer_data = {
+                    "device_id": new_id,
                     "customer_name": request.form.get("customer_name", "").strip(),
                     "device_number": request.form.get("device_number", "").strip(),
                     "machine_model": request.form.get("machine_model", "").strip(),
@@ -860,73 +976,52 @@ def index():
                     "contract_end": request.form.get("contract_end", "").strip(),
                     "pm": request.form.get("pm", "").strip()
                 }
-                update_customer(device_id, customer_data)
-                return redirect(url_for("billing.index", device_id=device_id, message="✅ 客戶資料已更新"))
 
-            elif mode == "delete_customer":
-                delete_customer(device_id)
-                message = f"🗑 已刪除客戶（設備編號：{device_id}）"
+                new_contract_data = {
+                    "device_id": new_id,
+                    "monthly_rent": old_contract.get("monthly_rent", 0),
+                    "tax_type": old_contract.get("tax_type", ""),
+                    "contra": old_contract.get("contra", ""),
+                    "master_device_id": old_contract.get("master_device_id", ""),
+                    
+                    "bw_unit_price": old_contract.get("bw_unit_price", 0),
+                    "bw_giveaway": old_contract.get("bw_giveaway", 0),
+                    "bw_basic": old_contract.get("bw_basic", 0),
+                    "bw_error_rate": old_contract.get("bw_error_rate", 0),
+                    "bw_tier1_limit": old_contract.get("bw_tier1_limit", 0),
+                    "bw_tier1_price": old_contract.get("bw_tier1_price", 0),
+                    "bw_tier2_price": old_contract.get("bw_tier2_price", 0),
 
-            elif mode == "new_customer":
-                old_id = request.form.get("device_id")
-                new_id = request.form.get("device_id_new", "").strip()
+                    "color_unit_price": old_contract.get("color_unit_price", 0),
+                    "color_giveaway": old_contract.get("color_giveaway", 0),
+                    "color_basic": old_contract.get("color_basic", 0),
+                    "color_error_rate": old_contract.get("color_error_rate", 0),
+                    "color_tier1_limit": old_contract.get("color_tier1_limit", 0),
+                    "color_tier1_price": old_contract.get("color_tier1_price", 0),
+                    "color_tier2_price": old_contract.get("color_tier2_price", 0),
 
-                old_customer = get_customer(old_id)
-                old_contract, _ = get_contract(old_id)
+                    "color_a3_unit_price": old_contract.get("color_a3_unit_price", 0),
+                    "color_a3_giveaway": old_contract.get("color_a3_giveaway", 0),
+                    "color_a3_basic": old_contract.get("color_a3_basic", 0),
+                    "color_a3_error_rate": old_contract.get("color_a3_error_rate", 0),
+                    "color_a3_tier1_limit": old_contract.get("color_a3_tier1_limit", 0),
+                    "color_a3_tier1_price": old_contract.get("color_a3_tier1_price", 0),
+                    "color_a3_tier2_price": old_contract.get("color_a3_tier2_price", 0)
+                }
 
-                if not old_customer or not old_contract:
-                    message = "❌ 找不到原始客戶或契約資料，無法建檔。"
-                elif not new_id:
-                    message = "⚠️ 請輸入新設備編號。"
-                elif get_customer(new_id):
-                    message = "❌ 此設備編號已存在，請使用不同編號。"
+                ok1 = insert_customer(new_id, new_customer_data)
+                ok2 = insert_contract(new_id, new_contract_data)
+
+                if not ok1 or not ok2:
+                    message = "❌ 新客戶建檔失敗（Google Sheet 寫入錯誤）"
                 else:
-                    new_customer_data = {
-                        "device_id": new_id,
-                        "customer_name": request.form.get("customer_name", "").strip(),
-                        "device_number": request.form.get("device_number", "").strip(),
-                        "machine_model": request.form.get("machine_model", "").strip(),
-                        "tax_id": request.form.get("tax_id", "").strip(),
-                        "install_address": request.form.get("install_address", "").strip(),
-                        "service_person": request.form.get("service_person", "").strip(),
-                        "contract_number": request.form.get("contract_number", "").strip(),
-                        "contract_start": request.form.get("contract_start", "").strip(),
-                        "contract_end": request.form.get("contract_end", "").strip(),
-                        "pm": request.form.get("pm", "").strip()
-                    }
-
-                    new_contract_data = {
-                        "device_id": new_id,
-                        "monthly_rent": old_contract.get("monthly_rent", 0),
-                        "color_unit_price": old_contract.get("color_unit_price", 0),
-                        "bw_unit_price": old_contract.get("bw_unit_price", 0),
-                        "color_giveaway": old_contract.get("color_giveaway", 0),
-                        "bw_giveaway": old_contract.get("bw_giveaway", 0),
-                        "color_error_rate": old_contract.get("color_error_rate", 0),
-                        "bw_error_rate": old_contract.get("bw_error_rate", 0),
-                        "color_basic": old_contract.get("color_basic", 0),
-                        "bw_basic": old_contract.get("bw_basic", 0),
-                        "color_a3_unit_price": old_contract.get("color_a3_unit_price", 0),
-                        "color_a3_giveaway": old_contract.get("color_a3_giveaway", 0),
-                        "color_a3_error_rate": old_contract.get("color_a3_error_rate", 0),
-                        "color_a3_basic": old_contract.get("color_a3_basic", 0),
-                        "tax_type": old_contract.get("tax_type", ""),
-                        "contra": old_contract.get("contra", "")
-                    }
-
-                    ok1 = insert_customer(new_id, new_customer_data)
-                    ok2 = insert_contract(new_id, new_contract_data)
-
-                    if not ok1 or not ok2:
-                        message = "❌ 新客戶建檔失敗（Google Sheet 寫入錯誤）"
-                    else:
-                        return redirect(
-                            url_for(
-                                "billing.index",
-                                device_id=new_id,
-                                message="✅ 新客戶建檔成功！"
-                            )
+                    return redirect(
+                        url_for(
+                            "billing.index",
+                            device_id=new_id,
+                            message="✅ 新客戶建檔成功！"
                         )
+                    )
 
     elif request.args.get("device_id"):
         q_device = request.args.get("device_id")
