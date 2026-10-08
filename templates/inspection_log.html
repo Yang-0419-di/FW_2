@@ -74,7 +74,7 @@ h1, h2 { text-align: center; color: #333; margin-bottom: 20px; }
 .nav-btn-gray { background-color: #6c757d; }
 .nav-btn-gray:hover { background-color: #495057; }
 
-/* ===== 卡片容器樣式 (IP 與 裝置指紋共用) ===== */
+/* ===== 卡片容器樣式 ===== */
 .card-container {
     background: #ffffff;
     border: 1px solid #e2e8f0;
@@ -187,7 +187,7 @@ tr:hover { background-color: #f1f5f9; }
             </div>
         </div>
 
-        <!-- 💻 裝置指紋卡片區塊 -->
+        <!-- 💻 裝置指紋卡片區塊（僅顯示不重複） -->
         <div class="card-container">
             <h3>💻 此帳號曾使用的裝置指紋清單</h3>
             <div class="badges-wrap" style="flex-direction: column; gap: 6px;">
@@ -195,7 +195,7 @@ tr:hover { background-color: #f1f5f9; }
                     {% set unique_fps = logs | map(attribute='fingerprint') | select('string') | reject('equalto', '') | reject('equalto', 'None') | unique | list %}
                     {% if unique_fps %}
                         {% for fp in unique_fps %}
-                            <div><code class="badge-fingerprint">🔑 {{ fp }}</code></div>
+                            <div><code class="badge-fingerprint">📱 {{ fp }}</code></div>
                         {% endfor %}
                     {% else %}
                         <span style="color: #64748b; font-size: 14px;">尚無裝置指紋紀錄</span>
@@ -214,7 +214,7 @@ tr:hover { background-color: #f1f5f9; }
                     <th style="width: 20%;">IP 位址</th>
                     <th style="width: 20%;">登入日期</th>
                     <th style="width: 20%;">登入時間</th>
-                    <th style="width: 30%;">裝置指紋</th>
+                    <th style="width: 30%;">裝置資訊 / 指紋</th>
                 </tr>
             </thead>
             <tbody>
@@ -332,48 +332,72 @@ window.addEventListener("pageshow", function () {
   document.onclick = resetTimer;
   document.onscroll = resetTimer;
 
-  // 自動生成裝置指紋
-  // 更穩健的手機相容指紋生成函數
-  function getBasicFingerprint() {
+  // 💡 結合可讀裝置資訊與短 Base64 指紋雜湊
+  function getReadableDeviceFingerprint() {
+      const ua = navigator.userAgent;
+      let deviceName = "Unknown Device";
+      let browserName = "Unknown Browser";
+
+      // 1. 解析作業系統與主要裝置品牌
+      if (/iphone/i.test(ua)) {
+          deviceName = "Apple iPhone";
+      } else if (/ipad/i.test(ua)) {
+          deviceName = "Apple iPad";
+      } else if (/macintosh|mac os x/i.test(ua)) {
+          deviceName = "Mac";
+      } else if (/android/i.test(ua)) {
+          deviceName = "Android Device";
+          const match = ua.match(/\b([A-Z0-9]+-[A-Z0-9]+)\b/);
+          if (match) { deviceName = "Android (" + match[1] + ")"; }
+      } else if (/win/i.test(ua)) {
+          deviceName = "Windows PC";
+      } else if (/linux/i.test(ua)) {
+          deviceName = "Linux PC";
+      }
+
+      // 2. 解析瀏覽器
+      if (/edg/i.test(ua)) {
+          browserName = "Edge";
+      } else if (/chrome/i.test(ua) && !/chromium/i.test(ua)) {
+          browserName = "Chrome";
+      } else if (/safari/i.test(ua) && !/chrome/i.test(ua)) {
+          browserName = "Safari";
+      } else if (/firefox/i.test(ua)) {
+          browserName = "Firefox";
+      } else if (/line/i.test(ua)) {
+          browserName = "LINE App";
+      }
+
+      // 3. 螢幕解析度
+      const res = screen.width + "x" + screen.height;
+      
+      // 4. 產生短 Base64 指紋雜湊（對應您原本的 TW96aWxsYS81LjAg... 格式）
+      let shortHash = "fingerprint_error";
       try {
-          let renderer = 'unknown';
-          try {
-              const canvas = document.createElement('canvas');
-              const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-              if (gl) {
-                  const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
-                  if (debugInfo) {
-                      renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
-                  } else {
-                      renderer = gl.getParameter(gl.RENDERER);
-                  }
-              }
-          } catch (e) {
-              // 若 WebGL 讀取失敗則略過，不影響其他指紋組合
-          }
+          const canvas = document.createElement('canvas');
+          const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+          let renderer = gl ? gl.getParameter(gl.RENDERER) : 'unknown';
           
           const data = [
-              navigator.userAgent || '',
+              ua,
               navigator.language || '',
-              screen.width + 'x' + screen.height,
+              res,
               Intl.DateTimeFormat().resolvedOptions().timeZone || '',
               renderer
           ].join('|');
           
-          // 使用更安全的方式轉 Base64，避免手機特殊字元報錯
-          return btoa(encodeURIComponent(data).replace(/%([0-9A-F]{2})/g, function(match, p1) {
-              return String.fromCharCode('0x' + p1);
-          })).substring(0, 32);
-          
+          shortHash = btoa(unescape(encodeURIComponent(data))).substring(0, 32);
       } catch (e) {
-          console.error('手機指紋生成例外錯誤:', e);
-          // 若真的完全不支援，退回純 userAgent 的簡單雜湊或識別碼
-          return 'mobile_fallback_' + (navigator.platform || 'unknown');
+          shortHash = btoa(unescape(encodeURIComponent(ua))).substring(0, 32);
       }
+
+      // 5. 結合成您要的格式：Windows PC / Chrome (1440x900)-TW96aWxsYS81LjAg...
+      return `${deviceName} / ${browserName} (${res})-${shortHash}`;
   }
 
   window.addEventListener('DOMContentLoaded', function() {
-      const fingerprint = getBasicFingerprint();
+      const fingerprint = getReadableDeviceFingerprint();
+      console.log('解析出的裝置資訊:', fingerprint);
       
       fetch('/api/save_log', {
           method: 'POST',
@@ -395,7 +419,7 @@ window.addEventListener("pageshow", function () {
       })
       .then(data => {
           if (data) {
-              console.log('✅ 裝置指紋同步成功:', data);
+              console.log('✅ 裝置資訊同步成功:', data);
           }
       })
       .catch(error => {
