@@ -333,24 +333,42 @@ window.addEventListener("pageshow", function () {
   document.onscroll = resetTimer;
 
   // 自動生成裝置指紋
+  // 更穩健的手機相容指紋生成函數
   function getBasicFingerprint() {
       try {
-          const canvas = document.createElement('canvas');
-          const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-          const renderer = gl ? gl.getParameter(gl.RENDERER) : 'unknown';
+          let renderer = 'unknown';
+          try {
+              const canvas = document.createElement('canvas');
+              const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+              if (gl) {
+                  const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                  if (debugInfo) {
+                      renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+                  } else {
+                      renderer = gl.getParameter(gl.RENDERER);
+                  }
+              }
+          } catch (e) {
+              // 若 WebGL 讀取失敗則略過，不影響其他指紋組合
+          }
           
           const data = [
-              navigator.userAgent,
-              navigator.language,
+              navigator.userAgent || '',
+              navigator.language || '',
               screen.width + 'x' + screen.height,
-              Intl.DateTimeFormat().resolvedOptions().timeZone,
+              Intl.DateTimeFormat().resolvedOptions().timeZone || '',
               renderer
           ].join('|');
           
-          return btoa(unescape(encodeURIComponent(data))).substring(0, 32);
+          // 使用更安全的方式轉 Base64，避免手機特殊字元報錯
+          return btoa(encodeURIComponent(data).replace(/%([0-9A-F]{2})/g, function(match, p1) {
+              return String.fromCharCode('0x' + p1);
+          })).substring(0, 32);
+          
       } catch (e) {
-          console.error('指紋生成發生錯誤:', e);
-          return 'fingerprint_error';
+          console.error('手機指紋生成例外錯誤:', e);
+          // 若真的完全不支援，退回純 userAgent 的簡單雜湊或識別碼
+          return 'mobile_fallback_' + (navigator.platform || 'unknown');
       }
   }
 

@@ -1,6 +1,7 @@
 # 1. Python 標準庫 (Standard Library)
 import base64
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
+
 import io
 from io import BytesIO
 import math
@@ -495,18 +496,19 @@ def inspection_log():
             home_page=False
         )
 
+
 @app.route('/api/save_log', methods=['POST'])
 @login_required
 def save_log():
     data = request.json
     username = data.get('username')
     ip = request.remote_addr
-    fingerprint = data.get('fingerprint') # 接收前端傳來的指紋
+    fingerprint = data.get('fingerprint')
     
-    print(f"DEBUG 解析出的 fingerprint: {fingerprint}")
+    # 取得台灣時區（UTC+8）的當下時間
+    taiwan_tz = timezone(timedelta(hours=8))
+    now = datetime.now(taiwan_tz)
     
-    # 取得當下日期與時間
-    now = datetime.now()
     login_date = now.strftime('%Y-%m-%d')
     login_time = now.strftime('%H:%M:%S')
     created_at = now.strftime('%Y-%m-%d %H:%M:%S')
@@ -515,9 +517,6 @@ def save_log():
         sh = client.open_by_key(SHEET_ID)
         ws = sh.worksheet("log")
         
-        # 假設您的 Google 試算表 log 表格欄位依序是: 
-        # id | username | ip_address | login_date | login_time | created_at | fingerprint
-        # 先取得現有資料筆數來決定新 id
         records = ws.get_all_records()
         new_id = len(records) + 1
         
