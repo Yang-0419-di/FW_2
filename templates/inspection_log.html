@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>系統登入日誌 - TG客戶系統</title>
+<title>{% if view_mode == 'detail' %}帳號登入詳情 ({{ target_username }}) - TG客戶系統{% else %}系統登入日誌 - TG客戶系統{% endif %}</title>
 
 <style>
 /* ===== 全域與版面基礎 ===== */
@@ -15,10 +15,10 @@ body {
     position: relative;
 }
 .content-wrap {
-    max-width: 800px;
+    max-width: 1000px;
     margin: 0 auto;
 }
-h1 { text-align: center; color: #333; margin-bottom: 20px; }
+h1, h2 { text-align: center; color: #333; margin-bottom: 20px; }
 
 /* ===== 右上角登出資訊區塊 ===== */
 .user-header-info {
@@ -74,18 +74,45 @@ h1 { text-align: center; color: #333; margin-bottom: 20px; }
 .nav-btn-gray { background-color: #6c757d; }
 .nav-btn-gray:hover { background-color: #495057; }
 
-/* ===== 分頁按鈕區塊 ===== */
-.pagination {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 12px;
-    margin-top: 20px;
+/* ===== 卡片容器樣式 (IP 與 裝置指紋共用) ===== */
+.card-container {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
-.pagination-disabled {
-    background-color: #007BFF;
-    opacity: 0.4;
-    cursor: not-allowed !important;
+.card-container h3 {
+    margin: 0 0 10px 0;
+    font-size: 16px;
+    color: #1e293b;
+    text-align: left;
+}
+.badges-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* ===== 標籤樣式 ===== */
+.badge-ip {
+    background-color: #e2e8f0;
+    color: #334155;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 14px;
+}
+.badge-fingerprint {
+    background-color: #f1f5f9;
+    color: #0f172a;
+    border: 1px solid #cbd5e1;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-family: monospace;
+    font-size: 13px;
+    word-break: break-all;
 }
 
 /* ===== 表格樣式 ===== */
@@ -113,13 +140,13 @@ th {
 tr:nth-child(even) { background-color: #f8fafc; }
 tr:hover { background-color: #f1f5f9; }
 
-.badge-ip {
-    background-color: #e2e8f0;
-    color: #334155;
-    padding: 3px 8px;
-    border-radius: 4px;
-    font-family: monospace;
-    font-size: 14px;
+.link-detail {
+    color: #007BFF;
+    text-decoration: none;
+    font-weight: bold;
+}
+.link-detail:hover {
+    text-decoration: underline;
 }
 </style>
 </head>
@@ -135,63 +162,131 @@ tr:hover { background-color: #f1f5f9; }
 {% endif %}
 
 <div class="content-wrap">
-    <h1>📜 系統登入日誌</h1>
+    
+    {% if view_mode == 'detail' %}
+        <!-- ================= 模式二：個別帳號詳細紀錄 ================= -->
+        <h1>🔍 帳號登入詳情：{{ target_username }}</h1>
 
-    <div class="nav-buttons">
-        <a href="{{ url_for('billing.index') }}" class="nav-btn-blue">回 TG 客戶系統</a>
-        <button type="button" onclick="history.back()" class="nav-btn-gray">← 返回上一頁</button>
-        <a href="/" class="nav-btn-gray">回首頁</a>
-    </div>
+        <div class="nav-buttons">
+            <a href="{{ url_for('inspection_log') }}" class="nav-btn-gray">← 返回帳號列表</a>
+            <a href="{{ url_for('billing.index') }}" class="nav-btn-blue">回 TG 客戶系統</a>
+            <a href="/" class="nav-btn-gray">回首頁</a>
+        </div>
 
-    <table>
-        <thead>
-            <tr>
-                <th style="width: 10%;">流水號</th>
-                <th style="width: 25%;">登入帳號</th>
-                <th style="width: 25%;">IP 位址</th>
-                <th style="width: 20%;">登入日期</th>
-                <th style="width: 20%;">登入時間</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% if logs %}
-                {% for log in logs %}
+        <!-- 🌐 IP 卡片區塊 -->
+        <div class="card-container">
+            <h3>🌐 此帳號曾使用的 IP 位址清單（共 {{ unique_ips | length }} 個）</h3>
+            <div class="badges-wrap">
+                {% if unique_ips %}
+                    {% for ip in unique_ips %}
+                        <span class="badge-ip">{{ ip }}</span>
+                    {% endfor %}
+                {% else %}
+                    <span style="color: #64748b; font-size: 14px;">無紀錄</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- 💻 裝置指紋卡片區塊 -->
+        <div class="card-container">
+            <h3>💻 此帳號曾使用的裝置指紋清單</h3>
+            <div class="badges-wrap" style="flex-direction: column; gap: 6px;">
+                {% if logs %}
+                    {% set unique_fps = logs | map(attribute='fingerprint') | select('string') | reject('equalto', '') | reject('equalto', 'None') | unique | list %}
+                    {% if unique_fps %}
+                        {% for fp in unique_fps %}
+                            <div><code class="badge-fingerprint">🔑 {{ fp }}</code></div>
+                        {% endfor %}
+                    {% else %}
+                        <span style="color: #64748b; font-size: 14px;">尚無裝置指紋紀錄</span>
+                    {% endif %}
+                {% else %}
+                    <span style="color: #64748b; font-size: 14px;">尚無紀錄</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- 詳情列表表格 -->
+        <table>
+            <thead>
                 <tr>
-                    <td>{{ log.id }}</td>
-                    <td style="font-weight: bold; color: #0f172a;">{{ log.username }}</td>
-                    <td><span class="badge-ip">{{ log.ip_address }}</span></td>
-                    <td>{{ log.login_date }}</td>
-                    <td>{{ log.login_time }}</td>
+                    <th style="width: 10%;">流水號</th>
+                    <th style="width: 20%;">IP 位址</th>
+                    <th style="width: 20%;">登入日期</th>
+                    <th style="width: 20%;">登入時間</th>
+                    <th style="width: 30%;">裝置指紋</th>
                 </tr>
-                {% endfor %}
-            {% else %}
+            </thead>
+            <tbody>
+                {% if logs %}
+                    {% for log in logs %}
+                    <tr>
+                        <td>{{ log.id }}</td>
+                        <td><span class="badge-ip">{{ log.ip_address }}</span></td>
+                        <td>{{ log.login_date }}</td>
+                        <td>{{ log.login_time }}</td>
+                        <td>
+                            <code style="font-size: 12px; color: #334155;">
+                                {% if log.fingerprint and log.fingerprint != 'None' and log.fingerprint != '' %}
+                                    {{ log.fingerprint }}
+                                {% else %}
+                                    無
+                                {% endif %}
+                            </code>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="5" style="color: #64748b; padding: 20px;">尚無詳細登入紀錄</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+
+    {% else %}
+        <!-- ================= 模式一：帳號總覽首頁 ================= -->
+        <h1>📜 系統登入日誌（帳號總覽）</h1>
+
+        <div class="nav-buttons">
+            <a href="{{ url_for('billing.index') }}" class="nav-btn-blue">回 TG 客戶系統</a>
+            <button type="button" onclick="history.back()" class="nav-btn-gray">← 返回上一頁</button>
+            <a href="/" class="nav-btn-gray">回首頁</a>
+        </div>
+
+        <table>
+            <thead>
                 <tr>
-                    <td colspan="5" style="color: #64748b; padding: 20px;">尚無登入紀錄</td>
+                    <th style="width: 30%;">登入帳號</th>
+                    <th style="width: 30%;">最後登入 IP</th>
+                    <th style="width: 40%;">最後登入時間</th>
                 </tr>
-            {% endif %}
-        </tbody>
-    </table>
-
-    <!-- 📄 分頁控制按鈕 -->
-    {% if total_pages and total_pages > 1 %}
-    <div class="pagination">
-        {% if page > 1 %}
-            <a href="{{ url_for('inspection_log', page=page-1) }}" class="nav-btn-blue">上一頁</a>
-        {% else %}
-            <button class="nav-btn-blue pagination-disabled" disabled>上一頁</button>
-        {% endif %}
-
-        <span style="font-weight: bold; color: #475569;">第 {{ page }} / {{ total_pages }} 頁（共 {{ total_logs }} 筆）</span>
-
-        {% if page < total_pages %}
-            <a href="{{ url_for('inspection_log', page=page+1) }}" class="nav-btn-blue">下一頁</a>
-        {% else %}
-            <button class="nav-btn-blue pagination-disabled" disabled>下一頁</button>
-        {% endif %}
-    </div>
+            </thead>
+            <tbody>
+                {% if summary_list %}
+                    {% for item in summary_list %}
+                    <tr>
+                        <td>
+                            <a href="{{ url_for('inspection_log', username=item.username) }}" class="link-detail">
+                                👤 {{ item.username }}
+                            </a>
+                        </td>
+                        <td><span class="badge-ip">{{ item.last_ip }}</span></td>
+                        <td>{{ item.last_date }} {{ item.last_time }}</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="3" style="color: #64748b; padding: 20px;">尚無登入紀錄</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
     {% endif %}
+
 </div>
 
+<!-- 全域載入動畫 -->
 <div id="global-loading" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); z-index:9999; justify-content:center; align-items:center;">
     <div style="background:white; padding:30px 50px; border-radius:12px; font-size:22px; font-weight:bold; box-shadow:0 4px 20px rgba(0,0,0,0.3);">
         ⏳ 加載中...請稍後
@@ -220,7 +315,6 @@ window.addEventListener("pageshow", function () {
 
 {% if current_user.is_authenticated %}
 <script>
-  // 10 分鐘無動作前端自動登出重導向
   let idleTimeout;
   const timeoutTime = 10 * 60 * 1000;
 
@@ -237,6 +331,59 @@ window.addEventListener("pageshow", function () {
   document.onkeydown = resetTimer;
   document.onclick = resetTimer;
   document.onscroll = resetTimer;
+
+  // 自動生成裝置指紋
+  function getBasicFingerprint() {
+      try {
+          const canvas = document.createElement('canvas');
+          const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+          const renderer = gl ? gl.getParameter(gl.RENDERER) : 'unknown';
+          
+          const data = [
+              navigator.userAgent,
+              navigator.language,
+              screen.width + 'x' + screen.height,
+              Intl.DateTimeFormat().resolvedOptions().timeZone,
+              renderer
+          ].join('|');
+          
+          return btoa(unescape(encodeURIComponent(data))).substring(0, 32);
+      } catch (e) {
+          console.error('指紋生成發生錯誤:', e);
+          return 'fingerprint_error';
+      }
+  }
+
+  window.addEventListener('DOMContentLoaded', function() {
+      const fingerprint = getBasicFingerprint();
+      
+      fetch('/api/save_log', {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+              username: "{{ current_user.username }}",
+              fingerprint: fingerprint
+          })
+      })
+      .then(async response => {
+          if (!response.ok) {
+              const errorText = await response.text();
+              console.error(`❌ 伺服器回應錯誤 [狀態碼 ${response.status}]:`, errorText);
+              return null;
+          }
+          return response.json();
+      })
+      .then(data => {
+          if (data) {
+              console.log('✅ 裝置指紋同步成功:', data);
+          }
+      })
+      .catch(error => {
+          console.error('❌ 網路請求發生例外錯誤:', error);
+      });
+  });
 </script>
 {% endif %}
 

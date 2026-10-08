@@ -287,6 +287,7 @@
                 data.forEach(row => {
                     const tr = document.createElement('tr');
                     tr.setAttribute('data-store-id', row['門店編號'] || '');
+                    tr.setAttribute('data-work-no', row['台芝工作案號'] || ''); // 👈 儲存工作案號在 tr 屬性中
                     tr.innerHTML = `
                         <td>${row['離場時間'] || ''}</td>
                         <td>${row['門店編號'] || ''}</td>
@@ -340,21 +341,21 @@
 // 儲存 SC/TM 數值至 Google Sheet
 function saveDiskRow(btn) {
     const tr = btn.closest('tr');
-    
-    // 取得 td 內容 (根據 HTML <td> 的實際位置調整索引)
     const tds = tr.querySelectorAll('td');
-    
+    const workNo = tr.getAttribute('data-work-no') || ''; // 👈 抓取工作案號
+
     const payload = {
         action: 'save',
-        leave_time: tds[0].innerText.trim(),    // A欄: 離場時間
-        store_id: tds[1].innerText.trim(),      // B欄: 門店編號
-        store_name: tds[2].innerText.trim(),    // C欄: 門店名稱
-        repair_cat: tds[3].innerText.trim(),    // D欄: 報修類別
-        work_content: tds[4].innerText.trim(),  // E欄: 工作內容
-        sc1: tr.querySelector('.sc1').value.trim(), // F欄: SC(1)
-        sc2: tr.querySelector('.sc2').value.trim(), // G欄: SC(2)
-        tm1: tr.querySelector('.tm1').value.trim(), // H欄: TM(1)
-        tm2: tr.querySelector('.tm2').value.trim()  // I欄: TM(2)
+        work_no: workNo,                                  // 👈 帶入 work_no
+        leave_time: tds[0].innerText.trim(),
+        store_id: tds[1].innerText.trim(),
+        store_name: tds[2].innerText.trim(),
+        repair_cat: tds[3].innerText.trim(),
+        work_content: tds[4].innerText.trim(),
+        sc1: tr.querySelector('.sc1').value.trim(),
+        sc2: tr.querySelector('.sc2').value.trim(),
+        tm1: tr.querySelector('.tm1').value.trim(),
+        tm2: tr.querySelector('.tm2').value.trim()
     };
 
     fetch('/sc_disk/update', {
@@ -375,16 +376,17 @@ function deleteDiskRow(btn) {
     
     const tr = btn.closest('tr');
     const store_id = tr.children[1].innerText.trim();
+    const workNo = tr.getAttribute('data-work-no') || ''; // 👈 抓取工作案號
 
     fetch('/sc_disk/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'delete', store_id: store_id })
+        body: JSON.stringify({ action: 'delete', store_id: store_id, work_no: workNo }) // 👈 帶入 work_no
     })
     .then(res => res.json())
     .then(data => {
         alert(data.message);
-        tr.remove(); // 成功後將畫面的 Row 移除
+        tr.remove();
     })
     .catch(err => alert('刪除失敗: ' + err));
 }

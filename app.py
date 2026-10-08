@@ -180,7 +180,7 @@ def get_sc_disk_data():
     sc_disk_data = []
     try:
         df_im = clean_df(pd.read_excel(xls, sheet_name='IM'))
-
+        
         cond_category = df_im['報修類別'].astype(str).isin(['HL-TM主機', 'HL-SC主機'])
         content_col = '工作內容' if '工作內容' in df_im.columns else df_im.columns[28]
         cond_content = (
@@ -207,9 +207,12 @@ def get_sc_disk_data():
 
         for _, row in df_filtered.iterrows():
             store_id = str(row.get('門店編號', '')).strip()
+            # 取得台芝工作案號作為唯一 Key（clean_df 會將 \n 濾掉，所以抓 '台芝工作案號'）
+            work_no = str(row.get('台芝工作案號', '')).strip()
+
             matched = pd.DataFrame()
-            if not gs_df.empty and '門店編號' in gs_df.columns:
-                matched = gs_df[gs_df['門店編號'].astype(str).str.strip() == store_id]
+            if not gs_df.empty and '台芝工作案號' in gs_df.columns:
+                matched = gs_df[gs_df['台芝工作案號'].astype(str).str.strip() == work_no]
 
             if not matched.empty and 'SC(1)' in matched.columns:
                 if str(matched.iloc[0]['SC(1)']).strip() == 'DELETED':
@@ -221,6 +224,7 @@ def get_sc_disk_data():
                 '門店名稱': str(row.get('門店名稱', '')),
                 '報修類別': str(row.get('報修類別', '')),
                 '工作內容': str(row.get(content_col, '')),
+                '台芝工作案號': work_no,  # 👈 確保有加上這一行
                 'SC1': matched.iloc[0]['SC(1)'] if not matched.empty and 'SC(1)' in matched.columns else '',
                 'SC2': matched.iloc[0]['SC(2)'] if not matched.empty and 'SC(2)' in matched.columns else '',
                 'TM1': matched.iloc[0]['TM(1)'] if not matched.empty and 'TM(1)' in matched.columns else '',
@@ -430,43 +434,99 @@ def inspection_log():
     if current_user.username != 'yang.di':
         abort(403)
 
+    target_username = request.args.get('username')
     logs = []
+    
     try:
         sh = client.open_by_key(SHEET_ID)
         ws = sh.worksheet("log")
-        logs = ws.get_all_records()
-        logs.reverse()  # 讓最新的登入紀錄排在前面
+        raw_logs = ws.get_all_records()
+        
+        # 確保資料依原本邏輯反轉（最新的排在前面）
+        logs = list(raw_logs)
+        logs.reverse()  
     except Exception as e:
         print(f"⚠️ 檢視日誌載入失敗: {e}")
 
-    # --- 📄 分頁邏輯 ---
-    page = request.args.get('page', 1, type=int)  # 取得當前頁碼，預設為第 1 頁
-    per_page = 12                                  # 每頁顯示 12 筆
-    total_logs = len(logs)
-    total_pages = math.ceil(total_logs / per_page) if total_logs > 0 else 1
+    if target_username:
+        # === 模式二：特定帳號詳細紀錄與不重複 IP ===
+        user_logs = [log for log in logs if str(log.get('username')) == str(target_username)]
+        
+        # 萃取該帳號使用過的所有 IP 並去重 (保持不重複)
+        unique_ips = []
+        for log in user_logs:
+            ip = log.get('ip_address')
+            if ip and ip not in unique_ips:
+                unique_ips.append(ip)
+                
+        return render_template(
+            'inspection_log.html',
+            page_header="檢視日誌",
+            version=version_time,
+            view_mode='detail',
+            target_username=target_username,
+            logs=user_logs,
+            unique_ips=unique_ips,
+            billing_invoice_log=False,
+            home_page=False
+        )
+    else:
+        # === 模式一：帳號總覽首頁（只取每個帳號最後一次登入） ===
+        summary_dict = {}
+        for log in logs:
+            uname = log.get('username')
+            if uname and uname not in summary_dict:
+                summary_dict[uname] = {
+                    'username': uname,
+                    'last_ip': log.get('ip_address'),
+                    'last_date': log.get('login_date'),
+                    'last_time': log.get('login_time')
+                }
+        
+        summary_list = list(summary_dict.values())
+        
+        return render_template(
+            'inspection_log.html',
+            page_header="檢視日誌",
+            version=version_time,
+            view_mode='summary',
+            summary_list=summary_list,
+            billing_invoice_log=False,
+            home_page=False
+        )
 
-    # 確保頁碼範圍正確
-    if page < 1:
-        page = 1
-    elif page > total_pages:
-        page = total_pages
+@app.route('/api/save_log', methods=['POST'])
+@login_required
+def save_log():
+    data = request.json
+    username = data.get('username')
+    ip = request.remote_addr
+    fingerprint = data.get('fingerprint') # 接收前端傳來的指紋
+    
+    print(f"DEBUG 解析出的 fingerprint: {fingerprint}")
+    
+    # 取得當下日期與時間
+    now = datetime.now()
+    login_date = now.strftime('%Y-%m-%d')
+    login_time = now.strftime('%H:%M:%S')
+    created_at = now.strftime('%Y-%m-%d %H:%M:%S')
 
-    # 裁切當頁資料
-    start_idx = (page - 1) * per_page
-    end_idx = start_idx + per_page
-    paginated_logs = logs[start_idx:end_idx]
-
-    return render_template(
-        'inspection_log.html',
-        page_header="檢視日誌",
-        version=version_time,
-        logs=paginated_logs,       # 只傳送當頁的 12 筆資料
-        page=page,                 # 當前頁碼
-        total_pages=total_pages,   # 總頁數
-        total_logs=total_logs,     # 總筆數
-        billing_invoice_log=False,
-        home_page=False
-    )
+    try:
+        sh = client.open_by_key(SHEET_ID)
+        ws = sh.worksheet("log")
+        
+        # 假設您的 Google 試算表 log 表格欄位依序是: 
+        # id | username | ip_address | login_date | login_time | created_at | fingerprint
+        # 先取得現有資料筆數來決定新 id
+        records = ws.get_all_records()
+        new_id = len(records) + 1
+        
+        row_data = [new_id, username, ip, login_date, login_time, created_at, fingerprint]
+        ws.append_row(row_data)
+        
+        return jsonify({'status': 'success', 'message': '日誌與指紋已記錄'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/time')
 @login_required
@@ -681,54 +741,55 @@ def update_sc_disk():
     data = request.json
     action = data.get('action')
     store_id = str(data.get('store_id', '')).strip()
+    work_no = str(data.get('work_no', '')).strip()
 
     try:
         sh = client.open_by_key(SHEET_ID)
         ws = sh.worksheet("硬碟檢測")
         records = ws.get_all_records()
         
-        # 尋找目標列 (比對 門店編號)
+        # 尋找目標列 (以「台芝工作案號」進行比對)
         row_idx = None
         for idx, r in enumerate(records, start=2): # header 佔據第 1 列
-            if str(r.get('門店編號')).strip() == store_id:
+            if str(r.get('台芝工作案號')).strip() == work_no:
                 row_idx = idx
                 break
 
         if action == 'delete':
-            # 🚀 關鍵修改：刪除時，在 Google 試算表記錄「已刪除」狀態 (例如寫入 'DELETED' 或 註記)
-            # 這樣後端讀取時才知道這筆被刪除了，不會再從 Excel 抓出來
             row_data = [
-                data.get('leave_time', ''),
-                store_id,
-                data.get('store_name', ''),
-                data.get('repair_cat', ''),
-                data.get('work_content', ''),
-                'DELETED', # SC(1) 設為 DELETED 做為已刪除標記
-                'DELETED',
-                'DELETED',
-                'DELETED'
+                work_no,                      # A: 台芝工作案號
+                data.get('leave_time', ''),   # B: 離場時間
+                store_id,                     # C: 門店編號
+                data.get('store_name', ''),   # D: 門店名稱
+                data.get('repair_cat', ''),   # E: 報修類別
+                data.get('work_content', ''), # F: 工作內容
+                'DELETED',                    # G: SC(1) 設為 DELETED
+                'DELETED',                    # H: SC(2)
+                'DELETED',                    # I: TM(1)
+                'DELETED'                     # J: TM(2)
             ]
             if row_idx:
-                ws.update(f'A{row_idx}:I{row_idx}', [row_data])
+                ws.update(f'A{row_idx}:J{row_idx}', [row_data])
             else:
                 ws.append_row(row_data)
                 
-            return jsonify({'status': 'success', 'message': '已標記為刪除，頁面重新整理後將不再顯示'})
+            return jsonify({'status': 'success', 'message': '已標記為刪除'})
 
         elif action == 'save':
             row_data = [
-                data.get('leave_time', ''),
-                store_id,
-                data.get('store_name', ''),
-                data.get('repair_cat', ''),
-                data.get('work_content', ''),
-                data.get('sc1', ''),
-                data.get('sc2', ''),
-                data.get('tm1', ''),
-                data.get('tm2', '')
+                work_no,                      # A: 台芝工作案號
+                data.get('leave_time', ''),   # B: 離場時間
+                store_id,                     # C: 門店編號
+                data.get('store_name', ''),   # D: 門店名稱
+                data.get('repair_cat', ''),   # E: 報修類別
+                data.get('work_content', ''), # F: 工作內容
+                data.get('sc1', ''),          # G: SC(1)
+                data.get('sc2', ''),          # H: SC(2)
+                data.get('tm1', ''),          # I: TM(1)
+                data.get('tm2', '')           # J: TM(2)
             ]
             if row_idx:
-                ws.update(f'A{row_idx}:I{row_idx}', [row_data])
+                ws.update(f'A{row_idx}:J{row_idx}', [row_data])
             else:
                 ws.append_row(row_data)
                 
