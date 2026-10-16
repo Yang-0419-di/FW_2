@@ -747,10 +747,16 @@ def update_sc_disk():
         ws = sh.worksheet("硬碟檢測")
         records = ws.get_all_records()
         
-        # 尋找目標列 (以「台芝工作案號」進行比對)
+        # 尋找目標列：優先以「台芝工作案號」比對，若無則以「門店編號」輔助比對
         row_idx = None
-        for idx, r in enumerate(records, start=2): # header 佔據第 1 列
-            if str(r.get('台芝工作案號')).strip() == work_no:
+        for idx, r in enumerate(records, start=2):
+            r_work_no = str(r.get('台芝工作案號', '')).strip()
+            r_store_id = str(r.get('門店編號', '')).strip()
+            
+            if work_no and r_work_no == work_no:
+                row_idx = idx
+                break
+            elif not work_no and store_id and r_store_id == store_id:
                 row_idx = idx
                 break
 

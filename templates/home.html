@@ -375,13 +375,23 @@ function deleteDiskRow(btn) {
     if (!confirm("確定要刪除此筆記錄並同步刪除 Google 試算表中的資料嗎？")) return;
     
     const tr = btn.closest('tr');
-    const store_id = tr.children[1].innerText.trim();
-    const workNo = tr.getAttribute('data-work-no') || ''; // 👈 抓取工作案號
+    const tds = tr.querySelectorAll('td');
+    const workNo = tr.getAttribute('data-work-no') || '';
+
+    const payload = {
+        action: 'delete',
+        work_no: workNo,
+        leave_time: tds[0].innerText.trim(),
+        store_id: tds[1].innerText.trim(),
+        store_name: tds[2].innerText.trim(),
+        repair_cat: tds[3].innerText.trim(),
+        work_content: tds[4].innerText.trim()
+    };
 
     fetch('/sc_disk/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'delete', store_id: store_id, work_no: workNo }) // 👈 帶入 work_no
+        body: JSON.stringify(payload)
     })
     .then(res => res.json())
     .then(data => {
