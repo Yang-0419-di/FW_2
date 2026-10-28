@@ -7,6 +7,7 @@ from io import BytesIO
 import math
 import os
 import sqlite3
+import time
 
 # 2. 第三方套件 (Third-Party Packages)
 from flask import (
@@ -42,9 +43,17 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'your_default_secret_key_here')  # Flask 密鑰設定
 # 設定 Session 存活時間為 10 分鐘
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=10)
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+if os.environ.get('SECRET_KEY') is None:
+    print('⚠️ 未設定環境變數 SECRET_KEY，正在使用不安全的預設值，請盡快設定！')
+# 可檢視日誌的管理員（逗號分隔），預設維持原本的 yang.di
+ADMIN_USERS = {u.strip() for u in os.environ.get('ADMIN_USERS', 'yang.di').split(',') if u.strip()}
 
 GITHUB_XLSX_URL = 'https://raw.githubusercontent.com/Yang-0419-di/FW_2/master/data.xlsx'
 cached_xls = None
+cached_at = 0
+EXCEL_TTL = int(os.environ.get('EXCEL_TTL', '300'))  # 秒
 version_time = None
 app.config['VERSION_TIME'] = version_time
 
@@ -55,7 +64,7 @@ login_manager.login_view = 'billing.login'  # 未登入時自動重定向之登�
 
 @login_manager.user_loader
 def load_user(user_id):
-    conn = sqlite3.connect('billing.db')
+    conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute('SELECT id, username FROM users WHERE id = ?', (user_id,))
     user_row = cursor.fetchone()
@@ -69,28 +78,37 @@ def load_user(user_id):
 app.register_blueprint(billing_bp)
 
 # ====== 字型設定（支援中文） ======
-matplotlib.rcParams['font.sans-serif'] = ['Microsoft JhengHei']
+font_path = os.path.join(BASE_DIR, "fonts", "NotoSansCJKtc-Regular.otf")
+if os.path.exists(font_path):
+    from matplotlib import font_manager
+    font_manager.fontManager.addfont(font_path)
+    font_prop = FontProperties(fname=font_path)
+    matplotlib.rcParams['font.sans-serif'] = [font_prop.get_name(), 'Microsoft JhengHei']
+else:
+    font_prop = None
+    matplotlib.rcParams['font.sans-serif'] = ['Microsoft JhengHei']
 matplotlib.rcParams['axes.unicode_minus'] = False
-font_path = "./fonts/NotoSansCJKtc-Regular.otf"
-font_prop = FontProperties(fname=font_path)
 
 # ====== 載入 Excel（含版本號） ======
 def load_excel_from_github(url):
-    global cached_xls, version_time
-    if cached_xls:
+    global cached_xls, version_time, cached_at
+    if cached_xls and (time.time() - cached_at) < EXCEL_TTL:
         return cached_xls
     try:
         response = requests.get(url, timeout=5)
         if response.status_code == 200:
             excel_bytes = BytesIO(response.content)
             cached_xls = pd.ExcelFile(excel_bytes, engine='openpyxl')
+            cached_at = time.time()
             df_version = pd.read_excel(cached_xls, sheet_name='首頁', header=None, usecols="G", nrows=1)
             version_time = str(df_version.iat[0, 0]) if not pd.isna(df_version.iat[0, 0]) else "無版本資訊"
             app.config['VERSION_TIME'] = version_time
             return cached_xls
     except Exception as e:
         print(f"❌ Excel 下載失敗: {e}")
-    abort(500, description="⚠️ 無發從 GitHub 載入 Excel 檔案")
+    if cached_xls:
+        return cached_xls  # 下載失敗時退回舊快取
+    abort(500, description="⚠️ 無法從 GitHub 載入 Excel 檔案")
 
 def clean_df(df):
     df.columns = df.columns.astype(str).str.replace('\n', '', regex=False)
@@ -139,7 +157,7 @@ def home():
     keyword = request.args.get('keyword', '').strip()
     no_data_found = False
     if keyword:
-        df = df[df.apply(lambda r: r.astype(str).str.contains(keyword, case=False).any(), axis=1)]
+        df = df[df.apply(lambda r: r.astype(str).str.contains(keyword, case=False, regex=False).any(), axis=1)]
         no_data_found = df.empty
 
     # 區域數量（三段）
@@ -240,6 +258,14 @@ def get_sc_disk_data():
 
     return jsonify(sc_disk_data)
 
+def _to_int(v):
+    try:
+        return int(float(v))
+    except (TypeError, ValueError):
+        return 0
+
+DISK_USERS = {u.strip() for u in os.environ.get('DISK_USERS', '蔡欣璇,狄澤洋,湯家瑋,劉柏均,吳宗鴻').split(',') if u.strip()}
+
 @app.route("/disk", methods=["GET"])
 @login_required
 def disk_page():
@@ -264,7 +290,7 @@ def disk_page():
         'sc_256_new','sc_256_old','sc_500_new','sc_500_old',
         'sc_1t_new','sc_1t_old','tm_128_new','tm_128_old','tm_256_new','tm_256_old'
     ]
-    total = {k: sum(int(r.get(k) or 0) for r in rows) for k in total_keys}
+    total = {k: sum(_to_int(r.get(k)) for r in rows) for k in total_keys}
 
     return render_template("disk.html", page_header="POS 相關", rows=rows, total=total)
 
@@ -289,8 +315,11 @@ def disk_save():
         "tm_256_old": request.form.get("tm_256_old") or "0"
     }
 
-    if not data['user']:
-        return "⚠️ 必須選擇使用者", 400
+    if data['user'] not in DISK_USERS:
+        return "⚠️ 必須選擇有效的使用者", 400
+    for _k, _v in data.items():
+        if _k != 'user' and not (str(_v).isdigit() and len(str(_v)) <= 6):
+            return f"⚠️ 欄位 {_k} 必須是 0 以上的整數", 400
 
     try:
         sh = client.open_by_key(SHEET_ID)
@@ -360,7 +389,7 @@ def personal(name):
     no_data_found = False
     if keyword:
         df_bottom = df_bottom[
-            df_bottom.apply(lambda r: r.astype(str).str.contains(keyword, case=False).any(), axis=1)
+            df_bottom.apply(lambda r: r.astype(str).str.contains(keyword, case=False, regex=False).any(), axis=1)
         ]
         no_data_found = df_bottom.empty
 
@@ -397,9 +426,9 @@ def report():
     
     if keyword or store_id or repair_item:
         if keyword:
-            df = df[df.apply(lambda r: r.astype(str).str.contains(keyword, case=False).any(), axis=1)]
+            df = df[df.apply(lambda r: r.astype(str).str.contains(keyword, case=False, regex=False).any(), axis=1)]
         if store_id:
-            df = df[df['門店編號'].astype(str).str.contains(store_id, case=False)]
+            df = df[df['門店編號'].astype(str).str.contains(store_id, case=False, regex=False)]
         if repair_item:
             df = df[df['報修類別'].astype(str).str.strip() == repair_item.strip()]
         tables = df.to_dict(orient='records')
@@ -432,7 +461,7 @@ def sm_web_page():
 @login_required
 def inspection_log():
     # 限制僅 yang.di 可存取
-    if current_user.username != 'yang.di':
+    if current_user.username not in ADMIN_USERS:
         abort(403)
 
     target_username = request.args.get('username')
@@ -500,9 +529,9 @@ def inspection_log():
 @app.route('/api/save_log', methods=['POST'])
 @login_required
 def save_log():
-    data = request.json
-    username = data.get('username')
-    ip = request.remote_addr
+    data = request.get_json(silent=True) or {}
+    username = current_user.username  # 不信任前端傳入的 username（可被偽造）
+    ip = (request.headers.get('X-Forwarded-For') or request.remote_addr or '').split(',')[0].strip()
     fingerprint = data.get('fingerprint')
     
     # 取得台灣時區（UTC+8）的當下時間
@@ -530,7 +559,7 @@ def save_log():
 @app.route('/time')
 @login_required
 def time_page():
-    xls = pd.ExcelFile("MFP/MFP.xlsx")
+    xls = pd.ExcelFile(os.path.join(BASE_DIR, "MFP", "MFP.xlsx"))
 
     df_summary = pd.read_excel(
         xls,
@@ -649,7 +678,8 @@ def calendar_events():
     try:
         xls = load_excel_from_github(GITHUB_XLSX_URL)
         df = pd.read_excel(xls, sheet_name='行事曆')
-    except:
+    except Exception as e:
+        print(f"⚠️ 行事曆載入失敗: {e}")
         return jsonify([])
     df.columns = df.columns.str.strip()
     today = datetime.today().date()
@@ -677,7 +707,7 @@ def calendar_events():
 @app.route("/worktime")
 @login_required
 def worktime():
-    path = "MFP/MFP.xlsx"
+    path = os.path.join(BASE_DIR, "MFP", "MFP.xlsx")
 
     df_1 = pd.read_excel(
         path,
@@ -736,6 +766,7 @@ def worktime():
 
 # 🆕 SC硬碟檢測 儲存/刪除同步 API
 @app.route('/sc_disk/update', methods=['POST'])
+@login_required
 def update_sc_disk():
     data = request.json
     action = data.get('action')
@@ -800,8 +831,14 @@ def update_sc_disk():
                 
             return jsonify({'status': 'success', 'message': '資料已同步至 Google Sheet'})
 
+        return jsonify({'status': 'error', 'message': '未知的 action'}), 400
+
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.context_processor
+def inject_admin_users():
+    return {'ADMIN_USERS': globals().get('ADMIN_USERS', {'yang.di'})}
 
 @app.before_request
 def make_session_permanent():

@@ -271,6 +271,13 @@
 
 {% block extra_scripts %}
 <script>
+    // HTML 跳脫：後端資料來自 Excel / Google Sheet，不可直接塞進 innerHTML
+    function esc(v) {
+        return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+            return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c];
+        });
+    }
+
     // ===== 頁面載入後，非同步向後端 API 取得硬碟檢測資料 =====
     document.addEventListener("DOMContentLoaded", function() {
         fetch('/api/sc_disk_data')
@@ -289,15 +296,15 @@
                     tr.setAttribute('data-store-id', row['門店編號'] || '');
                     tr.setAttribute('data-work-no', row['台芝工作案號'] || ''); // 👈 儲存工作案號在 tr 屬性中
                     tr.innerHTML = `
-                        <td>${row['離場時間'] || ''}</td>
-                        <td>${row['門店編號'] || ''}</td>
-                        <td>${row['門店名稱'] || ''}</td>
-                        <td>${row['報修類別'] || ''}</td>
-                        <td style="max-width: 200px; text-align: left;">${row['工作內容'] || ''}</td>
-                        <td><input type="text" class="disk-input sc1" value="${row['SC1'] || ''}" style="width: 50px;"></td>
-                        <td><input type="text" class="disk-input sc2" value="${row['SC2'] || ''}" style="width: 50px;"></td>
-                        <td><input type="text" class="disk-input tm1" value="${row['TM1'] || ''}" style="width: 50px;"></td>
-                        <td><input type="text" class="disk-input tm2" value="${row['TM2'] || ''}" style="width: 50px;"></td>
+                        <td>${esc(row['離場時間'])}</td>
+                        <td>${esc(row['門店編號'])}</td>
+                        <td>${esc(row['門店名稱'])}</td>
+                        <td>${esc(row['報修類別'])}</td>
+                        <td style="max-width: 200px; text-align: left;">${esc(row['工作內容'])}</td>
+                        <td><input type="text" class="disk-input sc1" value="${esc(row['SC1'])}" style="width: 50px;"></td>
+                        <td><input type="text" class="disk-input sc2" value="${esc(row['SC2'])}" style="width: 50px;"></td>
+                        <td><input type="text" class="disk-input tm1" value="${esc(row['TM1'])}" style="width: 50px;"></td>
+                        <td><input type="text" class="disk-input tm2" value="${esc(row['TM2'])}" style="width: 50px;"></td>
                         <td>
                             <button type="button" onclick="saveDiskRow(this)" style="background-color: #28a745; font-size: 14px; padding: 4px 8px;">儲存</button>
                             <button type="button" onclick="deleteDiskRow(this)" style="background-color: #dc3545; font-size: 14px; padding: 4px 8px;">刪除</button>
@@ -395,8 +402,8 @@ function deleteDiskRow(btn) {
     })
     .then(res => res.json())
     .then(data => {
-        alert(data.message);
-        tr.remove();
+        alert(data.message || data.status);
+        if (data.status === 'success') tr.remove();
     })
     .catch(err => alert('刪除失敗: ' + err));
 }

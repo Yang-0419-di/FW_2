@@ -1,3 +1,4 @@
+import sys
 import win32com.client
 
 # ===== Excel 常數 =====
@@ -106,6 +107,7 @@ def main():
 
     except Exception as e:
         print(f"[重大錯誤] {e}")
+        sys.exit(1)
 
     finally:
         if excel:

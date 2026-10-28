@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify
+from flask_login import login_required
 import pandas as pd
 import gspread
 from modules.gsheet import client, SHEET_ID
@@ -103,7 +104,7 @@ def fetch_and_sync_sc_check(xls):
         if not gs_df.empty:
             gs_key_col = None
             for c in gs_df.columns:
-                clean_c = c.replace('\n', '', '').replace(' ', '')
+                clean_c = c.replace('\n', '').replace(' ', '')
                 if '台芝' in clean_c and '工作案號' in clean_c:
                     gs_key_col = c
                     break
@@ -180,6 +181,7 @@ def fetch_and_sync_sc_check(xls):
 
 
 @sc_check_bp.route('/sc_check/update', methods=['POST'])
+@login_required
 def sc_check_update():
     """ 即時更新 SC(1), SC(2), TM(1), TM(2) 格子數值至 Google Sheet """
     data = request.json or {}
@@ -229,6 +231,7 @@ def sc_check_update():
 
 
 @sc_check_bp.route('/sc_check/delete', methods=['POST'])
+@login_required
 def sc_check_delete():
     """ 同步刪除 Google Sheet 中的該筆資料 """
     data = request.json or {}

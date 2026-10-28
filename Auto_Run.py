@@ -1,6 +1,12 @@
+import os
+import sys
 import tkinter as tk
 from tkinter import messagebox
 import subprocess
+
+BASE_DIR = os.path.dirname(os.path.abspath(sys.argv[0]))
+os.chdir(BASE_DIR)
+PY = "python" if getattr(sys, "frozen", False) else sys.executable
 
 def run_selected():
     selected = [var.get() for var in step_vars]
@@ -12,26 +18,29 @@ def run_selected():
     if selected[2] and not tags:
         messagebox.showerror("錯誤", "請輸入步驟 3 的年月")
         return
+    if selected[3] and not ver_entry.get().strip():
+        messagebox.showerror("錯誤", "請輸入版本號")
+        return
 
     try:
         if selected[0]:
-            subprocess.run(["python", "Excel_Edge.py"], check=True)
+            subprocess.run([PY, "Excel_Edge.py"], check=True)
 
         if selected[1]:
-            subprocess.run(["python", "run_update2.py"], input=tags.encode(), check=True)
+            subprocess.run([PY, "run_update2.py"], input=tags.encode(), check=True)
 
         if selected[2]:
-            subprocess.run(["python", "run_MFP_update.py"], input=tags.encode(), check=True)
+            subprocess.run([PY, "run_MFP_update.py"], input=tags.encode(), check=True)
 
         if selected[3]:
             version = ver_entry.get().strip()
             if not version:
                 messagebox.showerror("錯誤", "請輸入版本號")
                 return
-            subprocess.run(["python", "add_ver.py", version], check=True)
+            subprocess.run([PY, "add_ver.py", version], check=True)
 
         if selected[4]:
-            subprocess.run(["python", "data_updw.py"], check=True)
+            subprocess.run([PY, "data_updw.py"], check=True)
 
         if selected[5]:
             subprocess.run(["save_excel.exe"], check=True)

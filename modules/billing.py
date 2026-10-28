@@ -8,6 +8,10 @@ from io import BytesIO
 import pandas as pd
 from zoneinfo import ZoneInfo
 import threading  # 🚀 新增：匯入背景線程模組
+import os
+from html import escape as html_escape
+from urllib.parse import urlparse
+from gspread.utils import rowcol_to_a1
 from modules.gsheet import (
     client, 
     SHEET_ID, 
@@ -21,8 +25,13 @@ from modules.gsheet import (
 billing_bp = Blueprint('billing', __name__, url_prefix='/billing')
 bp = billing_bp  # 相容性別名
 
+# 允許讀寫的人員分頁白名單（可用環境變數 PERSON_SHEETS 以逗號分隔覆寫）
+ALLOWED_PERSON_SHEETS = {
+    s.strip() for s in os.environ.get('PERSON_SHEETS', '吳宗鴻,湯家瑋,狄澤洋,劉柏均').split(',') if s.strip()
+}
+
 GITHUB_XLSX_URL = 'https://raw.githubusercontent.com/Yang-0419-di/FW_2/master/MFP/MFP.xlsx'
-DB_FILE = "billing.db"
+DB_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "billing.db")
 _cached_xls = None   # 快取避免多次下載
 
 def to_int(val):
@@ -109,9 +118,11 @@ def login():
                         daemon=True
                     ).start()
 
-                    # 嚴格檢查 next_page 是否為無效的空值/空字串
-                    next_page = request.args.get('next')
-                    if not next_page or next_page.strip() == '':
+                    # 只允許站內相對路徑，避免 Open Redirect
+                    next_page = (request.args.get('next') or '').strip()
+                    parsed_next = urlparse(next_page)
+                    if (not next_page.startswith('/') or next_page.startswith('//')
+                            or next_page.startswith('/\\') or parsed_next.scheme or parsed_next.netloc):
                         next_page = url_for('home')
 
                     return redirect(next_page)
@@ -150,10 +161,11 @@ def color_overdue(val, last_pm, cycle):
         except Exception:
             overdue = True
 
+    safe_val = html_escape(str(val))  # 客戶名稱來自可編輯的 Google Sheet，必須 escape
     if overdue:
-        return f'<span style="background-color:#FFC0CB">{val}</span>'
+        return f'<span style="background-color:#FFC0CB">{safe_val}</span>'
     else:
-        return val
+        return safe_val
 
 # ================================================================
 # 讀取 GitHub / 本地 Excel（支援檔名參數）
@@ -296,6 +308,11 @@ def init_db():
         )
     """)
 
+    # 舊資料庫自動補欄位（取代手動執行 db_updata.py）
+    cols = [r[1] for r in c.execute("PRAGMA table_info(billing_summary)").fetchall()]
+    if "last_date" not in cols:
+        c.execute("ALTER TABLE billing_summary ADD COLUMN last_date TEXT DEFAULT ''")
+
     conn.commit()
     conn.close()
 
@@ -405,18 +422,29 @@ def search_customers_by_name(keyword):
 
     return result
 
+def _update_row_fields(ws, row_idx, data):
+    """一次 batch 更新同一列的多個欄位（取代逐格 update_cell）"""
+    headers = ws.row_values(1)
+    payload = []
+    for key, value in data.items():
+        if key in headers:
+            payload.append({
+                "range": rowcol_to_a1(row_idx, headers.index(key) + 1),
+                "values": [[value]],
+            })
+        else:
+            print(f"⚠️ 工作表缺少欄位 {key}，已略過")
+    if payload:
+        ws.batch_update(payload, value_input_option="USER_ENTERED")
+
+
 def update_contract(device_id, contract_data):
     ws = get_person_worksheet("contracts")
     rows = ws.get_all_records()
 
     for idx, row in enumerate(rows, start=2):
         if str(row.get("device_id", "")).strip() == str(device_id).strip():
-            for key, value in contract_data.items():
-                try:
-                    col = list(row.keys()).index(key) + 1
-                    ws.update_cell(idx, col, value)
-                except Exception:
-                    pass
+            _update_row_fields(ws, idx, contract_data)
             return True
     return False
 
@@ -426,12 +454,7 @@ def update_customer(device_id, customer_data):
 
     for idx, row in enumerate(rows, start=2):
         if str(row.get("device_id", "")).strip() == str(device_id).strip():
-            for key, value in customer_data.items():
-                try:
-                    col = list(row.keys()).index(key) + 1
-                    ws.update_cell(idx, col, value)
-                except Exception:
-                    pass
+            _update_row_fields(ws, idx, customer_data)
             return True
     return False
 
@@ -538,8 +561,8 @@ def get_related_devices(device_id):
     
     
 # --- 紀錄使用量 ---
-def insert_usage(device_id, color_a3, color_count, bw_count):
-    month = datetime.now().strftime("%Y%m")
+def insert_usage(device_id, color_a3, color_count, bw_count, month=None):
+    month = month or datetime.now().strftime("%Y%m")
     timestamp = datetime.now().strftime("%Y/%m/%d-%H:%M")
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -693,7 +716,8 @@ def save_monthly_summary(
     last_color_a3,
     last_color,
     last_bw,
-    calc_result
+    calc_result,
+    year=None
 ):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -727,12 +751,13 @@ def save_monthly_summary(
             monthly_rent,
             untaxed_subtotal,
             tax_amount,
-            total_with_tax
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            total_with_tax,
+            last_date
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         device_id,
         month_int,
-        datetime.now().year,
+        year or datetime.now().year,
         total_curr_color_a3,
         total_curr_color,
         total_curr_bw,
@@ -752,7 +777,8 @@ def save_monthly_summary(
         calc_result.get("月租金", 0),
         calc_result.get("未稅小計", 0),
         calc_result.get("稅額", 0),
-        calc_result.get("含稅總額", 0)
+        calc_result.get("含稅總額", 0),
+        datetime.now().strftime("%Y/%m/%d")
     ))
 
     conn.commit()
@@ -803,6 +829,7 @@ def load_billing_summary(device_id, year):
     
 # --- 主頁面路由 ---
 @billing_bp.route("/", methods=["GET", "POST"])
+@login_required
 def index():
     message = request.args.get("message", "")
     contract, customer, result = None, None, None
@@ -828,19 +855,21 @@ def index():
                 matches = search_customers_by_name(keyword)
                 message = f"🔍 找到 {len(matches)} 筆相符客戶" if matches else f"❌ 找不到設備或客戶：{keyword}"
             else:
-                last_color_a3, last_color, last_bw, last_time = get_last_counts(keyword, prev_year, prev_month)
+                last_color_a3, last_color, last_bw, last_time = get_last_counts(keyword, selected_year, selected_month)
                 related_devices = get_related_devices(keyword)
 
         elif mode == "calculate":
             contract, contra_text = get_contract(device_id)
             customer = get_customer(device_id)
             if contract:
-                related_devices = get_related_devices(device_id)
+                # SQLite 查不到合開群組時，至少要計算本機（否則總數歸零並覆蓋帳單）
+                related_devices = get_related_devices(device_id) or [device_id]
                 total_last_color_a3 = total_last_color = total_last_bw = 0
                 total_curr_color_a3 = total_curr_color = total_curr_bw = 0
+                dev_counts = {}
 
                 for dev in related_devices:
-                    last_a3, last_c, last_b, _ = get_last_counts(dev, prev_year, prev_month)
+                    last_a3, last_c, last_b, _ = get_last_counts(dev, selected_year, selected_month)
                     total_last_color_a3 += last_a3
                     total_last_color += last_c
                     total_last_bw += last_b
@@ -849,14 +878,17 @@ def index():
                     val_c = request.form.get(f"curr_color_{dev}")
                     val_b = request.form.get(f"curr_bw_{dev}")
 
-                    if val_c is None:
-                        total_curr_color_a3 += int(request.form.get("curr_color_a3", 0))
-                        total_curr_color += int(request.form.get("curr_color", 0))
-                        total_curr_bw += int(request.form.get("curr_bw", 0))
-                    else:
-                        total_curr_color_a3 += int(val_a3 or 0)
-                        total_curr_color += int(val_c or 0)
-                        total_curr_bw += int(val_b or 0)
+                    # 單機且表單用未帶設備代號的欄位名稱時才使用備援欄位
+                    if val_c is None and len(related_devices) == 1:
+                        val_a3 = request.form.get("curr_color_a3")
+                        val_c = request.form.get("curr_color")
+                        val_b = request.form.get("curr_bw")
+
+                    cnt_a3, cnt_c, cnt_b = to_int(val_a3), to_int(val_c), to_int(val_b)
+                    total_curr_color_a3 += cnt_a3
+                    total_curr_color += cnt_c
+                    total_curr_bw += cnt_b
+                    dev_counts[dev] = (cnt_a3, cnt_c, cnt_b)
 
                 result = calculate(
                     contract,
@@ -868,13 +900,9 @@ def index():
                     total_last_bw
                 )
 
-                for dev in related_devices:
-                    insert_usage(
-                        dev,
-                        int(request.form.get(f"curr_color_a3_{dev}", 0)),
-                        int(request.form.get(f"curr_color_{dev}", 0)),
-                        int(request.form.get(f"curr_bw_{dev}", 0))
-                    )
+                usage_month = f"{selected_year}{selected_month:02d}"
+                for dev, (cnt_a3, cnt_c, cnt_b) in dev_counts.items():
+                    insert_usage(dev, cnt_a3, cnt_c, cnt_b, month=usage_month)
 
                 save_monthly_summary(
                     device_id,
@@ -885,7 +913,8 @@ def index():
                     total_last_color_a3,
                     total_last_color,
                     total_last_bw,
-                    result
+                    result,
+                    year=selected_year
                 )
                 message = f"✅ {device_id} 的抄表與金額已儲存至 {selected_month} 月"
             else:
@@ -1056,6 +1085,7 @@ def index():
 
 # --- 顯示發票紀錄頁面 ---
 @billing_bp.route("/invoice_log/<device_id>")
+@login_required
 def invoice_log(device_id):
     selected_year = request.args.get("year", type=int) or datetime.now().year
     months = load_billing_summary(device_id, selected_year)
@@ -1070,6 +1100,7 @@ def invoice_log(device_id):
 
 # --- 客戶總表 + 概況 ---
 @billing_bp.route('/mfp_summary')
+@login_required
 def mfp_summary():
     keyword = request.args.get("keyword", "").strip()
 
@@ -1168,8 +1199,13 @@ def upsert_person_field(sheet_name, device_id, field, value):
     ])
 
 @billing_bp.route("/save_person_field", methods=["POST"])
+@login_required
 def save_person_field():
-    data = request.json
+    data = request.get_json(silent=True) or {}
+    if (data.get("sheet") not in ALLOWED_PERSON_SHEETS
+            or data.get("field") not in ("remark", "method")
+            or not data.get("device_id")):
+        return {"ok": False, "error": "invalid request"}, 400
     upsert_person_field(
         sheet_name=data["sheet"],
         device_id=data["device_id"],
@@ -1179,7 +1215,10 @@ def save_person_field():
     return {"ok": True}
 
 @billing_bp.route("/person/<sheet>")
+@login_required
 def person_page(sheet):
+    if sheet not in ALLOWED_PERSON_SHEETS:
+        abort(404)
     keyword = request.args.get("keyword", "").strip()
 
     mfp_xls = load_github_excel("MFP.xlsx")
@@ -1233,7 +1272,7 @@ def person_page(sheet):
     df3 = df3[["項次", "客戶名稱", "備註", "保養週期", "最後保養日", "設備代號", "抄表方式"]]
 
     if keyword:
-        df3 = df3[df3.apply(lambda r: r.astype(str).str.contains(keyword, case=False, na=False).any(), axis=1)]
+        df3 = df3[df3.apply(lambda r: r.astype(str).str.contains(keyword, case=False, regex=False, na=False).any(), axis=1)]
 
     return render_template(
         "tjw.html",
@@ -1246,6 +1285,7 @@ def person_page(sheet):
     )
 
 @billing_bp.route('/get_last_counts', methods=['GET'])
+@login_required
 def route_get_last_counts():
     device_id = request.args.get('device_id')
     selected_year = int(request.args.get('year', datetime.now().year))

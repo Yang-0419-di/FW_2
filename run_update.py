@@ -3,6 +3,7 @@ from openpyxl import load_workbook
 from openpyxl.styles import Alignment, numbers
 from datetime import datetime
 import copy
+from openpyxl.formula.translate import Translator
 import os
 import threading
 import sys
@@ -135,7 +136,7 @@ for tag in month_tags:
         # 複製公式（AL、AM欄）
         for col_letter, formula_cell in [("AL", al_formula_cell), ("AM", am_formula_cell)]:
             target_cell = data_ws[f"{col_letter}{new_row}"]
-            formula = formula_cell.value.replace(str(ref_row), str(new_row)) if formula_cell.data_type == "f" else formula_cell.value
+            formula = Translator(formula_cell.value, origin=formula_cell.coordinate).translate_formula(f"{formula_cell.column_letter}{new_row}") if formula_cell.data_type == "f" else formula_cell.value
             target_cell.value = formula
             target_cell.font = copy.copy(formula_cell.font)
             target_cell.alignment = copy.copy(formula_cell.alignment)

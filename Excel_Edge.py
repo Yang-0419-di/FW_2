@@ -10,6 +10,12 @@ import time
 import shutil
 import glob
 from datetime import datetime
+import sys
+
+EIP_USER = os.environ.get("EIP_USER", "")
+EIP_PASS = os.environ.get("EIP_PASS", "")
+if not EIP_USER or not EIP_PASS:
+    sys.exit("❌ 請先設定環境變數 EIP_USER / EIP_PASS（例：setx EIP_USER 帳號、setx EIP_PASS 密碼，重開終端機生效）")
 
 # ===============================
 # 時間與資料夾設定
@@ -50,6 +56,8 @@ options.add_experimental_option("prefs", {
 options.add_argument('--disable-gpu')
 options.add_argument('--no-sandbox')
 
+failures = []
+
 try:
     # 使用 webdriver_manager 自動管理驅動版本，避免未來手動更新麻煩
     driver = webdriver.Edge(service=EdgeService(EdgeChromiumDriverManager().install()), options=options)
@@ -58,9 +66,9 @@ try:
     # ===============================
     # 登入
     # ===============================
-    driver.get("http://eip.toshibatec.com.tw/Main.aspx")
-    wait.until(EC.presence_of_element_located((By.NAME, "AccountID"))).send_keys("yang.di")
-    driver.find_element(By.NAME, "PassWord").send_keys("foxdie789")
+    driver.get("https://eip.toshibatec.com.tw/Main.aspx")
+    wait.until(EC.presence_of_element_located((By.NAME, "AccountID"))).send_keys(EIP_USER)
+    driver.find_element(By.NAME, "PassWord").send_keys(EIP_PASS)
     driver.find_element(By.NAME, "login_SubmitBtn").click()
 
     # ===============================
@@ -127,6 +135,7 @@ try:
         print(f"   Synology：{pos_synology}")
     else:
         print("❌ POS 報表未下載完成")
+        failures.append("POS")
 
     # ==================================================
     # 強力返回主選單機制
@@ -155,7 +164,7 @@ try:
             except Exception as e:
                 print(f"❌ 所有返回方法皆失敗，錯誤資訊: {e}")
                 # 如果真的都回不去，直接讓瀏覽器重新填寫網址進入「台芝技術服務分析系統」的首頁
-                driver.get("http://eip.toshibatec.com.tw/Main.aspx") # 或者是分析系統的那個新視窗網址
+                driver.get("https://eip.toshibatec.com.tw/Main.aspx") # 或者是分析系統的那個新視窗網址
                 time.sleep(3)
 
     time.sleep(2)
@@ -208,10 +217,15 @@ try:
         print(f"   Synology：{mfp_synology}")
     else:
         print("❌ MFP 報表未下載完成")
+        failures.append("MFP")
 
     driver.quit()
+    if failures:
+        print(f"❌ 下載失敗項目：{', '.join(failures)}")
+        sys.exit(1)
 
 except Exception as e:
     print(f"❌ 發生錯誤：{e}")
     if 'driver' in locals():
         driver.quit()
+    sys.exit(1)

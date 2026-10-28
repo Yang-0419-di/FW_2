@@ -270,7 +270,7 @@ table input:focus, table select:focus {
                 {% for m in matches %}
                 <tr>
                     <td>
-                        <a href="{{ url_for('billing.index') }}?device_id={{m.device_id}}" style="text-decoration: none; color: #007BFF; font-weight: bold;">
+                        <a href="{{ url_for('billing.index', device_id=m.device_id) }}" style="text-decoration: none; color: #007BFF; font-weight: bold;">
                             {{m.device_id}}
                         </a>
                     </td>
@@ -280,7 +280,8 @@ table input:focus, table select:focus {
                             <input type="hidden" name="mode" value="delete_customer">
                             <input type="hidden" name="device_id" value="{{ m.device_id }}">
                             <button type="submit" style="background-color: #e74c3c; color: white; border: none; padding: 4px 12px; font-size: 14px; border-radius: 4px; cursor: pointer;"
-                                onclick="return confirm('確定要刪除 {{ m.customer_name }}（設備編號：{{ m.device_id }}）嗎？');">
+                                data-msg="{{ '確定要刪除 ' ~ m.customer_name ~ '（設備編號：' ~ m.device_id ~ '）嗎？' }}"
+                                onclick="return confirm(this.dataset.msg);">
                                 🗑 刪除
                             </button>
                         </form>
@@ -298,7 +299,7 @@ table input:focus, table select:focus {
         <table class="contract-table">
             <input type="hidden" name="device_id" value="{{ customer.device_id }}">
             <tr><th style="width: 30%;">項目</th><th>內容</th></tr>
-            <tr><td>設備編號</td><td><input type="text" name="device_id" value="{{ customer.device_id }}"></td></tr>
+            <tr><td>設備編號</td><td><input type="text" value="{{ customer.device_id }}" readonly style="background-color:#f1f5f9;"></td></tr>
             <tr><td>客戶名稱</td><td><input type="text" name="customer_name" value="{{ customer.customer_name }}"></td></tr>
             <tr><td>新設備編號</td><td><input type="text" name="device_id_new" value="" placeholder="若欲變更設備編號請填寫於此"></td></tr>
             <tr><td>保養週期</td><td><input type="text" name="pm" value="{{ customer.pm }}"></td></tr>
@@ -325,6 +326,26 @@ table input:focus, table select:focus {
         <form method="POST">
             <input type="hidden" name="device_id" value="{{ contract.device_id }}">
             <input type="hidden" name="mode" value="calculate">
+
+            <!-- period-selector (moved) -->
+                <div class="form-row-flex">
+                    <div>
+                        <label for="selected_year">抄表年份：</label>
+                        <select name="selected_year" id="selected_year" required>
+                            {% for y in range(current_year - 2, current_year + 2) %}
+                            <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }} 年</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="selected_month">抄表月份：</label>
+                        <select name="selected_month" id="selected_month" required>
+                            {% for m in range(1,13) %}
+                            <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ m }} 月</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
 
             {% if related_devices and related_devices|length > 1 %}
             <p style="font-size:16px; color:#333; font-weight: bold; margin-bottom: 8px;">📦 合開群組（主機：{{ related_devices[0] }}），共 {{ related_devices|length }} 台</p>
@@ -354,24 +375,7 @@ table input:focus, table select:focus {
 
             {% else %}
             <div>
-                <div class="form-row-flex">
-                    <div>
-                        <label for="selected_year">抄表年份：</label>
-                        <select name="selected_year" id="selected_year" required>
-                            {% for y in range(current_year - 2, current_year + 2) %}
-                            <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }} 年</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div>
-                        <label for="selected_month">抄表月份：</label>
-                        <select name="selected_month" id="selected_month" required>
-                            {% for m in range(1,13) %}
-                            <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ m }} 月</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
+
 
                 <table style="margin-top: 15px;">
                     <thead>
@@ -411,7 +415,7 @@ table input:focus, table select:focus {
                         </button>
                     </td>
                     <td style="width: 50% !important; padding: 0 0 0 6px !important; border: none !important; background: none !important;">
-                        <button type="button" onclick="location.href='/billing/invoice_log/{{ contract.device_id }}'" style="width: 100% !important; height: 42px !important; border: none !important; border-radius: 6px !important; font-size: 15px !important; cursor: pointer !important; white-space: nowrap !important; margin: 0 !important; display: block !important; background-color: #007BFF !important; color: #ffffff !important; font-weight: bold !important; padding: 0 !important;">
+                        <button type="button" data-url="{{ url_for('billing.invoice_log', device_id=contract.device_id) }}" onclick="location.href=this.dataset.url" style="width: 100% !important; height: 42px !important; border: none !important; border-radius: 6px !important; font-size: 15px !important; cursor: pointer !important; white-space: nowrap !important; margin: 0 !important; display: block !important; background-color: #007BFF !important; color: #ffffff !important; font-weight: bold !important; padding: 0 !important;">
                             發票紀錄
                         </button>
                     </td>
@@ -562,10 +566,10 @@ window.addEventListener("pageshow", function (event) {
 function updateLastCounts() {
     const month = document.getElementById('selected_month').value;
     const year = document.getElementById('selected_year').value;
-    const device_id = "{{ contract.device_id if contract else '' }}";
+    const device_id = {{ (contract.device_id if contract else '') | tojson }};
     if (!device_id) return;
 
-    fetch(`/billing/get_last_counts?device_id=${device_id}&year=${year}&month=${month}`)
+    fetch(`/billing/get_last_counts?device_id=${encodeURIComponent(device_id)}&year=${year}&month=${month}`)
     .then(res => res.json())
     .then(data => {
         const prevColorA3 = document.getElementById('prev-color-a3');

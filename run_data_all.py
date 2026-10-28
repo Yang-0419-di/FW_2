@@ -1,6 +1,7 @@
 import os
 import time
 import copy
+from openpyxl.formula.translate import Translator
 import threading
 import sys
 from datetime import datetime
@@ -131,7 +132,7 @@ def process_sheet(ws, config, base_dir, month_tags):
             if copy_formula:
                 for col, f_cell in [("AL", al_formula), ("AM", am_formula)]:
                     target = ws[f"{col}{new_row}"]
-                    formula = f_cell.value.replace(str(ref_row), str(new_row)) if f_cell.data_type == "f" else f_cell.value
+                    formula = Translator(f_cell.value, origin=f_cell.coordinate).translate_formula(f"{f_cell.column_letter}{new_row}") if f_cell.data_type == "f" else f_cell.value
                     target.value = formula
 
         r_wb.close()

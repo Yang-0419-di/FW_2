@@ -1,0 +1,254 @@
+{% extends "layout.html" %}
+
+{% block content %}
+
+	<style>
+	.status-alert {
+		background-color: #fdecee;
+	}
+	.highlight-row {
+		background-color: #5CADAD;  /* 換成你標題列的顏色 */
+		color: white;
+		font-weight: bold;
+	}
+	</style>
+    <!-- === 個人查詢頁 personal.html === -->
+
+    {% if show_top %}
+        <h2 id="season-title">{{ personal_page }} - 季保養進度</h2>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        {% for key in tables_top[0].keys() %}
+                            <th>{{ key }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in tables_top %}
+                        <tr {% if loop.index == 4 %}class="highlight-row"{% endif %}>
+                            {% for value in row.values() %}
+                                <td>{{ value }}</td>
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+	
+	{% if show_unfinished %}
+		<h2>
+			<button onclick="toggleSection('unfinished-content', event)" style="margin-right: 8px;">▶</button>
+			PMQ3需補單門市
+		</h2>
+
+		<div id="unfinished-content" style="display: block;" class="table-container">
+			<table>
+				<thead>
+					<tr>
+						{% for key in tables_unfinished[0].keys() %}
+							<th>{{ key }}</th>
+						{% endfor %}
+					</tr>
+				</thead>
+				<tbody>
+					{% for row in tables_unfinished %}
+						<tr>
+							{% for val in row.values() %}
+								<td>{{ val }}</td>
+							{% endfor %}
+						</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+	{% endif %}
+	
+	{% if show_area %}
+		<h2>
+			<button onclick="toggleSection('area-content', event)" style="margin-right: 8px;">▶</button>
+			區域數量
+		</h2>
+
+		<div id="area-content" style="display: none;" class="table-container">
+
+			<table>
+				<thead>
+					{% if tables_area %}
+						<tr>
+							{% for key in tables_area[0].keys() %}
+								<th>{{ key }}</th>
+							{% endfor %}
+						</tr>
+					{% endif %}
+				</thead>
+				<tbody>
+					{% for row in tables_area %}
+						<tr>
+							{% for value in row.values() %}
+								<td>{{ value }}</td>
+							{% endfor %}
+						</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+
+		</div>
+	{% endif %}
+
+
+	{% if show_project %}
+
+		<h2>
+			<button onclick="toggleSection('project-content', event)" style="margin-right: 8px;">▼</button>
+			專案進度
+		</h2>
+
+		<div id="project-content" style="display: block;" class="table-container">
+
+			<table style="table-layout: fixed; width: 100%; border-collapse: collapse;">
+				<thead>
+					{% if tables_project %}
+						<tr>
+							{% for key in tables_project[0].keys() %}
+								<th style="width: 20%; text-align: center;">{{ key }}</th>
+							{% endfor %}
+						</tr>
+					{% endif %}
+				</thead>
+				<tbody>
+					{% for row in tables_project %}
+						<tr>
+							{% for value in row.values() %}
+								<td style="text-align: center; word-wrap: break-word;">{{ value }}</td>
+							{% endfor %}
+						</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+
+		</div>
+	{% endif %}
+
+	{% if show_ads %}
+		<h2>
+			<button onclick="toggleSection('ads-content', event)" style="margin-right: 8px;">▶</button>
+			門市地址
+		</h2>
+		
+		<div id="ads-content" style="display: none;" class="table-container">
+			
+			<div style="margin:10px 0;">
+				<input type="text" id="storeSearchads" placeholder="搜尋門市地址..."
+					   style="width:300px;padding:6px;font-size:14px;">
+			</div>
+			
+			<table id="adsTable">
+				<thead>
+					{% if tables_ads %}
+						<tr>
+							{% for key in tables_ads[0].keys() %}
+								<th>{{ key }}</th>
+							{% endfor %}
+						</tr>
+					{% endif %}
+				</thead>
+				<tbody>
+					{% for row in tables_ads %}
+						<tr>
+							{% for key in tables_ads[0].keys() %}
+								<td {% if key == '門市地址' %}style="text-align:left;"{% endif %}>
+									{{ row[key] }}
+								</td>
+							{% endfor %}
+						</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+
+		</div>
+	{% endif %}
+	
+
+    <h2>門市資料</h2>
+	
+	<div style="margin:10px 0;">
+		<input type="text" id="storeSearchBottom" placeholder="搜尋門市資料..." style="width:300px;padding:6px;font-size:14px;">
+	</div>
+	
+    <div class="table-container">
+        <table id="storeTable">
+            <thead>
+                {% if tables_bottom %}
+                    <tr>
+                        {% for key in tables_bottom[0].keys() %}
+                            <th>{{ key }}</th>
+                        {% endfor %}
+                    </tr>
+                {% endif %}
+            </thead>
+			<tbody>
+				{% for row in tables_bottom %}
+					<tr>
+											{% for key in tables_bottom[0].keys() %}
+					<td
+						class="{% if key == '門市狀態' and row[key] and row[key] != '未保養' %}status-alert{% endif %}"
+					>
+						{{ row[key] | safe }}
+					</td>
+						{% endfor %}
+					</tr>
+				{% endfor %}
+			</tbody>
+        </table >
+    </div>
+	
+<script>
+// ===== 收合功能（穩定版）=====
+function toggleSection(id, event) {
+    const content = document.getElementById(id);
+    const btn = event.currentTarget; // ← 改這裡（關鍵）
+
+    if (!content) return;
+
+    const isHidden = window.getComputedStyle(content).display === "none";
+
+    if (isHidden) {
+        content.style.display = "block";
+        btn.textContent = "▼";
+    } else {
+        content.style.display = "none";
+        btn.textContent = "▶";
+    }
+}
+
+// ===== 門市資料搜尋 =====
+const storeSearchBottom = document.getElementById("storeSearchBottom");
+if (storeSearchBottom) {
+    storeSearchBottom.addEventListener("input", function () {
+        const keyword = this.value.toLowerCase();
+
+        document.querySelectorAll("#storeTable tbody tr").forEach(row => {
+            row.style.display =
+                row.innerText.toLowerCase().includes(keyword) ? "" : "none";
+        });
+    });
+}
+
+// ===== 門市地址搜尋 =====
+const adsSearch = document.getElementById("storeSearchads");
+if (adsSearch) {
+    adsSearch.addEventListener("input", function () {
+        const keyword = this.value.toLowerCase();
+
+        document.querySelectorAll("#adsTable tbody tr").forEach(row => {
+            row.style.display =
+                row.innerText.toLowerCase().includes(keyword) ? "" : "none";
+        });
+    });
+}
+</script>
+
+{% endblock %}

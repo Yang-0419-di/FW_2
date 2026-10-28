@@ -59,7 +59,7 @@
             {% for col in df3.columns %}
                 {% if col == "設備代號" %}
                     <td>
-                        <a href="{{ url_for('billing.index') }}?device_id={{ row[col] }}" style="color: blue; text-decoration: none;">
+                        <a href="{{ url_for('billing.index', device_id=row[col]) }}" style="color: blue; text-decoration: none;">
                             {{ row[col] }}
                         </a>
                     </td>
@@ -165,12 +165,13 @@ document.querySelectorAll('.gs-input').forEach(el => {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                sheet: "{{ page_name }}",
+                sheet: {{ page_name | tojson }},
                 device_id: el.dataset.device,
                 field: el.dataset.field,
                 value: el.value
             })
-        });
+        }).then(r => { if (!r.ok) alert('儲存失敗（' + r.status + '），請重新整理後再試'); })
+          .catch(() => alert('網路錯誤，這筆變更尚未儲存'));
     });
 });
 

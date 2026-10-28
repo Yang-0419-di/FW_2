@@ -47,8 +47,9 @@ def safe_save(wb, file_path):
 
     os.replace(tmp_path, file_path)
 
-def get_version(timeout=10, auto_only=False):
-    version = None
+def get_version(timeout=10, auto_only=False, version=None):
+    if version:
+        auto_only = True  # 已有版本號就不再等待輸入
 
     if not auto_only:
         user_input = ask_input(timeout)
@@ -76,10 +77,11 @@ def get_version(timeout=10, auto_only=False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--auto", action="store_true")
+    parser.add_argument("version", nargs="?", default=None)
     args = parser.parse_args()
 
     try:
-        get_version(auto_only=args.auto)
+        get_version(auto_only=args.auto, version=args.version)
         sys.exit(0)
     except Exception as e:
         print(f"❌ 錯誤：{e}")

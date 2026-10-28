@@ -275,7 +275,7 @@
     <a href="{{ url_for('time_page') }}"><button class="button-1">出勤時間統計</button></a>
     <a href="{{ url_for('calendar_page') }}"><button class="button-2">排程表</button></a>
     <a href="{{ url_for('sm_web_page') }}"><button class="button-2">報修刊版</button></a>
-	{% if current_user.is_authenticated and current_user.username == 'yang.di' %}
+	{% if current_user.is_authenticated and current_user.username in ADMIN_USERS %}
 		<a href="{{ url_for('inspection_log') }}"><button class="button-2">檢視日誌</button></a>
 	{% endif %}
 
