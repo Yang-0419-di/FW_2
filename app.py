@@ -62,6 +62,21 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'billing.login'  # 未登入時自動重定向之登入頁面路由
 
+_API_PREFIXES = ('/api/', '/sc_disk/', '/calendar/events', '/billing/get_last_counts', '/billing/save_person_field')
+
+@login_manager.unauthorized_handler
+def _unauthorized():
+    wants_json = (
+        request.path.startswith(_API_PREFIXES)
+        or request.is_json
+        or request.headers.get('X-Requested-With', '').lower() == 'fetch'
+        or request.accept_mimetypes.best == 'application/json'
+    )
+    if wants_json:
+        return jsonify({'status': 'error', 'message': '登入已逾時，請重新登入',
+                        'login_url': url_for('billing.login')}), 401
+    return redirect(url_for('billing.login', next=request.full_path.rstrip('?')))
+
 @login_manager.user_loader
 def load_user(user_id):
     conn = sqlite3.connect(DB_FILE)
@@ -157,7 +172,7 @@ def home():
     keyword = request.args.get('keyword', '').strip()
     no_data_found = False
     if keyword:
-        df = df[df.apply(lambda r: r.astype(str).str.contains(keyword, case=False, regex=False).any(), axis=1)]
+        df = df[df.astype(str).apply(lambda col: col.str.contains(keyword, case=False, regex=False)).any(axis=1)]
         no_data_found = df.empty
 
     # 區域數量（三段）
@@ -412,6 +427,8 @@ def personal(name):
         home_page=False
     )
 
+REPORT_PER_PAGE = int(os.environ.get('REPORT_PER_PAGE', '50'))
+
 @app.route('/report')
 @login_required
 def report():
@@ -424,20 +441,28 @@ def report():
     
     tables = []
     
+    pagination = None
+    query_args = {k: v for k, v in (('keyword', keyword), ('store_id', store_id), ('repair_item', repair_item)) if v}
     if keyword or store_id or repair_item:
         if keyword:
-            df = df[df.apply(lambda r: r.astype(str).str.contains(keyword, case=False, regex=False).any(), axis=1)]
+            df = df[df.astype(str).apply(lambda col: col.str.contains(keyword, case=False, regex=False)).any(axis=1)]
         if store_id:
             df = df[df['門店編號'].astype(str).str.contains(store_id, case=False, regex=False)]
         if repair_item:
             df = df[df['報修類別'].astype(str).str.strip() == repair_item.strip()]
-        tables = df.to_dict(orient='records')
+        total = len(df)
+        pages = max(1, math.ceil(total / REPORT_PER_PAGE))
+        page = min(max(request.args.get('page', 1, type=int) or 1, 1), pages)
+        tables = df.iloc[(page - 1) * REPORT_PER_PAGE: page * REPORT_PER_PAGE].to_dict(orient='records')
+        pagination = {'page': page, 'pages': pages, 'total': total, 'per_page': REPORT_PER_PAGE}
         
     return render_template(
         'report.html',
         page_header="POS 相關",
         version=version_time,
         tables=tables,
+        pagination=pagination,
+        query_args=query_args,
         keyword=keyword,
         store_id=store_id,
         repair_item=repair_item,
@@ -526,32 +551,72 @@ def inspection_log():
         )
 
 
+# save_log v3
+@app.route('/api/ping', methods=['POST'])
+@login_required
+def api_ping():
+    """前端使用中定期呼叫，讓後端 session 延長有效期（避免輸入到一半被登出）"""
+    session.modified = True
+    return jsonify({'status': 'ok'})
+
+
 @app.route('/api/save_log', methods=['POST'])
 @login_required
 def save_log():
+    """記錄裝置指紋。
+    - 帳號一律取自登入者，不信任前端傳入
+    - 優先補在該帳號『剛登入』那一筆（避免一次登入出現兩列）
+    - 相同指紋 30 分鐘內不重複寫入
+    """
     data = request.get_json(silent=True) or {}
-    username = current_user.username  # 不信任前端傳入的 username（可被偽造）
+    username = current_user.username
+    fingerprint = str(data.get('fingerprint') or '').strip()[:200]
+    if not fingerprint:
+        return jsonify({'status': 'error', 'message': '缺少 fingerprint'}), 400
+
     ip = (request.headers.get('X-Forwarded-For') or request.remote_addr or '').split(',')[0].strip()
-    fingerprint = data.get('fingerprint')
-    
-    # 取得台灣時區（UTC+8）的當下時間
     taiwan_tz = timezone(timedelta(hours=8))
     now = datetime.now(taiwan_tz)
-    
-    login_date = now.strftime('%Y-%m-%d')
-    login_time = now.strftime('%H:%M:%S')
-    created_at = now.strftime('%Y-%m-%d %H:%M:%S')
 
     try:
         sh = client.open_by_key(SHEET_ID)
         ws = sh.worksheet("log")
-        
-        records = ws.get_all_records()
-        new_id = len(records) + 1
-        
-        row_data = [new_id, username, ip, login_date, login_time, created_at, fingerprint]
-        ws.append_row(row_data)
-        
+        headers = ws.row_values(1)
+
+        def _col(name, default):
+            return headers.index(name) if name in headers else default
+
+        i_user, i_created, i_fp = _col('username', 1), _col('created_at', 5), _col('fingerprint', 6)
+
+        usernames = ws.col_values(i_user + 1)  # 含標題列；list 索引 i 對應試算表第 i+1 列
+        last_row = None
+        for i in range(len(usernames) - 1, 0, -1):
+            if usernames[i] == username:
+                last_row = i + 1
+                break
+
+        if last_row is not None:
+            row = ws.row_values(last_row)
+            last_fp = row[i_fp] if len(row) > i_fp else ''
+            try:
+                last_at = datetime.strptime(row[i_created], '%Y-%m-%d %H:%M:%S')
+                age = (now.replace(tzinfo=None) - last_at).total_seconds()
+            except (ValueError, IndexError):
+                age = None
+
+            if age is not None and age < 30 * 60:
+                if last_fp == fingerprint:
+                    return jsonify({'status': 'success', 'message': '指紋已記錄（略過重複）'})
+                if not last_fp:
+                    ws.update_cell(last_row, i_fp + 1, fingerprint)
+                    return jsonify({'status': 'success', 'message': '已補上本次登入的裝置指紋'})
+
+        new_id = len(usernames)  # 標題列 + 既有資料列數 = 新 ID
+        ws.append_row([
+            new_id, username, ip,
+            now.strftime('%Y-%m-%d'), now.strftime('%H:%M:%S'), now.strftime('%Y-%m-%d %H:%M:%S'),
+            fingerprint
+        ])
         return jsonify({'status': 'success', 'message': '日誌與指紋已記錄'})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500

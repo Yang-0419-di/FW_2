@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, abort, jsonify, current_app, flash
+from flask import Blueprint, render_template, request, redirect, url_for, abort, jsonify, current_app, flash, session
 from flask_login import login_user, logout_user, login_required, UserMixin
 from werkzeug.security import check_password_hash
 import sqlite3
@@ -99,6 +99,7 @@ def login():
                 if is_valid:
                     user = User(id=user_id, username=db_username)
                     login_user(user)
+                    session['login_ts'] = datetime.now(ZoneInfo("Asia/Taipei")).strftime('%Y%m%d%H%M%S')
                     
                     # 🌐 抓取使用者 IP 位址 (考慮代理伺服器情況)
                     ip_address = request.headers.get('X-Forwarded-For', request.remote_addr)
@@ -466,6 +467,29 @@ def delete_customer(device_id):
             ws.delete_rows(idx)
             return True
     return False
+
+def delete_contract(device_id):
+    """刪除契約。回傳 (是否刪除, 仍以此設備為主機的子機清單)；帳單歷史(billing_summary)保留"""
+    ws = get_person_worksheet("contracts")
+    rows = ws.get_all_records()
+    target = str(device_id).strip()
+    orphans = [str(r.get("device_id", "")).strip() for r in rows
+               if str(r.get("master_device_id", "")).strip() == target
+               and str(r.get("device_id", "")).strip() != target]
+    deleted = False
+    for idx, row in enumerate(rows, start=2):
+        if str(row.get("device_id", "")).strip() == target:
+            ws.delete_rows(idx)
+            deleted = True
+            break
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        conn.execute("DELETE FROM contracts WHERE device_id = ?", (target,))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"⚠️ 刪除本機契約失敗: {e}")
+    return deleted, orphans
 
 # 新客戶建檔
 def insert_customer(device_id, customer_data):
@@ -976,7 +1000,10 @@ def index():
 
         elif mode == "delete_customer":
             delete_customer(device_id)
-            message = f"🗑 已刪除客戶（設備編號：{device_id}）"
+            _deleted, _orphans = delete_contract(device_id)
+            message = f"🗑 已刪除客戶與契約（設備編號：{device_id}）"
+            if _orphans:
+                message += f"；⚠️ 以下子機仍指向此主機，請重新指定：{', '.join(_orphans)}"
 
         elif mode == "new_customer":
             old_id = request.form.get("device_id")
@@ -1320,9 +1347,12 @@ def route_get_last_counts():
             "prev_month": prev_month
         })
 
-@billing_bp.route('/logout')
+@billing_bp.route('/logout', methods=['GET', 'POST'])
 @login_required
 def logout():
+    if request.method != 'POST':
+        # GET 不登出，避免 <img src="/billing/logout"> 之類的跨站強制登出
+        return redirect(url_for('home'))
     logout_user()
     flash('您已成功登出', 'info')
     return redirect(url_for('billing.login'))

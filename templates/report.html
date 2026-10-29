@@ -42,6 +42,19 @@
             </tbody>
         </table>
     </div>
+    {% if pagination %}
+    <div class="pager">
+        共 {{ pagination.total }} 筆，第 {{ pagination.page }} / {{ pagination.pages }} 頁
+        {% if pagination.page > 1 %}
+            <a href="{{ url_for('report', page=1, **query_args) }}">« 第一頁</a>
+            <a href="{{ url_for('report', page=pagination.page - 1, **query_args) }}">‹ 上一頁</a>
+        {% endif %}
+        {% if pagination.page < pagination.pages %}
+            <a href="{{ url_for('report', page=pagination.page + 1, **query_args) }}">下一頁 ›</a>
+            <a href="{{ url_for('report', page=pagination.pages, **query_args) }}">最後一頁 »</a>
+        {% endif %}
+    </div>
+    {% endif %}
     {% else %}
         <p class="no-data">查無符合條件的報修資料。</p>
     {% endif %}
@@ -108,6 +121,17 @@
 
         tr:hover {
             background-color: #f9f9f9;
+        }
+
+        .pager {
+            margin: 14px 0;
+            font-size: 15px;
+        }
+
+        .pager a {
+            margin-left: 10px;
+            color: #007BFF;
+            text-decoration: none;
         }
 
         .no-data {

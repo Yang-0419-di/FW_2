@@ -238,7 +238,7 @@
 {% if current_user.is_authenticated %}
 <div class="user-header-info">
     <span>👤 <span class="username">{{ current_user.username }}</span></span>
-    <a href="{{ url_for('billing.logout') }}" class="logout-btn">登出</a>
+    <form method="POST" action="{{ url_for('billing.logout') }}" style="display:inline;margin:0;"><button type="submit" class="logout-btn" style="margin:0;border:none;cursor:pointer;font-family:inherit;">登出</button></form>
 </div>
 {% endif %}
 
@@ -337,52 +337,6 @@
 
 <button id="backToTop" onclick="window.scrollTo({top:0, behavior:'smooth'})">回頂部</button>
 
-<div id="global-loading" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); z-index:9999; justify-content:center; align-items:center;">
-    <div style="background:white; padding:30px 50px; border-radius:12px; font-size:22px; font-weight:bold; box-shadow:0 4px 20px rgba(0,0,0,0.3);">
-        ⏳ 加載中...請稍後
-    </div>
-</div>
-
-<script>
-function showGlobalLoading() {
-    const loading = document.getElementById("global-loading");
-    if (loading) {
-        loading.style.display = "flex";
-    }
-}
-
-document.addEventListener("click", function (e) {
-    const link = e.target.closest("a");
-    if (!link) return;
-
-    const rawHref = link.getAttribute("href");
-    if (!rawHref || rawHref.startsWith("javascript") || rawHref.startsWith("#")) {
-        return;
-    }
-    if (link.target === "_blank") {
-        return;
-    }
-    if (link.hasAttribute("download")) {
-        return;
-    }
-    if (e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1) {
-        return;
-    }
-    showGlobalLoading();
-});
-
-document.addEventListener("submit", function () {
-    showGlobalLoading();
-});
-
-window.addEventListener("pageshow", function () {
-    const loading = document.getElementById("global-loading");
-    if (loading) {
-        loading.style.display = "none";
-    }
-});
-</script>
-
 <script>
 document.querySelectorAll('.accordion-nav-container .accordion-button').forEach(btn => {
     btn.addEventListener('click', function() {
@@ -419,29 +373,14 @@ document.addEventListener('click', function(e) {
 });
 </script>
 
-{% if current_user.is_authenticated %}
-<script>
-  // 10 分鐘無動作前端自動登出重導向 (10 分鐘 = 600,000 毫秒)
-  let idleTimeout;
-  const timeoutTime = 10 * 60 * 1000;
-
-  // 修改前端自動登出觸發邏輯
-	function resetTimer() {
-		clearTimeout(idleTimeout);
-		idleTimeout = setTimeout(function() {
-			alert("由於您已超過 10 分鐘未操作，系統已自動登出。");
-			// 使用 replace 避免留有歷史舊紀錄，並直接跳轉
-			window.location.replace("{{ url_for('billing.logout') }}");
-		}, timeoutTime);
-	}
-
-  window.onload = resetTimer;
-  document.onmousemove = resetTimer;
-  document.onkeydown = resetTimer;
-  document.onclick = resetTimer;
-  document.onscroll = resetTimer;
-</script>
-{% endif %}
+<script src="{{ url_for('static', filename='js/common.js', v=3) }}"
+        data-auth="{{ '1' if current_user.is_authenticated else '0' }}"
+        data-login-url="{{ url_for('billing.login') }}"
+        data-logout-url="{{ url_for('billing.logout') }}"
+        data-ping-url="{{ url_for('api_ping') }}"
+        data-log-url="{{ url_for('save_log') }}"
+        data-sess="{{ session.get('login_ts', '') }}"
+        data-idle-minutes="{{ (config.PERMANENT_SESSION_LIFETIME.total_seconds() // 60) | int }}"></script>
 
 {% block extra_scripts %}{% endblock %}
 </body>

@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-fix_project.py (v2) — Flask 計費系統 / Excel 自動化腳本 / 前端 templates 的缺陷修正工具
+fix_project.py (v3) — Flask 計費系統 / Excel 自動化腳本 / 前端 templates 的缺陷修正工具
 
 用法（在專案根目錄，也就是 app.py 所在資料夾執行）：
     python fix_project.py              # 套用所有修正（會先備份）
     python fix_project.py --dry-run    # 只預覽，不寫檔
+    python fix_project.py --add-sri    # （另外執行，需連網）替 CDN 的 Bootstrap/FullCalendar 補 integrity
     python fix_project.py --restore _fix_backup/20261027_153000   # 還原備份
     python fix_project.py D:\\flask2    # 指定專案路徑
 
@@ -91,14 +92,6 @@ patch("app.py", "中文字型：實際載入專案內 Noto 字型（Linux/Render
 rpatch("app.py", "關鍵字搜尋改為純文字比對（輸入 ( [ * 等字元會觸發 regex 錯誤造成 500）",
        r"contains\((keyword|store_id), case=False(?!, regex=False)",
        r"contains(\1, case=False, regex=False")
-
-patch("app.py", "save_log：不信任前端傳入的 username、改用登入者；IP 優先取 X-Forwarded-For",
-      "    data = request.json\n    username = data.get('username')\n    ip = request.remote_addr\n"
-      "    fingerprint = data.get('fingerprint')\n",
-      "    data = request.get_json(silent=True) or {}\n"
-      "    username = current_user.username  # 不信任前端傳入的 username（可被偽造）\n"
-      "    ip = (request.headers.get('X-Forwarded-For') or request.remote_addr or '').split(',')[0].strip()\n"
-      "    fingerprint = data.get('fingerprint')\n")
 
 patch("app.py", "inspection_log 管理員改讀 ADMIN_USERS",
       "if current_user.username != 'yang.di':",
@@ -605,6 +598,498 @@ def _fix_sm_web(text):
 
 fpatch("templates/sm_web.html", "移除 block 內巢狀的 <html><head><body>（無效 HTML，瀏覽器靠容錯才能顯示）", _fix_sm_web)
 
+
+# =====================================================================
+# 第三批：session 同步 / 401 JSON / 共用 JS / 裝置指紋 / 分頁 / 刪契約 / POST 登出
+# =====================================================================
+def newfile(file, desc, content):
+    PATCHES.append(dict(file=file, desc=desc, kind="newfile", content=content))
+
+
+COMMON_JS = r"""/*!
+ * common.js — 全站共用前端邏輯（由 fix_project.py 產生；請改這一份，不要再複製到各模板）
+ *  1. 全域載入遮罩
+ *  2. fetch 回 401（登入逾時）時自動導向登入頁
+ *  3. 閒置自動登出 + 使用中定期 ping（前端計時與後端 session 同步）
+ *  4. 裝置指紋（每次登入只送一次）
+ */
+(function () {
+  'use strict';
+
+  var script = document.currentScript;
+  var cfg = (script && script.dataset) || {};
+  var isAuth = cfg.auth === '1';
+  var loginUrl = cfg.loginUrl || '/billing/login';
+  var logoutUrl = cfg.logoutUrl || '/billing/logout';
+  var pingUrl = cfg.pingUrl || '/api/ping';
+  var logUrl = cfg.logUrl || '/api/save_log';
+  var idleMs = (parseInt(cfg.idleMinutes, 10) || 10) * 60 * 1000;
+  var pingEveryMs = Math.min(3 * 60 * 1000, Math.floor(idleMs / 2));
+  var warnBeforeMs = Math.min(60 * 1000, Math.floor(idleMs / 5));
+  var nativeFetch = window.fetch ? window.fetch.bind(window) : null;
+
+  /* ---------- 1. 載入遮罩 ---------- */
+  function ensureOverlay() {
+    var el = document.getElementById('global-loading');
+    if (el) return el;
+    el = document.createElement('div');
+    el.id = 'global-loading';
+    el.style.cssText = 'display:none;position:fixed;top:0;left:0;width:100%;height:100%;' +
+      'background:rgba(0,0,0,0.4);z-index:9999;justify-content:center;align-items:center;';
+    var box = document.createElement('div');
+    box.style.cssText = 'background:white;padding:30px 50px;border-radius:12px;font-size:22px;' +
+      'font-weight:bold;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+    box.textContent = '\u23F3 加載中...請稍後';
+    el.appendChild(box);
+    document.body.appendChild(el);
+    return el;
+  }
+  function showGlobalLoading() { ensureOverlay().style.display = 'flex'; }
+  function hideGlobalLoading() {
+    var el = document.getElementById('global-loading');
+    if (el) el.style.display = 'none';
+  }
+  window.showGlobalLoading = showGlobalLoading;
+  window.hideGlobalLoading = hideGlobalLoading;
+
+  document.addEventListener('click', function (e) {
+    var link = e.target && e.target.closest ? e.target.closest('a') : null;
+    if (!link) return;
+    var rawHref = link.getAttribute('href');
+    if (!rawHref || rawHref.indexOf('javascript') === 0 || rawHref.charAt(0) === '#') return;
+    if (link.target === '_blank' || link.hasAttribute('download')) return;
+    if (e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1) return;
+    showGlobalLoading();
+  });
+  document.addEventListener('submit', function () { showGlobalLoading(); });
+  window.addEventListener('pageshow', hideGlobalLoading);
+
+  /* ---------- 2. fetch 遇到 401 → 導向登入頁 ---------- */
+  var redirecting = false;
+  function goLogin() {
+    if (redirecting) return;
+    redirecting = true;
+    var next = location.pathname + location.search;
+    location.replace(loginUrl + (loginUrl.indexOf('?') < 0 ? '?' : '&') + 'next=' + encodeURIComponent(next));
+  }
+  window.goLogin = goLogin;
+
+  if (nativeFetch) {
+    window.fetch = function (input, init) {
+      return nativeFetch(input, init).then(function (res) {
+        if (res.status === 401) {
+          var url = typeof input === 'string' ? input : ((input && input.url) || '');
+          if (url.charAt(0) === '/' || url.indexOf(location.origin) === 0) goLogin();
+        }
+        return res;
+      });
+    };
+  }
+
+  /* ---------- 3. 閒置登出 + 定期 ping ---------- */
+  var sessKey = 'fp_sent:' + (cfg.sess || '');
+
+  if (isAuth) {
+    var lastActivity = Date.now();
+    var lastPing = Date.now();
+    var banner = null;
+
+    var showBanner = function (sec) {
+      if (!banner) {
+        banner = document.createElement('div');
+        banner.style.cssText = 'position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:10000;' +
+          'background:#b45309;color:#fff;padding:12px 22px;border-radius:8px;font-size:16px;' +
+          'box-shadow:0 4px 16px rgba(0,0,0,0.3);';
+        document.body.appendChild(banner);
+      }
+      banner.textContent = '\u26A0\uFE0F 長時間未操作，將於 ' + sec + ' 秒後自動登出。移動滑鼠或按任意鍵即可繼續使用。';
+    };
+    var hideBanner = function () {
+      if (banner && banner.parentNode) banner.parentNode.removeChild(banner);
+      banner = null;
+    };
+    var onActivity = function () { lastActivity = Date.now(); if (banner) hideBanner(); };
+    ['mousemove', 'keydown', 'click', 'scroll', 'touchstart', 'input'].forEach(function (ev) {
+      window.addEventListener(ev, onActivity, { passive: true, capture: true });
+    });
+
+    var doLogout = function () {
+      try { sessionStorage.removeItem(sessKey); } catch (e) {}
+      var done = function () { location.replace(loginUrl); };
+      if (!nativeFetch) { done(); return; }
+      nativeFetch(logoutUrl, { method: 'POST', credentials: 'same-origin', keepalive: true }).then(done, done);
+    };
+    var ping = function () {
+      lastPing = Date.now();
+      return fetch(pingUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'fetch' }
+      }).catch(function () {});
+    };
+    var tick = function () {
+      var now = Date.now();
+      var idle = now - lastActivity;
+      if (idle >= idleMs) { doLogout(); return; }
+      if (idle >= idleMs - warnBeforeMs) { showBanner(Math.ceil((idleMs - idle) / 1000)); return; }
+      // 使用中：每隔 pingEveryMs 通知後端延長 session，避免輸入到一半被登出
+      if (lastActivity > lastPing && now - lastPing >= pingEveryMs) ping();
+    };
+    setInterval(tick, 5000);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) tick(); });
+
+    // 手動按登出時，清掉指紋旗標讓下次登入重新記錄
+    document.addEventListener('submit', function (e) {
+      var action = e.target && e.target.getAttribute ? (e.target.getAttribute('action') || '') : '';
+      if (action && action.indexOf(logoutUrl) !== -1) {
+        try { sessionStorage.removeItem(sessKey); } catch (err) {}
+      }
+    });
+  }
+
+  /* ---------- 4. 裝置指紋（每次登入只送一次） ---------- */
+  function b64(str) {
+    var bytes = new TextEncoder().encode(str);
+    var bin = '';
+    for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin);
+  }
+
+  function getReadableDeviceFingerprint() {
+    var ua = navigator.userAgent;
+    var deviceName = 'Unknown Device';
+    var browserName = 'Unknown Browser';
+
+    if (/iphone/i.test(ua)) {
+      deviceName = 'Apple iPhone';
+    } else if (/ipad/i.test(ua)) {
+      deviceName = 'Apple iPad';
+    } else if (/macintosh|mac os x/i.test(ua)) {
+      deviceName = 'Mac';
+    } else if (/android/i.test(ua)) {
+      deviceName = 'Android Device';
+      var match = ua.match(/\b([A-Z0-9]+-[A-Z0-9]+)\b/);
+      if (match) deviceName = 'Android (' + match[1] + ')';
+    } else if (/win/i.test(ua)) {
+      deviceName = 'Windows PC';
+    } else if (/linux/i.test(ua)) {
+      deviceName = 'Linux PC';
+    }
+
+    if (/edg/i.test(ua)) {
+      browserName = 'Edge';
+    } else if (/chrome/i.test(ua) && !/chromium/i.test(ua)) {
+      browserName = 'Chrome';
+    } else if (/safari/i.test(ua) && !/chrome/i.test(ua)) {
+      browserName = 'Safari';
+    } else if (/firefox/i.test(ua)) {
+      browserName = 'Firefox';
+    } else if (/line/i.test(ua)) {
+      browserName = 'LINE App';
+    }
+
+    var res = screen.width + 'x' + screen.height;
+    var shortHash = 'fingerprint_error';
+    try {
+      var canvas = document.createElement('canvas');
+      var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+      var renderer = gl ? gl.getParameter(gl.RENDERER) : 'unknown';
+      var data = [
+        ua,
+        navigator.language || '',
+        res,
+        (Intl.DateTimeFormat().resolvedOptions().timeZone || ''),
+        renderer
+      ].join('|');
+      shortHash = b64(data).substring(0, 32);
+    } catch (e) {
+      try { shortHash = b64(ua).substring(0, 32); } catch (e2) {}
+    }
+    return deviceName + ' / ' + browserName + ' (' + res + ')-' + shortHash;
+  }
+
+  function sendFingerprintOnce() {
+    try { if (sessionStorage.getItem(sessKey) === '1') return; } catch (e) {}
+    fetch(logUrl, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fingerprint: getReadableDeviceFingerprint() })
+    }).then(function (res) {
+      if (res.ok) { try { sessionStorage.setItem(sessKey, '1'); } catch (e) {} }
+    }).catch(function () {});
+  }
+
+  if (isAuth) {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', sendFingerprintOnce);
+    else sendFingerprintOnce();
+  }
+})();
+"""
+
+newfile("static/js/common.js", "建立共用前端腳本 static/js/common.js（載入遮罩、401 導向、閒置登出+ping、裝置指紋）", COMMON_JS)
+
+COMMON_INCLUDE = (
+    '<script src="{{ url_for(\'static\', filename=\'js/common.js\', v=3) }}"\n'
+    '        data-auth="{{ \'1\' if current_user.is_authenticated else \'0\' }}"\n'
+    '        data-login-url="{{ url_for(\'billing.login\') }}"\n'
+    '        data-logout-url="{{ url_for(\'billing.logout\') }}"\n'
+    '        data-ping-url="{{ url_for(\'api_ping\') }}"\n'
+    '        data-log-url="{{ url_for(\'save_log\') }}"\n'
+    '        data-sess="{{ session.get(\'login_ts\', \'\') }}"\n'
+    '        data-idle-minutes="{{ (config.PERMANENT_SESSION_LIFETIME.total_seconds() // 60) | int }}"></script>\n'
+)
+
+_RE_OVERLAY = r'(?:<!-- 全域載入動畫 -->\s*)?<div id="global-loading".*?</div>\s*</div>\s*'
+_RE_LOADING_JS = r'<script>\s*function showGlobalLoading\(\) \{.*?</script>\s*'
+_RE_PAGESHOW_JS = r'<script>\s*window\.addEventListener\("pageshow".*?</script>\s*'
+_RE_IDLE = r'\{% if current_user\.is_authenticated %\}\s*<script>[^<]*?let idleTimeout;.*?</script>\s*\{% endif %\}\s*'
+
+
+def _dedupe_page_scripts(text, patterns, include_at_idle):
+    """移除各模板複製的載入遮罩/閒置登出，改引用 common.js"""
+    total = 0
+    for pat in patterns:
+        text, n = re.subn(pat, "", text, flags=re.S)
+        total += n
+    text, n = re.subn(_RE_IDLE, lambda m: COMMON_INCLUDE + "\n" if include_at_idle else "", text, flags=re.S)
+    return text, total + n
+
+
+def _fix_layout(text):
+    return _dedupe_page_scripts(text, [_RE_OVERLAY, _RE_LOADING_JS], True)
+
+
+def _fix_billing_index(text):
+    return _dedupe_page_scripts(text, [_RE_OVERLAY, _RE_LOADING_JS], True)
+
+
+def _fix_inspection_log(text):
+    return _dedupe_page_scripts(text, [_RE_OVERLAY, _RE_LOADING_JS], True)
+
+
+def _fix_tjw(text):
+    # tjw.html 繼承 layout，layout 已載入 common.js；這裡只需移除重複的遮罩與監聽（否則每次點擊會觸發兩次）
+    return _dedupe_page_scripts(text, [_RE_OVERLAY, _RE_LOADING_JS, _RE_PAGESHOW_JS], False)
+
+
+fpatch("templates/layout.html", "layout.html：重複的載入遮罩/閒置登出改引用 common.js", _fix_layout)
+fpatch("templates/billing_index.html", "billing_index.html：重複的載入遮罩/閒置登出改引用 common.js", _fix_billing_index)
+fpatch("templates/inspection_log.html", "inspection_log.html：重複的載入遮罩/閒置登出/指紋改引用 common.js", _fix_inspection_log)
+fpatch("templates/tjw.html", "tjw.html：移除與 layout 重複的載入遮罩與監聽", _fix_tjw)
+
+# ---- 登出改 POST（模板三處）----
+_LOGOUT_A = '<a href="{{ url_for(\'billing.logout\') }}" class="logout-btn">登出</a>'
+_LOGOUT_FORM = ('<form method="POST" action="{{ url_for(\'billing.logout\') }}" style="display:inline;margin:0;">'
+                '<button type="submit" class="logout-btn" '
+                'style="margin:0;border:none;cursor:pointer;font-family:inherit;">登出</button></form>')
+for _t in ("layout.html", "billing_index.html", "inspection_log.html"):
+    patch(f"templates/{_t}", "登出按鈕改為 POST 表單（GET 登出可被 <img src=/billing/logout> 強制登出）", _LOGOUT_A, _LOGOUT_FORM)
+
+patch("modules/billing.py", "/logout 只在 POST 時登出（GET 一律導回首頁，不再登出）",
+      "@billing_bp.route('/logout')\n@login_required\ndef logout():\n    logout_user()\n",
+      "@billing_bp.route('/logout', methods=['GET', 'POST'])\n@login_required\ndef logout():\n"
+      "    if request.method != 'POST':\n"
+      "        # GET 不登出，避免 <img src=\"/billing/logout\"> 之類的跨站強制登出\n"
+      "        return redirect(url_for('home'))\n"
+      "    logout_user()\n")
+
+patch("modules/billing.py", "匯入 session（記錄本次登入時間，供前端判斷是否需重送裝置指紋）",
+      "from flask import Blueprint, render_template, request, redirect, url_for, abort, jsonify, current_app, flash\n",
+      "from flask import Blueprint, render_template, request, redirect, url_for, abort, jsonify, current_app, flash, session\n")
+
+patch("modules/billing.py", "登入成功時寫入 session['login_ts']",
+      "                    login_user(user)\n",
+      "                    login_user(user)\n"
+      "                    session['login_ts'] = datetime.now(ZoneInfo(\"Asia/Taipei\")).strftime('%Y%m%d%H%M%S')\n")
+
+# ---- app.py：401 JSON / ping / save_log / 分頁 / 向量化搜尋 ----
+patch("app.py", "未登入時：API 類請求回 401 JSON，一般頁面才導向登入頁（原本 fetch 會拿到登入頁 HTML）",
+      "login_manager.login_view = 'billing.login'  # 未登入時自動重定向之登入頁面路由\n",
+      "login_manager.login_view = 'billing.login'  # 未登入時自動重定向之登入頁面路由\n\n"
+      "_API_PREFIXES = ('/api/', '/sc_disk/', '/calendar/events', '/billing/get_last_counts', '/billing/save_person_field')\n\n"
+      "@login_manager.unauthorized_handler\n"
+      "def _unauthorized():\n"
+      "    wants_json = (\n"
+      "        request.path.startswith(_API_PREFIXES)\n"
+      "        or request.is_json\n"
+      "        or request.headers.get('X-Requested-With', '').lower() == 'fetch'\n"
+      "        or request.accept_mimetypes.best == 'application/json'\n"
+      "    )\n"
+      "    if wants_json:\n"
+      "        return jsonify({'status': 'error', 'message': '登入已逾時，請重新登入',\n"
+      "                        'login_url': url_for('billing.login')}), 401\n"
+      "    return redirect(url_for('billing.login', next=request.full_path.rstrip('?')))\n")
+
+_SAVE_LOG_V3 = '''# save_log v3
+@app.route('/api/ping', methods=['POST'])
+@login_required
+def api_ping():
+    """前端使用中定期呼叫，讓後端 session 延長有效期（避免輸入到一半被登出）"""
+    session.modified = True
+    return jsonify({'status': 'ok'})
+
+
+@app.route('/api/save_log', methods=['POST'])
+@login_required
+def save_log():
+    """記錄裝置指紋。
+    - 帳號一律取自登入者，不信任前端傳入
+    - 優先補在該帳號『剛登入』那一筆（避免一次登入出現兩列）
+    - 相同指紋 30 分鐘內不重複寫入
+    """
+    data = request.get_json(silent=True) or {}
+    username = current_user.username
+    fingerprint = str(data.get('fingerprint') or '').strip()[:200]
+    if not fingerprint:
+        return jsonify({'status': 'error', 'message': '缺少 fingerprint'}), 400
+
+    ip = (request.headers.get('X-Forwarded-For') or request.remote_addr or '').split(',')[0].strip()
+    taiwan_tz = timezone(timedelta(hours=8))
+    now = datetime.now(taiwan_tz)
+
+    try:
+        sh = client.open_by_key(SHEET_ID)
+        ws = sh.worksheet("log")
+        headers = ws.row_values(1)
+
+        def _col(name, default):
+            return headers.index(name) if name in headers else default
+
+        i_user, i_created, i_fp = _col('username', 1), _col('created_at', 5), _col('fingerprint', 6)
+
+        usernames = ws.col_values(i_user + 1)  # 含標題列；list 索引 i 對應試算表第 i+1 列
+        last_row = None
+        for i in range(len(usernames) - 1, 0, -1):
+            if usernames[i] == username:
+                last_row = i + 1
+                break
+
+        if last_row is not None:
+            row = ws.row_values(last_row)
+            last_fp = row[i_fp] if len(row) > i_fp else ''
+            try:
+                last_at = datetime.strptime(row[i_created], '%Y-%m-%d %H:%M:%S')
+                age = (now.replace(tzinfo=None) - last_at).total_seconds()
+            except (ValueError, IndexError):
+                age = None
+
+            if age is not None and age < 30 * 60:
+                if last_fp == fingerprint:
+                    return jsonify({'status': 'success', 'message': '指紋已記錄（略過重複）'})
+                if not last_fp:
+                    ws.update_cell(last_row, i_fp + 1, fingerprint)
+                    return jsonify({'status': 'success', 'message': '已補上本次登入的裝置指紋'})
+
+        new_id = len(usernames)  # 標題列 + 既有資料列數 = 新 ID
+        ws.append_row([
+            new_id, username, ip,
+            now.strftime('%Y-%m-%d'), now.strftime('%H:%M:%S'), now.strftime('%Y-%m-%d %H:%M:%S'),
+            fingerprint
+        ])
+        return jsonify({'status': 'success', 'message': '日誌與指紋已記錄'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+'''
+
+
+def _replace_save_log(text):
+    if "# save_log v3" in text:
+        return text, 0
+    pat = re.compile(r"@app\.route\('/api/save_log', methods=\['POST'\]\)\n@login_required\ndef save_log\(\):.*?(?=\n@app\.route\('/time'\))", re.S)
+    new_text, n = pat.subn(lambda m: _SAVE_LOG_V3.rstrip("\n") + "\n", text, count=1)
+    return new_text, n
+
+
+fpatch("app.py", "save_log 重寫：新增 /api/ping；補在登入那一列、30 分鐘內同指紋不重複（原本每次重整新增一筆）", _replace_save_log)
+
+patch("app.py", "報表每頁筆數設定",
+      "@app.route('/report')\n@login_required\ndef report():\n",
+      "REPORT_PER_PAGE = int(os.environ.get('REPORT_PER_PAGE', '50'))\n\n"
+      "@app.route('/report')\n@login_required\ndef report():\n")
+
+patch("app.py", "report：建立分頁預設值與查詢參數（換頁時保留篩選條件）",
+      "    if keyword or store_id or repair_item:\n        if keyword:\n",
+      "    pagination = None\n"
+      "    query_args = {k: v for k, v in (('keyword', keyword), ('store_id', store_id), ('repair_item', repair_item)) if v}\n"
+      "    if keyword or store_id or repair_item:\n        if keyword:\n")
+
+patch("app.py", "report：後端分頁（原本把符合條件的資料一次全部送到瀏覽器）",
+      "        tables = df.to_dict(orient='records')\n",
+      "        total = len(df)\n"
+      "        pages = max(1, math.ceil(total / REPORT_PER_PAGE))\n"
+      "        page = min(max(request.args.get('page', 1, type=int) or 1, 1), pages)\n"
+      "        tables = df.iloc[(page - 1) * REPORT_PER_PAGE: page * REPORT_PER_PAGE].to_dict(orient='records')\n"
+      "        pagination = {'page': page, 'pages': pages, 'total': total, 'per_page': REPORT_PER_PAGE}\n")
+
+patch("app.py", "report：把分頁資訊傳給模板",
+      "        tables=tables,\n        keyword=keyword,\n        store_id=store_id,\n",
+      "        tables=tables,\n        pagination=pagination,\n        query_args=query_args,\n        keyword=keyword,\n        store_id=store_id,\n")
+
+rpatch("app.py", "關鍵字搜尋向量化（原本逐列 df.apply，資料多時很慢）",
+       r"df\[df\.apply\(lambda r: r\.astype\(str\)\.str\.contains\(keyword, case=False(?:, regex=False)?\)\.any\(\), axis=1\)\]",
+       r"df[df.astype(str).apply(lambda col: col.str.contains(keyword, case=False, regex=False)).any(axis=1)]")
+
+patch("templates/report.html", "報表分頁導覽列",
+      "        </table>\n    </div>\n    {% else %}\n        <p class=\"no-data\">查無符合條件的報修資料。</p>",
+      "        </table>\n    </div>\n"
+      "    {% if pagination %}\n"
+      "    <div class=\"pager\">\n"
+      "        共 {{ pagination.total }} 筆，第 {{ pagination.page }} / {{ pagination.pages }} 頁\n"
+      "        {% if pagination.page > 1 %}\n"
+      "            <a href=\"{{ url_for('report', page=1, **query_args) }}\">« 第一頁</a>\n"
+      "            <a href=\"{{ url_for('report', page=pagination.page - 1, **query_args) }}\">‹ 上一頁</a>\n"
+      "        {% endif %}\n"
+      "        {% if pagination.page < pagination.pages %}\n"
+      "            <a href=\"{{ url_for('report', page=pagination.page + 1, **query_args) }}\">下一頁 ›</a>\n"
+      "            <a href=\"{{ url_for('report', page=pagination.pages, **query_args) }}\">最後一頁 »</a>\n"
+      "        {% endif %}\n"
+      "    </div>\n"
+      "    {% endif %}\n"
+      "    {% else %}\n        <p class=\"no-data\">查無符合條件的報修資料。</p>")
+
+patch("templates/report.html", "分頁導覽樣式",
+      "        .no-data {\n            color: #777;\n",
+      "        .pager {\n            margin: 14px 0;\n            font-size: 15px;\n        }\n\n"
+      "        .pager a {\n            margin-left: 10px;\n            color: #007BFF;\n            text-decoration: none;\n        }\n\n"
+      "        .no-data {\n            color: #777;\n")
+
+# ---- 刪除客戶時一併刪除契約 ----
+patch("modules/billing.py", "新增 delete_contract（刪除 contracts 分頁與 SQLite 契約，並回報仍指向它的子機）",
+      "# 新客戶建檔\ndef insert_customer(",
+      "def delete_contract(device_id):\n"
+      "    \"\"\"刪除契約。回傳 (是否刪除, 仍以此設備為主機的子機清單)；帳單歷史(billing_summary)保留\"\"\"\n"
+      "    ws = get_person_worksheet(\"contracts\")\n"
+      "    rows = ws.get_all_records()\n"
+      "    target = str(device_id).strip()\n"
+      "    orphans = [str(r.get(\"device_id\", \"\")).strip() for r in rows\n"
+      "               if str(r.get(\"master_device_id\", \"\")).strip() == target\n"
+      "               and str(r.get(\"device_id\", \"\")).strip() != target]\n"
+      "    deleted = False\n"
+      "    for idx, row in enumerate(rows, start=2):\n"
+      "        if str(row.get(\"device_id\", \"\")).strip() == target:\n"
+      "            ws.delete_rows(idx)\n"
+      "            deleted = True\n"
+      "            break\n"
+      "    try:\n"
+      "        conn = sqlite3.connect(DB_FILE)\n"
+      "        conn.execute(\"DELETE FROM contracts WHERE device_id = ?\", (target,))\n"
+      "        conn.commit()\n"
+      "        conn.close()\n"
+      "    except Exception as e:\n"
+      "        print(f\"⚠️ 刪除本機契約失敗: {e}\")\n"
+      "    return deleted, orphans\n\n"
+      "# 新客戶建檔\ndef insert_customer(")
+
+patch("modules/billing.py", "刪除客戶時一併刪除契約，避免 contracts 留下孤兒資料",
+      "            delete_customer(device_id)\n            message = f\"🗑 已刪除客戶（設備編號：{device_id}）\"\n",
+      "            delete_customer(device_id)\n"
+      "            _deleted, _orphans = delete_contract(device_id)\n"
+      "            message = f\"🗑 已刪除客戶與契約（設備編號：{device_id}）\"\n"
+      "            if _orphans:\n"
+      "                message += f\"；⚠️ 以下子機仍指向此主機，請重新指定：{', '.join(_orphans)}\"\n")
+
+
 # =====================================================================
 # requirements
 # =====================================================================
@@ -645,12 +1130,34 @@ def write_text(path, text, meta):
 def apply_patches(root, dry):
     by_file = {}
     for p in PATCHES:
+        if p["kind"] == "newfile":
+            continue
         by_file.setdefault(p["file"], []).append(p)
 
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_dir = root / "_fix_backup" / stamp
     stats = dict(applied=0, skipped=0, missing=0, nofile=0)
     changed_files = []
+
+    # ---- 新增檔案（例如 static/js/common.js）----
+    for p in [x for x in PATCHES if x["kind"] == "newfile"]:
+        path = root / p["file"]
+        print(f"\n📄 {p['file']}")
+        content = p["content"]
+        if path.exists() and path.read_text(encoding="utf-8").replace("\r\n", "\n") == content:
+            print(f"   ⏭  已是最新：{p['desc']}")
+            stats["skipped"] += 1
+            continue
+        print(f"   ✅ {p['desc']}")
+        stats["applied"] += 1
+        changed_files.append(p["file"])
+        if not dry:
+            if path.exists():
+                dst = backup_dir / p["file"]
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(path, dst)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8", newline="\n")
 
     for rel, plist in by_file.items():
         path = root / rel
@@ -737,6 +1244,66 @@ def apply_patches(root, dry):
     print("  2. Render 設定環境變數 SECRET_KEY（隨機長字串）、ADMIN_USERS（可選）")
     print("  3. 用一筆已知月份的實際資料，驗證『上月讀數』與帳單金額是否正確")
     print("  4. 瀏覽器按 Ctrl+F5 強制重新整理；到 /disk、/billing/、首頁硬碟檢測表各操作一次確認")
+    print("  5. 新增了 static/js/common.js：部署到 Render 前務必 git add static/（否則頁面沒有載入遮罩與自動登出）")
+    print("  6. 有網路時另外執行：python fix_project.py --add-sri  （替 CDN 套件補 integrity）")
+
+
+
+def fetch_bytes(url):
+    import urllib.request
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (fix_project SRI)"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return r.read()
+
+
+_SRI_TAG = re.compile(
+    r'<(script|link)\b([^>]*?)\b(src|href)="(https://(?:cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com|unpkg\.com)/[^"]+)"([^>]*)>',
+    re.I)
+
+
+def add_sri(root, dry, fetch=fetch_bytes):
+    """替 templates/*.html 內的 CDN <script>/<link rel=stylesheet> 補上 integrity（需要連網；只下載、不執行）"""
+    import base64
+    import hashlib
+    cache, done, failed = {}, 0, 0
+    tdir = root / "templates"
+    if not tdir.is_dir():
+        sys.exit("找不到 templates 資料夾")
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    for path in sorted(tdir.rglob("*.html")):
+        rel = path.relative_to(root)
+        if any(part in ("備份", "臨時備份", "_fix_backup") for part in rel.parts):
+            continue
+        text, meta = read_text(path)
+
+        def repl(m):
+            nonlocal done, failed
+            whole, tag, url = m.group(0), m.group(1).lower(), m.group(4)
+            if "integrity=" in whole:
+                return whole
+            if tag == "link" and "stylesheet" not in whole.lower():
+                return whole
+            if url not in cache:
+                try:
+                    cache[url] = "sha384-" + base64.b64encode(hashlib.sha384(fetch(url)).digest()).decode()
+                except Exception as e:
+                    cache[url] = None
+                    print(f"   ❌ 下載失敗 {url}：{e}")
+            sri = cache[url]
+            if not sri:
+                failed += 1
+                return whole
+            done += 1
+            print(f"   ✅ {rel}: {url.split('/')[-1]} → {sri[:24]}…")
+            return whole[:-1].rstrip() + f' integrity="{sri}" crossorigin="anonymous">'
+
+        new_text = _SRI_TAG.sub(repl, text)
+        if new_text != text and not dry:
+            dst = root / "_fix_backup" / stamp / rel
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, dst)
+            write_text(path, new_text, meta)
+    print(f"\nSRI 完成：新增 {done} 處、失敗 {failed} 處" + ("（預覽，未寫入）" if dry else ""))
 
 
 def restore(root, backup):
@@ -759,6 +1326,7 @@ def main():
     ap.add_argument("project", nargs="?", default=".", help="專案根目錄（預設為目前資料夾）")
     ap.add_argument("--dry-run", action="store_true", help="只預覽，不寫檔")
     ap.add_argument("--restore", metavar="BACKUP_DIR", help="從備份資料夾還原")
+    ap.add_argument("--add-sri", action="store_true", help="替 CDN 的 script/link 補 integrity（需連網，另外執行）")
     args = ap.parse_args()
 
     root = Path(args.project).resolve()
@@ -767,6 +1335,8 @@ def main():
 
     if args.restore:
         restore(root, args.restore)
+    elif args.add_sri:
+        add_sri(root, args.dry_run)
     else:
         apply_patches(root, args.dry_run)
 

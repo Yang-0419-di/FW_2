@@ -157,7 +157,7 @@ tr:hover { background-color: #f1f5f9; }
 {% if current_user.is_authenticated %}
 <div class="user-header-info">
     <span>👤 <span class="username">{{ current_user.username }}</span></span>
-    <a href="{{ url_for('billing.logout') }}" class="logout-btn">登出</a>
+    <form method="POST" action="{{ url_for('billing.logout') }}" style="display:inline;margin:0;"><button type="submit" class="logout-btn" style="margin:0;border:none;cursor:pointer;font-family:inherit;">登出</button></form>
 </div>
 {% endif %}
 
@@ -286,148 +286,14 @@ tr:hover { background-color: #f1f5f9; }
 
 </div>
 
-<!-- 全域載入動畫 -->
-<div id="global-loading" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); z-index:9999; justify-content:center; align-items:center;">
-    <div style="background:white; padding:30px 50px; border-radius:12px; font-size:22px; font-weight:bold; box-shadow:0 4px 20px rgba(0,0,0,0.3);">
-        ⏳ 加載中...請稍後
-    </div>
-</div>
-
-<script>
-function showGlobalLoading() {
-    const loading = document.getElementById("global-loading");
-    if (loading) { loading.style.display = "flex"; }
-}
-
-document.addEventListener("click", function (e) {
-    const link = e.target.closest("a");
-    if (!link) return;
-    const rawHref = link.getAttribute("href");
-    if (!rawHref || rawHref.startsWith("javascript") || rawHref.startsWith("#")) { return; }
-    showGlobalLoading();
-});
-
-window.addEventListener("pageshow", function () {
-    const loading = document.getElementById("global-loading");
-    if (loading) { loading.style.display = "none"; }
-});
-</script>
-
-{% if current_user.is_authenticated %}
-<script>
-  let idleTimeout;
-  const timeoutTime = 10 * 60 * 1000;
-
-  function resetTimer() {
-    clearTimeout(idleTimeout);
-    idleTimeout = setTimeout(function() {
-      alert("由於您已超過 10 分鐘未操作，系統已自動登出。");
-      window.location.href = "{{ url_for('billing.logout') }}";
-    }, timeoutTime);
-  }
-
-  window.onload = resetTimer;
-  document.onmousemove = resetTimer;
-  document.onkeydown = resetTimer;
-  document.onclick = resetTimer;
-  document.onscroll = resetTimer;
-
-  // 💡 結合可讀裝置資訊與短 Base64 指紋雜湊
-  function getReadableDeviceFingerprint() {
-      const ua = navigator.userAgent;
-      let deviceName = "Unknown Device";
-      let browserName = "Unknown Browser";
-
-      // 1. 解析作業系統與主要裝置品牌
-      if (/iphone/i.test(ua)) {
-          deviceName = "Apple iPhone";
-      } else if (/ipad/i.test(ua)) {
-          deviceName = "Apple iPad";
-      } else if (/macintosh|mac os x/i.test(ua)) {
-          deviceName = "Mac";
-      } else if (/android/i.test(ua)) {
-          deviceName = "Android Device";
-          const match = ua.match(/\b([A-Z0-9]+-[A-Z0-9]+)\b/);
-          if (match) { deviceName = "Android (" + match[1] + ")"; }
-      } else if (/win/i.test(ua)) {
-          deviceName = "Windows PC";
-      } else if (/linux/i.test(ua)) {
-          deviceName = "Linux PC";
-      }
-
-      // 2. 解析瀏覽器
-      if (/edg/i.test(ua)) {
-          browserName = "Edge";
-      } else if (/chrome/i.test(ua) && !/chromium/i.test(ua)) {
-          browserName = "Chrome";
-      } else if (/safari/i.test(ua) && !/chrome/i.test(ua)) {
-          browserName = "Safari";
-      } else if (/firefox/i.test(ua)) {
-          browserName = "Firefox";
-      } else if (/line/i.test(ua)) {
-          browserName = "LINE App";
-      }
-
-      // 3. 螢幕解析度
-      const res = screen.width + "x" + screen.height;
-      
-      // 4. 產生短 Base64 指紋雜湊（對應您原本的 TW96aWxsYS81LjAg... 格式）
-      let shortHash = "fingerprint_error";
-      try {
-          const canvas = document.createElement('canvas');
-          const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-          let renderer = gl ? gl.getParameter(gl.RENDERER) : 'unknown';
-          
-          const data = [
-              ua,
-              navigator.language || '',
-              res,
-              Intl.DateTimeFormat().resolvedOptions().timeZone || '',
-              renderer
-          ].join('|');
-          
-          shortHash = btoa(unescape(encodeURIComponent(data))).substring(0, 32);
-      } catch (e) {
-          shortHash = btoa(unescape(encodeURIComponent(ua))).substring(0, 32);
-      }
-
-      // 5. 結合成您要的格式：Windows PC / Chrome (1440x900)-TW96aWxsYS81LjAg...
-      return `${deviceName} / ${browserName} (${res})-${shortHash}`;
-  }
-
-  window.addEventListener('DOMContentLoaded', function() {
-      const fingerprint = getReadableDeviceFingerprint();
-      console.log('解析出的裝置資訊:', fingerprint);
-      
-      fetch('/api/save_log', {
-          method: 'POST',
-          headers: {
-              'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-              username: "{{ current_user.username }}",
-              fingerprint: fingerprint
-          })
-      })
-      .then(async response => {
-          if (!response.ok) {
-              const errorText = await response.text();
-              console.error(`❌ 伺服器回應錯誤 [狀態碼 ${response.status}]:`, errorText);
-              return null;
-          }
-          return response.json();
-      })
-      .then(data => {
-          if (data) {
-              console.log('✅ 裝置資訊同步成功:', data);
-          }
-      })
-      .catch(error => {
-          console.error('❌ 網路請求發生例外錯誤:', error);
-      });
-  });
-</script>
-{% endif %}
+<script src="{{ url_for('static', filename='js/common.js', v=3) }}"
+        data-auth="{{ '1' if current_user.is_authenticated else '0' }}"
+        data-login-url="{{ url_for('billing.login') }}"
+        data-logout-url="{{ url_for('billing.logout') }}"
+        data-ping-url="{{ url_for('api_ping') }}"
+        data-log-url="{{ url_for('save_log') }}"
+        data-sess="{{ session.get('login_ts', '') }}"
+        data-idle-minutes="{{ (config.PERMANENT_SESSION_LIFETIME.total_seconds() // 60) | int }}"></script>
 
 </body>
 </html>
