@@ -84,27 +84,44 @@ try:
     wait.until(EC.title_contains("台芝技術服務分析系統"))
 
     # ==================================================
-    # POS 服務工作統計表
+    # POS 服務工作統計表 (含查無資料重試機制)
     # ==================================================
-    driver.switch_to.default_content()
-    wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "服務資料查詢"))).click()
-    time.sleep(1)
-    wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "POS服務工作統計表"))).click()
-    driver.switch_to.frame("iframe")
-    time.sleep(2)
+    while True:
+        driver.switch_to.default_content()
+        wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "服務資料查詢"))).click()
+        time.sleep(1)
+        wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "POS服務工作統計表"))).click()
+        driver.switch_to.frame("iframe")
+        time.sleep(2)
 
-    if "Warning: mysql" in driver.page_source:
-        raise Exception("Warning: mysql detected")
+        if "Warning: mysql" in driver.page_source:
+            raise Exception("Warning: mysql detected")
 
-    wait.until(EC.element_to_be_clickable(
-        (By.XPATH, '//option[contains(text(),"萊爾富")]'))).click()
-    time.sleep(0.5)
-    wait.until(EC.element_to_be_clickable(
-        (By.XPATH, '//option[contains(text(),"新北勤務一部")]'))).click()
+        wait.until(EC.element_to_be_clickable(
+            (By.XPATH, '//option[contains(text(),"萊爾富")]'))).click()
+        time.sleep(0.5)
+        wait.until(EC.element_to_be_clickable(
+            (By.XPATH, '//option[contains(text(),"新北勤務一部")]'))).click()
 
-    driver.find_element(By.XPATH, '//input[@type="submit" and @value="查詢"]').click()
-    wait.until(EC.presence_of_element_located(
-        (By.XPATH, '//input[@type="submit" and @value="匯出成EXCEL"]')))
+        driver.find_element(By.XPATH, '//input[@type="submit" and @value="查詢"]').click()
+        time.sleep(2)
+
+        # 檢查是否出現「查無資料」
+        if "查無資料" in driver.page_source:
+            print("⚠️ POS 查詢結果顯示「查無資料」，正在返回重新執行...")
+            driver.switch_to.default_content()
+            # 嘗試返回上一頁或重新點選選單重試
+            try:
+                driver.execute_script("if(typeof(back) === 'function'){ back(); } else { window.history.back(); }")
+            except Exception:
+                pass
+            time.sleep(2)
+            continue
+        else:
+            # 確認已進入正確結果頁面（出現匯出按鈕）
+            wait.until(EC.presence_of_element_located(
+                (By.XPATH, '//input[@type="submit" and @value="匯出成EXCEL"]')))
+            break
 
     # 刪除舊檔
     for f in glob.glob(pos_pattern):
@@ -116,7 +133,6 @@ try:
     downloaded_pos = None
     for _ in range(30):
         files = glob.glob(pos_pattern)
-        # 排除 Edge 的暫存檔以確保下載完成
         files = [f for f in files if not f.endswith('.crdownload')]
         if files:
             downloaded_pos = max(files, key=os.path.getctime)
@@ -141,16 +157,14 @@ try:
     # 強力返回主選單機制
     # ==================================================
     print("🔄 正在嘗試返回主選單...")
-    driver.switch_to.default_content() # 確保跳出 iframe
+    driver.switch_to.default_content()
     time.sleep(1)
 
     try:
-        # 嘗試方法 1：使用原本的 ID 定位（縮短等待到 5 秒，失敗立刻換方法）
         WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.ID, "back"))).click()
         print("▶️ 透過 ID 成功點擊返回")
     except Exception:
         try:
-            # 嘗試方法 2：如果它是 <input type="button" value="返回"> 或類似的中文字按鈕
             back_btn = WebDriverWait(driver, 5).until(
                 EC.element_to_be_clickable((By.XPATH, '//input[@value="返回" or @value="回上一頁" or contains(@value,"回")]'))
             )
@@ -158,36 +172,49 @@ try:
             print("▶️ 透過 XPATH 中文按鈕成功點擊返回")
         except Exception:
             try:
-                # 嘗試方法 3：使用 JavaScript 強行引發網頁的 back 函數（通常後台系統都有掛 window.history.back 或自訂 back 函式）
                 driver.execute_script("if(typeof(back) === 'function'){ back(); } else { window.history.back(); }")
                 print("▶️ 透過 JavaScript 強制返回成功")
             except Exception as e:
                 print(f"❌ 所有返回方法皆失敗，錯誤資訊: {e}")
-                # 如果真的都回不去，直接讓瀏覽器重新填寫網址進入「台芝技術服務分析系統」的首頁
-                driver.get("https://eip.toshibatec.com.tw/Main.aspx") # 或者是分析系統的那個新視窗網址
+                driver.get("https://eip.toshibatec.com.tw/Main.aspx")
                 time.sleep(3)
 
     time.sleep(2)
 
     # ==================================================
-    # MFP 勤務工作統計表
+    # MFP 勤務工作統計表 (含查無資料重試機制)
     # ==================================================
-    driver.switch_to.default_content()
-    wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "服務資料查詢"))).click()
-    time.sleep(1)
-    wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "勤務工作統計表"))).click()
-    driver.switch_to.frame("iframe")
-    time.sleep(2)
+    while True:
+        driver.switch_to.default_content()
+        wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "服務資料查詢"))).click()
+        time.sleep(1)
+        wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "勤務工作統計表"))).click()
+        driver.switch_to.frame("iframe")
+        time.sleep(2)
 
-    if "Warning: mysql" in driver.page_source:
-        raise Exception("Warning: mysql detected")
+        if "Warning: mysql" in driver.page_source:
+            raise Exception("Warning: mysql detected")
 
-    wait.until(EC.element_to_be_clickable(
-        (By.XPATH, '//option[contains(text(),"新北勤務一部")]'))).click()
+        wait.until(EC.element_to_be_clickable(
+            (By.XPATH, '//option[contains(text(),"新北勤務一部")]'))).click()
 
-    driver.find_element(By.XPATH, '//input[@type="submit" and @value="查詢"]').click()
-    wait.until(EC.presence_of_element_located(
-        (By.XPATH, '//input[@type="submit" and @value="匯出成EXCEL"]')))
+        driver.find_element(By.XPATH, '//input[@type="submit" and @value="查詢"]').click()
+        time.sleep(2)
+
+        # 檢查是否出現「查無資料」
+        if "查無資料" in driver.page_source:
+            print("⚠️ MFP 查詢結果顯示「查無資料」，正在返回重新執行...")
+            driver.switch_to.default_content()
+            try:
+                driver.execute_script("if(typeof(back) === 'function'){ back(); } else { window.history.back(); }")
+            except Exception:
+                pass
+            time.sleep(2)
+            continue
+        else:
+            wait.until(EC.presence_of_element_located(
+                (By.XPATH, '//input[@type="submit" and @value="匯出成EXCEL"]')))
+            break
 
     for f in glob.glob(mfp_pattern):
         os.remove(f)
@@ -198,7 +225,6 @@ try:
     downloaded_mfp = None
     for _ in range(30):
         files = glob.glob(mfp_pattern)
-        # 排除 Edge 的暫存檔以確保下載完成
         files = [f for f in files if not f.endswith('.crdownload')]
         if files:
             downloaded_mfp = max(files, key=os.path.getctime)
