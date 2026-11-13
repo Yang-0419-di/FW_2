@@ -3,7 +3,6 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.edge.service import Service as EdgeService
-from webdriver_manager.microsoft import EdgeChromiumDriverManager
 from selenium.common.exceptions import TimeoutException
 import os
 import time
@@ -52,15 +51,21 @@ options.add_experimental_option("prefs", {
     "download.directory_upgrade": True,
     "safebrowsing.enabled": True
 })
-# 穩定性優化參數
+# 穩定性優化與憑證參數
 options.add_argument('--disable-gpu')
 options.add_argument('--no-sandbox')
+options.add_argument('--ignore-certificate-errors')   # 略過 SSL 憑證錯誤
+options.add_argument('--allow-insecure-localhost')  # 允許不安全的本地連線
 
 failures = []
 
 try:
-    # 使用 webdriver_manager 自動管理驅動版本，避免未來手動更新麻煩
-    driver = webdriver.Edge(service=EdgeService(EdgeChromiumDriverManager().install()), options=options)
+    # 使用本地指定的離線 msedgedriver
+    driver_path = r"D:\tools\msedgedriver.exe"
+    if not os.path.exists(driver_path):
+        sys.exit(f"❌ 找不到 Edge 驅動程式，請確認檔案是否存在於：{driver_path}")
+
+    driver = webdriver.Edge(service=EdgeService(driver_path), options=options)
     wait = WebDriverWait(driver, 30)
 
     # ===============================
@@ -110,7 +115,6 @@ try:
         if "查無資料" in driver.page_source:
             print("⚠️ POS 查詢結果顯示「查無資料」，正在返回重新執行...")
             driver.switch_to.default_content()
-            # 嘗試返回上一頁或重新點選選單重試
             try:
                 driver.execute_script("if(typeof(back) === 'function'){ back(); } else { window.history.back(); }")
             except Exception:
@@ -118,7 +122,6 @@ try:
             time.sleep(2)
             continue
         else:
-            # 確認已進入正確結果頁面（出現匯出按鈕）
             wait.until(EC.presence_of_element_located(
                 (By.XPATH, '//input[@type="submit" and @value="匯出成EXCEL"]')))
             break
