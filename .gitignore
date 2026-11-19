@@ -1,1 +1,23 @@
 "*.json" 
+# PM 保養管理（本機工具，不部署）
+臨時備份/
+MFP/自動備份/
+__pycache__/
+_path_patch_backup/
+_fix_backup/
+pm_config.json
+pm_app.py
+pm_core.py
+pm_merge.py
+xl_writer.py
+xl_engine.py
+cjk_order.py
+git_publish.py
+selftest_B.py
+selftest_merge.py
+PM_start.bat
+PM_README.txt
+PM_gitignore.py
+PM_*.zip
+*.pyc
+/index.html
