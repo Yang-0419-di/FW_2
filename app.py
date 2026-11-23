@@ -6,6 +6,7 @@ import io
 from io import BytesIO
 import math
 import os
+import re
 import sqlite3
 import time
 
@@ -33,6 +34,8 @@ import requests
 # 3. 本地自訂模組 (Local Application Imports)
 from modules.gsheet import client, SHEET_ID
 from modules.billing import billing_bp, User
+from modules import staff as STAFF_CFG
+from modules import calendar_people
 
 # 取得當前 app.py 所在的目錄，並指到 billing.db
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -62,7 +65,7 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'billing.login'  # 未登入時自動重定向之登入頁面路由
 
-_API_PREFIXES = ('/api/', '/sc_disk/', '/calendar/events', '/billing/get_last_counts', '/billing/save_person_field')
+_API_PREFIXES = ('/api/', '/sc_disk/', '/calendar/events', '/calendar/assign', '/billing/get_last_counts', '/billing/save_person_field')
 
 @login_manager.unauthorized_handler
 def _unauthorized():
@@ -91,6 +94,11 @@ def load_user(user_id):
 
 # ====== 註冊 billing 藍圖 ======
 app.register_blueprint(billing_bp)
+
+# ====== 人員設定提供給所有模板（modules/staff.py 為唯一來源）======
+@app.context_processor
+def inject_staff():
+    return {'STAFF': STAFF_CFG.STAFF, 'STAFF_DEFAULT_COLOR': STAFF_CFG.DEFAULT_COLOR, 'STAFF_PAST_COLOR': STAFF_CFG.PAST_COLOR}
 
 # ====== 字型設定（支援中文） ======
 font_path = os.path.join(BASE_DIR, "fonts", "NotoSansCJKtc-Regular.otf")
@@ -366,7 +374,7 @@ def countpass():
 @app.route('/personal/<name>')
 @login_required
 def personal(name):
-    sheet_map = {'吳宗鴻': '吳宗鴻', '湯家瑋': '湯家瑋', '狄澤洋': '狄澤洋','劉柏均': '劉柏均'}
+    sheet_map = {n: n for n in STAFF_CFG.SHEET_NAMES}
     sheet_name = sheet_map.get(name)
     if not sheet_name:
         return f"找不到 {name} 的分頁", 404
@@ -737,37 +745,128 @@ def calendar_page():
         calendar_page=True
     )
 
-@app.route('/calendar/events')
-@login_required
-def calendar_events():
+TW_TZ = timezone(timedelta(hours=8))
+CALENDAR_REQUIRED_COLS = ('date', 'title')
+
+
+def _calendar_rows():
+    """讀 data.xlsx「行事曆」分頁 → (事件清單, 警告清單)。讀不到時丟出 RuntimeError（訊息給使用者看）。"""
     try:
         xls = load_excel_from_github(GITHUB_XLSX_URL)
         df = pd.read_excel(xls, sheet_name='行事曆')
     except Exception as e:
         print(f"⚠️ 行事曆載入失敗: {e}")
-        return jsonify([])
-    df.columns = df.columns.str.strip()
-    today = datetime.today().date()
-    events = []
+        raise RuntimeError("無法讀取排程資料（data.xlsx 下載或「行事曆」分頁讀取失敗），請稍後再試或通知管理員。")
+    df.columns = df.columns.astype(str).str.strip()
+    missing = [c for c in CALENDAR_REQUIRED_COLS if c not in df.columns]
+    if missing:
+        raise RuntimeError(f"「行事曆」分頁缺少欄位：{'、'.join(missing)}（請確認第 1 列標題沒有被改名或移動）。")
+
+    rows, no_title = [], 0
     for _, row in df.iterrows():
         date_val = row.get('date')
-        title_val = row.get('title', '')
-        if pd.notna(date_val) and title_val:
+        if pd.isna(date_val) or str(date_val).strip() == '':
+            continue
+        title_val = row.get('title')
+        if pd.isna(title_val) or str(title_val).strip() == '':
+            no_title += 1          # 有日期卻沒標題：多半是公式沒有計算結果
+            continue
+        try:
             start_date = pd.to_datetime(date_val).date()
-            color_map = {"狄澤洋": "red", "V": "red", "湯家瑋": "green", "吳宗鴻": "orange", "劉柏均": "skyblue"}
-            color = color_map.get(row.get('屬性'), "blue")
-            is_special = str(row.get('特殊', '')).strip().upper() in ['Y', 'YES', '1']
-            if start_date < today:
-                color = "gray"
-            events.append({
-                "title": str(title_val),
-                "start": start_date.strftime('%Y-%m-%d'),
-                "color": color,
-                "extendedProps": {
-                    "is_special": is_special
-                }
-            })
-    return jsonify(events)
+        except Exception:
+            continue
+        owner_raw = row.get('屬性')
+        owner_raw = '' if pd.isna(owner_raw) else str(owner_raw).strip()
+        special = row.get('特殊')
+        special = '' if pd.isna(special) else str(special)
+        rows.append({
+            'date': start_date,
+            'title': str(title_val).strip(),
+            'owner_raw': owner_raw,
+            'is_special': special.strip().upper() in ['Y', 'YES', '1'],
+        })
+    warnings = []
+    if no_title:
+        warnings.append(f"有 {no_title} 筆排程有日期但沒有標題，未顯示（data.xlsx 的標題公式可能沒有計算結果，請用 PM 工具「儲存並重算」後再發佈）。")
+    return rows, warnings
+
+
+@app.route('/calendar/events')
+@login_required
+def calendar_events():
+    try:
+        rows, warnings = _calendar_rows()
+    except RuntimeError as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 503
+
+    fresh = request.args.get('fresh') == '1'
+    try:
+        people = calendar_people.load_people(fresh=fresh)
+    except Exception as e:
+        print(f"⚠️ 行事曆人員載入失敗: {e}")
+        people = {}
+        warnings.append("無法讀取「人員2」資料（Google Sheet），目前只顯示預設人員。")
+
+    today = datetime.now(TW_TZ).date()      # Render 主機是 UTC，改用台灣日期判斷是否過期
+    events = []
+    for r in rows:
+        date_str = r['date'].strftime('%Y-%m-%d')
+        key = calendar_people.make_key(date_str, r['title'])
+        owner = STAFF_CFG.display_name(r['owner_raw'])
+        person2 = people.get(key, '')
+        color = STAFF_CFG.PAST_COLOR if r['date'] < today else STAFF_CFG.color_of(r['owner_raw'])
+        names = ' & '.join(n for n in (owner, person2) if n)
+        events.append({
+            'title': r['title'] + (f"\n人員：{names}" if person2 else ''),
+            'start': date_str,
+            'color': color,
+            'extendedProps': {
+                'is_special': r['is_special'],
+                'base_title': r['title'],
+                'owner': owner,
+                'person2': person2,
+            },
+        })
+    return jsonify({'status': 'ok', 'events': events, 'warnings': warnings})
+
+
+PERSON2_MAX = 30
+
+
+@app.route('/calendar/assign', methods=['POST'])
+@login_required
+def calendar_assign():
+    d = request.get_json(silent=True) or {}
+    date_str = str(d.get('date', '')).strip()[:10]
+    title = str(d.get('title', '')).strip()
+    person2 = re.sub(r'\s+', ' ', str(d.get('person2', ''))).strip()
+
+    try:
+        datetime.strptime(date_str, '%Y-%m-%d')
+    except ValueError:
+        return jsonify({'status': 'error', 'message': '日期格式錯誤'}), 400
+    if not title:
+        return jsonify({'status': 'error', 'message': '缺少工務標題'}), 400
+    if len(person2) > PERSON2_MAX:
+        return jsonify({'status': 'error', 'message': f'人員2 最多 {PERSON2_MAX} 個字'}), 400
+    if re.search(r'[<>"\\=]', person2):
+        return jsonify({'status': 'error', 'message': '人員2 不可包含 < > " \\ = 等符號'}), 400
+
+    # 只接受 data.xlsx 中確實存在的工務，避免寫入無對應的資料
+    try:
+        rows, _ = _calendar_rows()
+    except RuntimeError as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 503
+    key = calendar_people.make_key(date_str, title)
+    if not any(calendar_people.make_key(r['date'].strftime('%Y-%m-%d'), r['title']) == key for r in rows):
+        return jsonify({'status': 'error', 'message': '找不到這筆工務（排程可能剛被更新），請重新整理頁面後再試。'}), 409
+
+    try:
+        calendar_people.save_person(date_str, title, person2, getattr(current_user, 'username', ''))
+    except Exception as e:
+        print(f"⚠️ 行事曆人員寫入失敗: {e}")
+        return jsonify({'status': 'error', 'message': '寫入 Google Sheet 失敗，請稍後再試。'}), 502
+    return jsonify({'status': 'ok', 'person2': person2})
 
 @app.route("/worktime")
 @login_required
@@ -914,3 +1013,4 @@ def make_session_permanent():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
     app.run(host='0.0.0.0', port=port)
+

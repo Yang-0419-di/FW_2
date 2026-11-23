@@ -57,7 +57,7 @@
 
     /* 固定每日格子高度 */
     .fc .fc-daygrid-day-frame {
-      height: 160px !important;
+      min-height: 160px !important;
       overflow-y: auto !important;
     }
 
@@ -135,7 +135,19 @@ document.addEventListener('DOMContentLoaded', function () {
     height: 'auto',
     contentHeight: 'auto',
     dayMaxEventRows: false,
-    aspectRatio: 1.35
+    aspectRatio: 1.35,
+
+    eventDidMount: function(info) {
+      if (info.event.extendedProps.is_special) {
+
+
+
+        // ⭐ 只改邊框，不改底色
+        info.el.style.border = '2px solid red';
+        info.el.style.fontWeight = 'bold';  // 可保留強調感
+      }
+    }
+
   });
 
   calendar.render();
