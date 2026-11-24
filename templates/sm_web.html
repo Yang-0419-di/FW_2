@@ -1,11 +1,44 @@
 {% extends "layout.html" %}
-
-{# 報修刊版為嵌入的外部網頁（本身沒有手機版面），不使用手機 viewport，維持原本以電腦寬度縮放顯示 #}
-{% block viewport %}{% endblock %}
 {% block content %}
 
 <h2>新北一報修刊版</h2>
-<iframe src="https://bot.toshibatec.com.tw/hl0800/showjob31.php"
+<div id="smWrap" class="sm-wrap">
+<iframe id="smFrame" src="https://bot.toshibatec.com.tw/hl0800/showjob31.php"
         width="100%" height="600" loading="lazy" referrerpolicy="no-referrer"></iframe>
+</div>
+
+<style>
+/* 手機版：嵌入的報修刊版本身沒有手機版面，
+   因此以原本的電腦寬度（888px）排版，再整體等比例縮小到螢幕寬，
+   顯示效果與原本「整頁縮小」相同，內容不會被擠壓。電腦版不受影響。 */
+@media (max-width: 768px) {
+    .sm-wrap { width: 100%; overflow: hidden; }
+    .sm-wrap iframe {
+        width: 888px !important;
+        box-sizing: border-box;
+        transform-origin: 0 0;
+    }
+}
+</style>
+<script>
+(function () {
+    var DESKTOP_W = 888, FRAME_H = 600;
+    var wrap = document.getElementById('smWrap'), frame = document.getElementById('smFrame');
+    var mq = window.matchMedia('(max-width: 768px)');
+    function fit() {
+        if (mq.matches) {
+            var s = Math.min(1, wrap.clientWidth / DESKTOP_W);
+            frame.style.transform = 'scale(' + s + ')';
+            wrap.style.height = Math.ceil(FRAME_H * s) + 'px';
+        } else {
+            frame.style.transform = '';
+            wrap.style.height = '';
+        }
+    }
+    fit();
+    window.addEventListener('resize', fit);
+    if (mq.addEventListener) mq.addEventListener('change', fit); else if (mq.addListener) mq.addListener(fit);
+})();
+</script>
 
 {% endblock %}
