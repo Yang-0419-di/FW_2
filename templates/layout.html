@@ -2,7 +2,8 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {# 手機版面設定；個別頁面可覆寫此區塊（例如報修刊版需維持原本的電腦寬度顯示） #}
+    {% block viewport %}<meta name="viewport" content="width=device-width, initial-scale=1.0">{% endblock %}
     <title>門市資料查詢</title>
 
     <style>

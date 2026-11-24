@@ -1,4 +1,7 @@
 {% extends "layout.html" %}
+
+{# 報修刊版為嵌入的外部網頁（本身沒有手機版面），不使用手機 viewport，維持原本以電腦寬度縮放顯示 #}
+{% block viewport %}{% endblock %}
 {% block content %}
 
 <h2>新北一報修刊版</h2>
