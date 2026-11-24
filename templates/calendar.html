@@ -22,7 +22,15 @@
 		<span class="color-box special"></span> 特殊
 	  </span>
 	</div>
-	<div class="legend-hint">點擊工務可填寫「人員2」；當月週六、週日有排程時，該欄才會顯示。</div>
+	<div class="legend-hint">點擊工務可填寫「人員2」；週六、週日預設隱藏，當月有排程時會自動展開，也可用下方按鍵手動切換。</div>
+
+  <!-- 週末按鍵 -->
+  <div class="cal-tools">
+    <div class="cal-seg">
+      <button type="button" class="cal-tool" id="weekendBtn" aria-pressed="false">顯示週六日</button>
+      <button type="button" class="cal-tool cal-tool-link" id="weekendAuto" style="display:none;">恢復自動</button>
+    </div>
+  </div>
 
   <!-- 載入失敗／警告訊息 -->
   <div id="calMsg" class="cal-msg" style="display:none;">
@@ -145,6 +153,24 @@
 		color: #666;
 	  }
 
+    /* 檢視／週末工具列 */
+    .cal-tools {
+      display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center;
+      margin: 0 0 10px 0;
+    }
+    .cal-seg { display: flex; gap: 6px; align-items: center; }
+    .cal-tool {
+      margin: 0; padding: 6px 14px; font-size: 15px;
+      background: #fff; color: #1e293b; border: 1px solid #94a3b8; border-radius: 6px; cursor: pointer;
+    }
+    .cal-tool:hover { background: #f1f5f9; }
+    .cal-tool.active { background: #1e293b; color: #fff; border-color: #1e293b; }
+    .cal-tool-link { border: none; background: none; color: #007BFF; text-decoration: underline; padding: 6px 4px; }
+    .cal-tool-link:hover { background: none; }
+
+    /* 特殊事件：紅框 */
+    .fc .fc-daygrid-event.ev-special { border: 2px solid red !important; font-weight: bold; }
+
     /* 訊息列 */
     .cal-msg {
       margin: 0 0 12px 0;
@@ -180,6 +206,23 @@
     .p2-btns .primary { background: #007BFF; color: #fff; border-color: #007BFF; }
     .p2-btns .danger { color: #b71c1c; border-color: #e0a0a0; background: #fff; margin-right: auto; }
     .p2-btns button:disabled { opacity: .6; cursor: default; }
+
+    /* ===== 手機版 ===== */
+    @media (max-width: 768px) {
+      .legend { gap: 6px 12px; font-size: 13px; }
+      .legend .color-box { width: 26px; height: 14px; }
+      .legend-hint { font-size: 12px; }
+      .cal-tool { padding: 7px 10px; font-size: 14px; }
+      #calendar { padding: 4px; }
+      .fc .fc-toolbar { flex-wrap: wrap; gap: 6px; }
+      .fc .fc-toolbar-title { font-size: 17px; }
+      .fc .fc-button { padding: 4px 8px; font-size: 13px; }
+      .fc .fc-daygrid-day-frame { min-height: 90px !important; }
+      .fc .fc-daygrid-event { font-size: 11px; padding: 1px 2px; }
+      .fc .fc-col-header-cell-cushion { font-size: 12px; padding: 2px; }
+      .p2-btns { justify-content: stretch; }
+      .p2-btns button { flex: 1 1 auto; }
+    }
   </style>
 
   <div id="calendar"></div>
@@ -229,28 +272,55 @@ document.addEventListener('DOMContentLoaded', function () {
 
   let forceFresh = false;   // 儲存人員2 後，略過伺服器快取重新讀取
 
-  // ===== 週末自動展開：當月有週六／週日排程才顯示該欄 =====
-  function updateWeekends() {
+  // ===== 週末顯示 =====
+  // weekendMode：'auto'＝當月有週六／週日排程才展開該欄（預設）；'show'＝一律顯示；'hide'＝一律隱藏
+  const weekendBtn = document.getElementById('weekendBtn');
+  const weekendAuto = document.getElementById('weekendAuto');
+  let weekendMode = 'auto';
+  let hiddenNow = [0, 6];
+
+  function weekendEventsThisMonth() {
     const v = calendar.view;
-    let sat = false, sun = false;
+    const r = { sat: 0, sun: 0 };
     calendar.getEvents().forEach(function (ev) {
       const d = ev.start;
       if (!d || d < v.currentStart || d >= v.currentEnd) return;
       const w = d.getDay();
-      if (w === 6) sat = true;
-      if (w === 0) sun = true;
+      if (w === 6) r.sat++;
+      if (w === 0) r.sun++;
     });
-    const hidden = [];
-    if (!sun) hidden.push(0);
-    if (!sat) hidden.push(6);
-    const cur = (calendar.getOption('hiddenDays') || []).join(',');
-    if (cur !== hidden.join(',')) calendar.setOption('hiddenDays', hidden);
+    return r;
   }
+
+  function updateWeekends() {
+    const n = weekendEventsThisMonth();
+    let hidden;
+    if (weekendMode === 'show') hidden = [];
+    else if (weekendMode === 'hide') hidden = [0, 6];
+    else { hidden = []; if (!n.sun) hidden.push(0); if (!n.sat) hidden.push(6); }
+
+    if (hidden.join(',') !== hiddenNow.join(',')) {
+      hiddenNow = hidden;
+      calendar.setOption('hiddenDays', hidden);
+    }
+    // 按鍵文字：目前週末有顯示 → 「隱藏」；全部隱藏 → 「顯示」（有被藏起來的排程時附上筆數）
+    const anyShown = hidden.length < 2;
+    const total = n.sat + n.sun;
+    weekendBtn.textContent = anyShown ? '隱藏週六日' : ('顯示週六日' + (total ? '（' + total + ' 筆）' : ''));
+    weekendBtn.setAttribute('aria-pressed', anyShown ? 'true' : 'false');
+    weekendBtn.classList.toggle('active', weekendMode === 'show');
+    weekendAuto.style.display = weekendMode === 'auto' ? 'none' : '';
+  }
+
+  const IS_MOBILE = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
 
   const calendarEl = document.getElementById('calendar');
   const calendar = new FullCalendar.Calendar(calendarEl, {
     initialView: 'dayGridMonth',
     hiddenDays: [0, 6],              // 預設隱藏週末，有排程時由 updateWeekends 展開
+    headerToolbar: IS_MOBILE
+      ? { left: 'prev,next', center: 'title', right: 'today' }
+      : { left: 'title', center: '', right: 'today prev,next' },   // 電腦版＝FullCalendar 原本的預設配置
     events: function (info, success, failure) {
       const url = EVENTS_URL + (forceFresh ? '?fresh=1' : '');
       forceFresh = false;
@@ -295,11 +365,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     eventDidMount: function (info) {
       info.el.title = '點擊可填寫人員2';
-      if (info.event.extendedProps.is_special) {
-        // ⭐ 只改邊框，不改底色
-        info.el.style.border = '2px solid red';
-        info.el.style.fontWeight = 'bold';
-      }
+      // ⭐ 特殊事件：只改邊框，不改底色（樣式見 .ev-special）
+      if (info.event.extendedProps.is_special) info.el.classList.add('ev-special');
     },
 
     eventsSet: updateWeekends,
@@ -309,6 +376,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
   calendar.render();
   retryBtn.addEventListener('click', function () { calendar.refetchEvents(); });
+
+  weekendBtn.addEventListener('click', function () {
+    weekendMode = hiddenNow.length < 2 ? 'hide' : 'show';
+    updateWeekends();
+  });
+  weekendAuto.addEventListener('click', function () { weekendMode = 'auto'; updateWeekends(); });
+
 
   // ===== 人員2 編輯視窗 =====
   const ov = document.getElementById('p2Overlay');

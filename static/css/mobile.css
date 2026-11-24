@@ -1,0 +1,246 @@
+/* =====================================================================
+   mobile.css — 全站手機版面（layout.html 與獨立頁面共用）
+   原則：
+   1. 桌機版面完全不變；以下規則幾乎都只在螢幕寬度 ≤ 768px 時生效。
+   2. 選擇器前面加上 html，提高優先順序，蓋過各頁 <style> 內同名規則；
+      要蓋過 HTML 內的 style="" 才使用 !important。
+   3. 寬表格一律改成「左右滑動」，不擠壓文字（由 mobile.js 自動包裝）。
+   ===================================================================== */
+
+/* ---------- 所有尺寸都適用（不影響桌機外觀）---------- */
+img, video { max-width: 100%; height: auto; }
+iframe { max-width: 100%; }
+
+/* 手機選單按鈕：桌機不顯示 */
+.m-nav-toggle { display: none; }
+
+/* mobile.js 包裝寬表格用的橫向捲動容器 */
+.m-scroll {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* =====================================================================
+   手機（≤ 768px）
+   ===================================================================== */
+@media (max-width: 768px) {
+
+    /* ---------- 頁面基礎 ---------- */
+    html body {
+        padding: 12px !important;
+        font-size: 15px;
+        -webkit-text-size-adjust: 100%;
+    }
+    html h1 { font-size: 22px; margin: 6px 0 8px; line-height: 1.3; }
+    html h2 { font-size: 18px; line-height: 1.35; }
+    html h3 { font-size: 16px; }
+    html .version-info { font-size: 12px; margin-bottom: 10px; }
+
+    /* 右上角使用者／登出：改成一般排版，避免蓋住標題 */
+    html .user-header-info {
+        position: static;
+        width: fit-content;
+        margin: 0 0 6px auto;
+        padding: 4px 10px;
+        gap: 8px;
+        font-size: 13px;
+    }
+
+    /* 一般按鈕縮小（原本 20px 字在手機太大） */
+    html button {
+        font-size: 15px;
+        padding: 8px 12px;
+        margin: 3px;
+    }
+
+    /* 輸入框：字級 16px，避免 iPhone 點擊時自動放大畫面；不超出螢幕 */
+    html input:not([type=checkbox]):not([type=radio]):not([type=hidden]),
+    html select,
+    html textarea {
+        font-size: 16px !important;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+
+    /* ---------- 共用導覽列（layout.html）---------- */
+    html .m-nav-toggle {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        margin: 0 0 10px 0;
+        padding: 10px 14px;
+        font-size: 16px;
+        font-weight: bold;
+        color: #1e293b;
+        background: #ffffff;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    html .site-nav { display: none; }
+    html .site-nav.open { display: block; }
+
+    html .button-row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+    }
+    html .button-row a { display: block; }
+    html .button-row button {
+        width: 100%;
+        margin: 0;
+        padding: 10px 4px;
+        font-size: 14px;
+    }
+
+    /* 三個下拉選單：維持同一列，展開內容改為整列寬、往下推開 */
+    html .accordion-nav-container {
+        gap: 6px;
+        max-width: none;
+        margin-bottom: 12px;
+    }
+    html .accordion-nav-container .accordion-item { position: static; }
+    html .accordion-nav-container .accordion-button {
+        padding: 10px 8px;
+        font-size: 13px;
+    }
+    html .accordion-nav-container .accordion-item { flex: 1 1 0; min-width: 0; }
+    /* 下拉內容以整個選單列為基準定位，寬度＝整列 */
+    html .accordion-nav-container .accordion-content.show {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr;
+        position: absolute;
+        left: 0;
+        right: 0;
+        width: auto;
+        border-top: 1px solid #e2e8f0;
+        border-radius: 8px;
+        margin-top: 4px;
+    }
+    html .sub-link { min-height: 42px; }
+
+    /* 回頂部按鈕：移到右下角、縮小 */
+    html #backToTop {
+        bottom: 16px !important;
+        right: 12px !important;
+        padding: 8px 12px !important;
+        font-size: 14px !important;
+    }
+
+    /* ---------- 表格 ---------- */
+    html th, html td { padding: 6px 8px; font-size: 13px; }
+
+    /* 表格外框可左右滑動，高度依螢幕 */
+    html .table-container,
+    html .table-container-NO,
+    html .table-responsive {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    html .table-container { max-height: 70vh; }
+
+    /* 欄位多的表格（mobile.js 標記 .m-table）：不換行、左右滑動 */
+    html table.m-table {
+        width: auto !important;
+        min-width: 100%;
+    }
+    html table.m-table th,
+    html table.m-table td { white-space: nowrap; }
+    html table.m-table td.m-wrap {
+        white-space: normal;
+        min-width: 12em;
+        text-align: left;
+    }
+    /* 有輸入框的表格，輸入框維持可點的寬度 */
+    html table.m-table td input[type=text],
+    html table.m-table td input[type=number] { min-width: 60px; }
+
+    /* 滑動提示 */
+    html .m-scroll-hint {
+        font-size: 12px;
+        color: #94a3b8;
+        margin: 2px 0 4px;
+    }
+
+    /* ---------- 各頁調整 ---------- */
+
+    /* 首頁、個人頁：搜尋框 */
+    html #storeSearchBottom,
+    html #storeSearchads,
+    html #tableSearch,
+    html .search-box input { width: 100% !important; }
+
+    /* 工時統計等頁面：返回按鈕原本寫死 20px 字 */
+    html .header-flex button { font-size: 15px !important; padding: 8px 12px !important; }
+
+    /* 出勤時間：圖表寬度跟著螢幕 */
+    html img[alt="出勤時間曲線圖"] { width: 100% !important; }
+
+    /* 報修刊版：iframe 高度依螢幕 */
+    html iframe { height: 75vh; }
+
+    /* 報修查詢、MFP 零件表：查詢條件直向排列 */
+    html .search-form,
+    html .mfp-form {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+    }
+    html .search-form input,
+    html .search-form select,
+    html .search-form button,
+    html .mfp-form select,
+    html .mfp-form button { width: 100%; margin: 0; }
+    html .pager { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    html .pager a { margin-left: 0; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; }
+
+    /* 硬碟統計：左右兩欄改上下 */
+    html .main-layout { flex-direction: column; gap: 12px; }
+    html .main-layout .left-panel,
+    html .main-layout .right-panel {
+        flex: none;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 14px;
+    }
+    html .main-layout .row { flex-wrap: wrap; }
+    html .main-layout .row span:first-child { min-width: 3.5em; }
+    html .main-layout input[type=number] { width: 70px; }
+
+    /* 店長密碼 */
+    html .countpass-box { margin: 10px auto !important; padding: 14px !important; }
+
+    /* 客戶總表／個人客戶資料：11 欄固定寬表格改為左右滑動 */
+    html .table-container.no-scroll,
+    html .personal-scroll-table { overflow-x: auto !important; max-height: 70vh; }
+    html .mfp-table,
+    html .personal-main-table { min-width: 960px; }
+    html .mfp-table th, html .mfp-table td,
+    html .personal-main-table th, html .personal-main-table td { font-size: 12px; }
+    html .summary-accordion-container { flex-direction: column; max-width: none; }
+
+    /* TG 客戶系統（billing_index）：年份／月份上下排列 */
+    html .form-row-flex { flex-direction: column; gap: 10px; }
+    html .content-wrap { max-width: none; }
+    html .search-block { flex-wrap: nowrap; }
+    html .search-btn { padding: 8px 14px; white-space: nowrap; }
+    html .action-btn-container button { width: 100%; margin: 6px 0 0 0 !important; }
+    html .contract-table td:first-child { white-space: normal; }
+
+    /* 發票紀錄：控制列換行 */
+    html .control-bar { flex-wrap: wrap; gap: 10px; padding: 12px; }
+    html .invoice-log-container { padding: 0; }
+
+    /* 共用：導覽按鈕列 */
+    html .nav-buttons { gap: 6px; }
+    html .nav-buttons a, html .nav-buttons button { padding: 8px 12px; margin: 0; }
+}
+
+/* 更窄的手機（≤ 380px） */
+@media (max-width: 380px) {
+    html .button-row { grid-template-columns: repeat(2, 1fr); }
+    html .accordion-nav-container .accordion-button { font-size: 12px; padding: 10px 6px; }
+}

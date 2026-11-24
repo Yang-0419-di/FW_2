@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, abort, jsonify, current_app, flash
+from flask import Blueprint, render_template, request, redirect, url_for, abort, jsonify, current_app, flash, session
 from flask_login import login_user, logout_user, login_required, UserMixin
 from werkzeug.security import check_password_hash
 import sqlite3
@@ -8,6 +8,10 @@ from io import BytesIO
 import pandas as pd
 from zoneinfo import ZoneInfo
 import threading  # 🚀 新增：匯入背景線程模組
+import os
+from html import escape as html_escape
+from urllib.parse import urlparse
+from gspread.utils import rowcol_to_a1
 from modules.gsheet import (
     client, 
     SHEET_ID, 
@@ -21,8 +25,13 @@ from modules.gsheet import (
 billing_bp = Blueprint('billing', __name__, url_prefix='/billing')
 bp = billing_bp  # 相容性別名
 
+# 允許讀寫的人員分頁白名單（可用環境變數 PERSON_SHEETS 以逗號分隔覆寫）
+ALLOWED_PERSON_SHEETS = {
+    s.strip() for s in os.environ.get('PERSON_SHEETS', '吳宗鴻,湯家瑋,狄澤洋,劉柏均').split(',') if s.strip()
+}
+
 GITHUB_XLSX_URL = 'https://raw.githubusercontent.com/Yang-0419-di/FW_2/master/MFP/MFP.xlsx'
-DB_FILE = "billing.db"
+DB_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "billing.db")
 _cached_xls = None   # 快取避免多次下載
 
 def to_int(val):
@@ -90,6 +99,7 @@ def login():
                 if is_valid:
                     user = User(id=user_id, username=db_username)
                     login_user(user)
+                    session['login_ts'] = datetime.now(ZoneInfo("Asia/Taipei")).strftime('%Y%m%d%H%M%S')
                     
                     # 🌐 抓取使用者 IP 位址 (考慮代理伺服器情況)
                     ip_address = request.headers.get('X-Forwarded-For', request.remote_addr)
@@ -109,9 +119,11 @@ def login():
                         daemon=True
                     ).start()
 
-                    # 嚴格檢查 next_page 是否為無效的空值/空字串
-                    next_page = request.args.get('next')
-                    if not next_page or next_page.strip() == '':
+                    # 只允許站內相對路徑，避免 Open Redirect
+                    next_page = (request.args.get('next') or '').strip()
+                    parsed_next = urlparse(next_page)
+                    if (not next_page.startswith('/') or next_page.startswith('//')
+                            or next_page.startswith('/\\') or parsed_next.scheme or parsed_next.netloc):
                         next_page = url_for('home')
 
                     return redirect(next_page)
@@ -150,10 +162,11 @@ def color_overdue(val, last_pm, cycle):
         except Exception:
             overdue = True
 
+    safe_val = html_escape(str(val))  # 客戶名稱來自可編輯的 Google Sheet，必須 escape
     if overdue:
-        return f'<span style="background-color:#FFC0CB">{val}</span>'
+        return f'<span style="background-color:#FFC0CB">{safe_val}</span>'
     else:
-        return val
+        return safe_val
 
 # ================================================================
 # 讀取 GitHub / 本地 Excel（支援檔名參數）
@@ -296,6 +309,11 @@ def init_db():
         )
     """)
 
+    # 舊資料庫自動補欄位（取代手動執行 db_updata.py）
+    cols = [r[1] for r in c.execute("PRAGMA table_info(billing_summary)").fetchall()]
+    if "last_date" not in cols:
+        c.execute("ALTER TABLE billing_summary ADD COLUMN last_date TEXT DEFAULT ''")
+
     conn.commit()
     conn.close()
 
@@ -319,25 +337,33 @@ def get_contract(device_id):
 
     float_fields = [
         "monthly_rent", "color_unit_price", "bw_unit_price",
-        "color_a3_unit_price", "color_error_rate", "bw_error_rate", "color_a3_error_rate",
+        "color_a3_unit_price", "color_a3unit_price", 
+        "color_error_rate", "bw_error_rate", "color_a3_error_rate",
+        "color_tier1_price", "color_tier2_price",
+        "color_a3_tier1_price", "color_a3_tier2_price", "color_a3tier1_price",
+        "bw_tier1_price", "bw_tier2_price"
     ]
 
     int_fields = [
         "color_giveaway", "bw_giveaway", "color_a3_giveaway",
         "color_basic", "bw_basic", "color_a3_basic",
+        "color_tier1_limit", "color_a3_tier1_limit", "color_a3tier1_limit",
+        "bw_tier1_limit"
     ]
 
     for k in float_fields:
-        try:
-            contract_row[k] = float(contract_row.get(k) or 0)
-        except Exception:
-            contract_row[k] = 0.0
+        if k in contract_row:
+            try:
+                contract_row[k] = float(contract_row.get(k) or 0)
+            except Exception:
+                contract_row[k] = 0.0
 
     for k in int_fields:
-        try:
-            contract_row[k] = int(float(contract_row.get(k) or 0))
-        except Exception:
-            contract_row[k] = 0
+        if k in contract_row:
+            try:
+                contract_row[k] = int(float(contract_row.get(k) or 0))
+            except Exception:
+                contract_row[k] = 0
 
     return contract_row, contra_text
 
@@ -397,18 +423,29 @@ def search_customers_by_name(keyword):
 
     return result
 
+def _update_row_fields(ws, row_idx, data):
+    """一次 batch 更新同一列的多個欄位（取代逐格 update_cell）"""
+    headers = ws.row_values(1)
+    payload = []
+    for key, value in data.items():
+        if key in headers:
+            payload.append({
+                "range": rowcol_to_a1(row_idx, headers.index(key) + 1),
+                "values": [[value]],
+            })
+        else:
+            print(f"⚠️ 工作表缺少欄位 {key}，已略過")
+    if payload:
+        ws.batch_update(payload, value_input_option="USER_ENTERED")
+
+
 def update_contract(device_id, contract_data):
     ws = get_person_worksheet("contracts")
     rows = ws.get_all_records()
 
     for idx, row in enumerate(rows, start=2):
         if str(row.get("device_id", "")).strip() == str(device_id).strip():
-            for key, value in contract_data.items():
-                try:
-                    col = list(row.keys()).index(key) + 1
-                    ws.update_cell(idx, col, value)
-                except Exception:
-                    pass
+            _update_row_fields(ws, idx, contract_data)
             return True
     return False
 
@@ -418,12 +455,7 @@ def update_customer(device_id, customer_data):
 
     for idx, row in enumerate(rows, start=2):
         if str(row.get("device_id", "")).strip() == str(device_id).strip():
-            for key, value in customer_data.items():
-                try:
-                    col = list(row.keys()).index(key) + 1
-                    ws.update_cell(idx, col, value)
-                except Exception:
-                    pass
+            _update_row_fields(ws, idx, customer_data)
             return True
     return False
 
@@ -435,6 +467,29 @@ def delete_customer(device_id):
             ws.delete_rows(idx)
             return True
     return False
+
+def delete_contract(device_id):
+    """刪除契約。回傳 (是否刪除, 仍以此設備為主機的子機清單)；帳單歷史(billing_summary)保留"""
+    ws = get_person_worksheet("contracts")
+    rows = ws.get_all_records()
+    target = str(device_id).strip()
+    orphans = [str(r.get("device_id", "")).strip() for r in rows
+               if str(r.get("master_device_id", "")).strip() == target
+               and str(r.get("device_id", "")).strip() != target]
+    deleted = False
+    for idx, row in enumerate(rows, start=2):
+        if str(row.get("device_id", "")).strip() == target:
+            ws.delete_rows(idx)
+            deleted = True
+            break
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        conn.execute("DELETE FROM contracts WHERE device_id = ?", (target,))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"⚠️ 刪除本機契約失敗: {e}")
+    return deleted, orphans
 
 # 新客戶建檔
 def insert_customer(device_id, customer_data):
@@ -527,10 +582,11 @@ def get_related_devices(device_id):
 
     conn.close()
     return group
-
+    
+    
 # --- 紀錄使用量 ---
-def insert_usage(device_id, color_a3, color_count, bw_count):
-    month = datetime.now().strftime("%Y%m")
+def insert_usage(device_id, color_a3, color_count, bw_count, month=None):
+    month = month or datetime.now().strftime("%Y%m")
     timestamp = datetime.now().strftime("%Y/%m/%d-%H:%M")
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -541,7 +597,7 @@ def insert_usage(device_id, color_a3, color_count, bw_count):
     conn.commit()
     conn.close()
 
-# --- 計算邏輯 ---
+# --- 計算邏輯（支援黑白、彩色、彩色A3 階梯式超印費率與基礎張數） ---
 def calculate(contract, curr_color_a3, curr_color, curr_bw, last_color_a3, last_color, last_bw):
     if not contract:
         return None
@@ -551,7 +607,13 @@ def calculate(contract, curr_color_a3, curr_color, curr_bw, last_color_a3, last_
         "color_a3_giveaway", "color_giveaway", "bw_giveaway",
         "color_a3_error_rate", "color_error_rate", "bw_error_rate",
         "color_a3_basic", "color_basic", "bw_basic",
-        "monthly_rent"
+        "monthly_rent",
+        # 🟢 黑白階梯費率相關欄位
+        "bw_tier1_limit", "bw_tier1_price", "bw_tier2_price",
+        # 🟢 彩色階梯費率相關欄位
+        "color_tier1_limit", "color_tier1_price", "color_tier2_price",
+        # 🟢 彩色A3階梯費率相關欄位（統一命名規範）
+        "color_a3_tier1_limit", "color_a3_tier1_price", "color_a3_tier2_price"
     ]
     for key in keys_float:
         try:
@@ -570,24 +632,66 @@ def calculate(contract, curr_color_a3, curr_color, curr_bw, last_color_a3, last_
     used_color    = max(0, curr_color - last_color)
     used_bw       = max(0, curr_bw - last_bw)
 
-    bill_color_a3 = max(0, used_color_a3 - contract["color_a3_giveaway"])
-    bill_color_a3 = int(round(bill_color_a3 * (1 - contract["color_a3_error_rate"])))
+    # --- 彩色 A3 階梯計算 ---
+    excess_color_a3 = max(0, used_color_a3 - contract["color_a3_giveaway"])
+    excess_color_a3 = int(round(excess_color_a3 * (1 - contract["color_a3_error_rate"])))
     if contract["color_a3_basic"] > 0:
-        bill_color_a3 = max(int(contract["color_a3_basic"]), bill_color_a3)
+        excess_color_a3 = max(int(contract["color_a3_basic"]), excess_color_a3)
 
-    bill_color = max(0, used_color - contract["color_giveaway"])
-    bill_color = int(round(bill_color * (1 - contract["color_error_rate"])))
+    bill_color_a3 = excess_color_a3
+    color_a3_tier1_limit = contract.get("color_a3_tier1_limit", 0)
+    
+    tier1_a3_count = 0
+    tier2_a3_count = 0
+    if color_a3_tier1_limit > 0:
+        tier1_a3_count = min(excess_color_a3, color_a3_tier1_limit)
+        tier2_a3_count = max(0, excess_color_a3 - color_a3_tier1_limit)
+        price_a3_tier1 = contract.get("color_a3_tier1_price", contract["color_a3_unit_price"])
+        price_a3_tier2 = contract.get("color_a3_tier2_price", contract["color_a3_unit_price"])
+        color_a3_amount = (tier1_a3_count * price_a3_tier1) + (tier2_a3_count * price_a3_tier2)
+    else:
+        color_a3_amount = bill_color_a3 * contract["color_a3_unit_price"]
+
+    # --- 彩色 A4 階梯計算 ---
+    excess_color = max(0, used_color - contract["color_giveaway"])
+    excess_color = int(round(excess_color * (1 - contract["color_error_rate"])))
     if contract["color_basic"] > 0:
-        bill_color = max(int(contract["color_basic"]), bill_color)
+        excess_color = max(int(contract["color_basic"]), excess_color)
 
-    bill_bw = max(0, used_bw - contract["bw_giveaway"])
-    bill_bw = int(round(bill_bw * (1 - contract["bw_error_rate"])))
+    bill_color = excess_color
+    color_tier1_limit = contract.get("color_tier1_limit", 0)
+    
+    tier1_color_count = 0
+    tier2_color_count = 0
+    if color_tier1_limit > 0:
+        tier1_color_count = min(excess_color, color_tier1_limit)
+        tier2_color_count = max(0, excess_color - color_tier1_limit)
+        price_color_tier1 = contract.get("color_tier1_price", contract["color_unit_price"])
+        price_color_tier2 = contract.get("color_tier2_price", contract["color_unit_price"])
+        color_amount = (tier1_color_count * price_color_tier1) + (tier2_color_count * price_color_tier2)
+    else:
+        color_amount = bill_color * contract["color_unit_price"]
+
+    # --- 黑白階梯計算 ---
+    excess_bw = max(0, used_bw - contract["bw_giveaway"])
+    excess_bw = int(round(excess_bw * (1 - contract["bw_error_rate"])))
     if contract["bw_basic"] > 0:
-        bill_bw = max(int(contract["bw_basic"]), bill_bw)
+        excess_bw = max(int(contract["bw_basic"]), excess_bw)
 
-    color_a3_amount = bill_color_a3 * contract["color_a3_unit_price"]
-    color_amount    = bill_color * contract["color_unit_price"]
-    bw_amount       = bill_bw * contract["bw_unit_price"]
+    bill_bw = excess_bw
+    bw_tier1_limit = contract.get("bw_tier1_limit", 0)
+    
+    tier1_bw_count = 0
+    tier2_bw_count = 0
+    if bw_tier1_limit > 0:
+        tier1_bw_count = min(excess_bw, bw_tier1_limit)
+        tier2_bw_count = max(0, excess_bw - bw_tier1_limit)
+        price_bw_tier1 = contract.get("bw_tier1_price", contract["bw_unit_price"])
+        price_bw_tier2 = contract.get("bw_tier2_price", contract["bw_unit_price"])
+        bw_amount = (tier1_bw_count * price_bw_tier1) + (tier2_bw_count * price_bw_tier2)
+    else:
+        bw_amount = bill_bw * contract["bw_unit_price"]
+    
     subtotal = contract["monthly_rent"] + color_a3_amount + color_amount + bw_amount
 
     tax_rate = 0.05
@@ -600,16 +704,26 @@ def calculate(contract, curr_color_a3, curr_color, curr_bw, last_color_a3, last_
         untaxed = subtotal / (1 + tax_rate)
         tax = total - untaxed
 
+    # 🟢 擴充回傳的明細字典，包含各階梯張數
     return {
         "彩色A3使用張數": used_color_a3,
-        "彩色使用張數": used_color,
-        "黑白使用張數": used_bw,
         "彩色A3計費張數": bill_color_a3,
-        "彩色計費張數": bill_color,
-        "黑白計費張數": bill_bw,
+        "彩色A3_第一階段張數": tier1_a3_count,
+        "彩色A3_第二階段張數": tier2_a3_count,
         "彩色A3金額": round(color_a3_amount, 2),
+
+        "彩色使用張數": used_color,
+        "彩色計費張數": bill_color,
+        "彩色_第一階段張數": tier1_color_count,
+        "彩色_第二階段張數": tier2_color_count,
         "彩色金額": round(color_amount, 2),
+
+        "黑白使用張數": used_bw,
+        "黑白計費張數": bill_bw,
+        "黑白_第一階段張數": tier1_bw_count,
+        "黑白_第二階段張數": tier2_bw_count,
         "黑白金額": round(bw_amount, 2),
+
         "月租金": round(contract["monthly_rent"], 2),
         "未稅小計": round(untaxed, 2),
         "稅額": round(tax, 2),
@@ -626,7 +740,8 @@ def save_monthly_summary(
     last_color_a3,
     last_color,
     last_bw,
-    calc_result
+    calc_result,
+    year=None
 ):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -660,12 +775,13 @@ def save_monthly_summary(
             monthly_rent,
             untaxed_subtotal,
             tax_amount,
-            total_with_tax
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            total_with_tax,
+            last_date
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         device_id,
         month_int,
-        datetime.now().year,
+        year or datetime.now().year,
         total_curr_color_a3,
         total_curr_color,
         total_curr_bw,
@@ -685,7 +801,8 @@ def save_monthly_summary(
         calc_result.get("月租金", 0),
         calc_result.get("未稅小計", 0),
         calc_result.get("稅額", 0),
-        calc_result.get("含稅總額", 0)
+        calc_result.get("含稅總額", 0),
+        datetime.now().strftime("%Y/%m/%d")
     ))
 
     conn.commit()
@@ -733,9 +850,10 @@ def load_billing_summary(device_id, year):
         }
 
     return months
-
+    
 # --- 主頁面路由 ---
 @billing_bp.route("/", methods=["GET", "POST"])
+@login_required
 def index():
     message = request.args.get("message", "")
     contract, customer, result = None, None, None
@@ -761,19 +879,21 @@ def index():
                 matches = search_customers_by_name(keyword)
                 message = f"🔍 找到 {len(matches)} 筆相符客戶" if matches else f"❌ 找不到設備或客戶：{keyword}"
             else:
-                last_color_a3, last_color, last_bw, last_time = get_last_counts(keyword, prev_year, prev_month)
+                last_color_a3, last_color, last_bw, last_time = get_last_counts(keyword, selected_year, selected_month)
                 related_devices = get_related_devices(keyword)
 
         elif mode == "calculate":
             contract, contra_text = get_contract(device_id)
             customer = get_customer(device_id)
             if contract:
-                related_devices = get_related_devices(device_id)
+                # SQLite 查不到合開群組時，至少要計算本機（否則總數歸零並覆蓋帳單）
+                related_devices = get_related_devices(device_id) or [device_id]
                 total_last_color_a3 = total_last_color = total_last_bw = 0
                 total_curr_color_a3 = total_curr_color = total_curr_bw = 0
+                dev_counts = {}
 
                 for dev in related_devices:
-                    last_a3, last_c, last_b, _ = get_last_counts(dev, prev_year, prev_month)
+                    last_a3, last_c, last_b, _ = get_last_counts(dev, selected_year, selected_month)
                     total_last_color_a3 += last_a3
                     total_last_color += last_c
                     total_last_bw += last_b
@@ -782,14 +902,17 @@ def index():
                     val_c = request.form.get(f"curr_color_{dev}")
                     val_b = request.form.get(f"curr_bw_{dev}")
 
-                    if val_c is None:
-                        total_curr_color_a3 += int(request.form.get("curr_color_a3", 0))
-                        total_curr_color += int(request.form.get("curr_color", 0))
-                        total_curr_bw += int(request.form.get("curr_bw", 0))
-                    else:
-                        total_curr_color_a3 += int(val_a3 or 0)
-                        total_curr_color += int(val_c or 0)
-                        total_curr_bw += int(val_b or 0)
+                    # 單機且表單用未帶設備代號的欄位名稱時才使用備援欄位
+                    if val_c is None and len(related_devices) == 1:
+                        val_a3 = request.form.get("curr_color_a3")
+                        val_c = request.form.get("curr_color")
+                        val_b = request.form.get("curr_bw")
+
+                    cnt_a3, cnt_c, cnt_b = to_int(val_a3), to_int(val_c), to_int(val_b)
+                    total_curr_color_a3 += cnt_a3
+                    total_curr_color += cnt_c
+                    total_curr_bw += cnt_b
+                    dev_counts[dev] = (cnt_a3, cnt_c, cnt_b)
 
                 result = calculate(
                     contract,
@@ -801,13 +924,9 @@ def index():
                     total_last_bw
                 )
 
-                for dev in related_devices:
-                    insert_usage(
-                        dev,
-                        int(request.form.get(f"curr_color_a3_{dev}", 0)),
-                        int(request.form.get(f"curr_color_{dev}", 0)),
-                        int(request.form.get(f"curr_bw_{dev}", 0))
-                    )
+                usage_month = f"{selected_year}{selected_month:02d}"
+                for dev, (cnt_a3, cnt_c, cnt_b) in dev_counts.items():
+                    insert_usage(dev, cnt_a3, cnt_c, cnt_b, month=usage_month)
 
                 save_monthly_summary(
                     device_id,
@@ -818,37 +937,90 @@ def index():
                     total_last_color_a3,
                     total_last_color,
                     total_last_bw,
-                    result
+                    result,
+                    year=selected_year
                 )
                 message = f"✅ {device_id} 的抄表與金額已儲存至 {selected_month} 月"
             else:
                 message = f"❌ 找不到設備 {device_id}"
 
-        elif mode in ["update_contract", "update_customer", "delete_customer", "new_customer"]:
-            if mode == "update_contract":
-                contract_data = {
-                    "monthly_rent": float(request.form.get("monthly_rent") or 0),
-                    "color_unit_price": float(request.form.get("color_unit_price") or 0),
-                    "bw_unit_price": float(request.form.get("bw_unit_price") or 0),
-                    "color_giveaway": to_int(request.form.get("color_giveaway")),
-                    "bw_giveaway": to_int(request.form.get("bw_giveaway")),
-                    "color_error_rate": float(request.form.get("color_error_rate") or 0),
-                    "bw_error_rate": float(request.form.get("bw_error_rate") or 0),
-                    "color_basic": to_int(request.form.get("color_basic")),
-                    "bw_basic": to_int(request.form.get("bw_basic")),
-                    "color_a3_unit_price": float(request.form.get("color_a3_unit_price") or 0),
-                    "color_a3_giveaway": to_int(request.form.get("color_a3_giveaway")),
-                    "color_a3_error_rate": float(request.form.get("color_a3_error_rate") or 0),
-                    "color_a3_basic": to_int(request.form.get("color_a3_basic")),
-                    "tax_type": request.form.get("tax_type", "含稅"),
-                    "contra": request.form.get("contra", "").strip()
-                }
+        elif mode == "update_contract":
+            contract_data = {
+                "monthly_rent": float(request.form.get("monthly_rent") or 0),
+                "tax_type": request.form.get("tax_type", "含稅"),
+                "contra": request.form.get("contra", "").strip(),
+                "master_device_id": request.form.get("master_device_id", "").strip(),
+                
+                # 黑白設定
+                "bw_unit_price": float(request.form.get("bw_unit_price") or 0),
+                "bw_giveaway": to_int(request.form.get("bw_giveaway")),
+                "bw_basic": to_int(request.form.get("bw_basic")),
+                "bw_error_rate": float(request.form.get("bw_error_rate") or 0),
+                "bw_tier1_limit": to_int(request.form.get("bw_tier1_limit")),
+                "bw_tier1_price": float(request.form.get("bw_tier1_price") or 0),
+                "bw_tier2_price": float(request.form.get("bw_tier2_price") or 0),
 
-                update_contract(device_id, contract_data)
-                return redirect(url_for("billing.index", device_id=device_id, message="✅ 契約條件已更新"))
+                # 彩色 A4 設定
+                "color_unit_price": float(request.form.get("color_unit_price") or 0),
+                "color_giveaway": to_int(request.form.get("color_giveaway")),
+                "color_basic": to_int(request.form.get("color_basic")),
+                "color_error_rate": float(request.form.get("color_error_rate") or 0),
+                "color_tier1_limit": to_int(request.form.get("color_tier1_limit")),
+                "color_tier1_price": float(request.form.get("color_tier1_price") or 0),
+                "color_tier2_price": float(request.form.get("color_tier2_price") or 0),
 
-            elif mode == "update_customer":
-                customer_data = {
+                # 彩色 A3 設定
+                "color_a3_unit_price": float(request.form.get("color_a3_unit_price") or 0),
+                "color_a3_giveaway": to_int(request.form.get("color_a3_giveaway")),
+                "color_a3_basic": to_int(request.form.get("color_a3_basic")),
+                "color_a3_error_rate": float(request.form.get("color_a3_error_rate") or 0),
+                "color_a3_tier1_limit": to_int(request.form.get("color_a3_tier1_limit")),
+                "color_a3_tier1_price": float(request.form.get("color_a3_tier1_price") or 0),
+                "color_a3_tier2_price": float(request.form.get("color_a3_tier2_price") or 0)
+            }
+        
+            update_contract(device_id, contract_data)
+            return redirect(url_for("billing.index", device_id=device_id, message="✅ 契約條件已更新"))
+
+        elif mode == "update_customer":
+            customer_data = {
+                "customer_name": request.form.get("customer_name", "").strip(),
+                "device_number": request.form.get("device_number", "").strip(),
+                "machine_model": request.form.get("machine_model", "").strip(),
+                "tax_id": request.form.get("tax_id", "").strip(),
+                "install_address": request.form.get("install_address", "").strip(),
+                "service_person": request.form.get("service_person", "").strip(),
+                "contract_number": request.form.get("contract_number", "").strip(),
+                "contract_start": request.form.get("contract_start", "").strip(),
+                "contract_end": request.form.get("contract_end", "").strip(),
+                "pm": request.form.get("pm", "").strip()
+            }
+            update_customer(device_id, customer_data)
+            return redirect(url_for("billing.index", device_id=device_id, message="✅ 客戶資料已更新"))
+
+        elif mode == "delete_customer":
+            delete_customer(device_id)
+            _deleted, _orphans = delete_contract(device_id)
+            message = f"🗑 已刪除客戶與契約（設備編號：{device_id}）"
+            if _orphans:
+                message += f"；⚠️ 以下子機仍指向此主機，請重新指定：{', '.join(_orphans)}"
+
+        elif mode == "new_customer":
+            old_id = request.form.get("device_id")
+            new_id = request.form.get("device_id_new", "").strip()
+
+            old_customer = get_customer(old_id)
+            old_contract, _ = get_contract(old_id)
+
+            if not old_customer or not old_contract:
+                message = "❌ 找不到原始客戶或契約資料，無法建檔。"
+            elif not new_id:
+                message = "⚠️ 請輸入新設備編號。"
+            elif get_customer(new_id):
+                message = "❌ 此設備編號已存在，請使用不同編號。"
+            else:
+                new_customer_data = {
+                    "device_id": new_id,
                     "customer_name": request.form.get("customer_name", "").strip(),
                     "device_number": request.form.get("device_number", "").strip(),
                     "machine_model": request.form.get("machine_model", "").strip(),
@@ -860,73 +1032,52 @@ def index():
                     "contract_end": request.form.get("contract_end", "").strip(),
                     "pm": request.form.get("pm", "").strip()
                 }
-                update_customer(device_id, customer_data)
-                return redirect(url_for("billing.index", device_id=device_id, message="✅ 客戶資料已更新"))
 
-            elif mode == "delete_customer":
-                delete_customer(device_id)
-                message = f"🗑 已刪除客戶（設備編號：{device_id}）"
+                new_contract_data = {
+                    "device_id": new_id,
+                    "monthly_rent": old_contract.get("monthly_rent", 0),
+                    "tax_type": old_contract.get("tax_type", ""),
+                    "contra": old_contract.get("contra", ""),
+                    "master_device_id": old_contract.get("master_device_id", ""),
+                    
+                    "bw_unit_price": old_contract.get("bw_unit_price", 0),
+                    "bw_giveaway": old_contract.get("bw_giveaway", 0),
+                    "bw_basic": old_contract.get("bw_basic", 0),
+                    "bw_error_rate": old_contract.get("bw_error_rate", 0),
+                    "bw_tier1_limit": old_contract.get("bw_tier1_limit", 0),
+                    "bw_tier1_price": old_contract.get("bw_tier1_price", 0),
+                    "bw_tier2_price": old_contract.get("bw_tier2_price", 0),
 
-            elif mode == "new_customer":
-                old_id = request.form.get("device_id")
-                new_id = request.form.get("device_id_new", "").strip()
+                    "color_unit_price": old_contract.get("color_unit_price", 0),
+                    "color_giveaway": old_contract.get("color_giveaway", 0),
+                    "color_basic": old_contract.get("color_basic", 0),
+                    "color_error_rate": old_contract.get("color_error_rate", 0),
+                    "color_tier1_limit": old_contract.get("color_tier1_limit", 0),
+                    "color_tier1_price": old_contract.get("color_tier1_price", 0),
+                    "color_tier2_price": old_contract.get("color_tier2_price", 0),
 
-                old_customer = get_customer(old_id)
-                old_contract, _ = get_contract(old_id)
+                    "color_a3_unit_price": old_contract.get("color_a3_unit_price", 0),
+                    "color_a3_giveaway": old_contract.get("color_a3_giveaway", 0),
+                    "color_a3_basic": old_contract.get("color_a3_basic", 0),
+                    "color_a3_error_rate": old_contract.get("color_a3_error_rate", 0),
+                    "color_a3_tier1_limit": old_contract.get("color_a3_tier1_limit", 0),
+                    "color_a3_tier1_price": old_contract.get("color_a3_tier1_price", 0),
+                    "color_a3_tier2_price": old_contract.get("color_a3_tier2_price", 0)
+                }
 
-                if not old_customer or not old_contract:
-                    message = "❌ 找不到原始客戶或契約資料，無法建檔。"
-                elif not new_id:
-                    message = "⚠️ 請輸入新設備編號。"
-                elif get_customer(new_id):
-                    message = "❌ 此設備編號已存在，請使用不同編號。"
+                ok1 = insert_customer(new_id, new_customer_data)
+                ok2 = insert_contract(new_id, new_contract_data)
+
+                if not ok1 or not ok2:
+                    message = "❌ 新客戶建檔失敗（Google Sheet 寫入錯誤）"
                 else:
-                    new_customer_data = {
-                        "device_id": new_id,
-                        "customer_name": request.form.get("customer_name", "").strip(),
-                        "device_number": request.form.get("device_number", "").strip(),
-                        "machine_model": request.form.get("machine_model", "").strip(),
-                        "tax_id": request.form.get("tax_id", "").strip(),
-                        "install_address": request.form.get("install_address", "").strip(),
-                        "service_person": request.form.get("service_person", "").strip(),
-                        "contract_number": request.form.get("contract_number", "").strip(),
-                        "contract_start": request.form.get("contract_start", "").strip(),
-                        "contract_end": request.form.get("contract_end", "").strip(),
-                        "pm": request.form.get("pm", "").strip()
-                    }
-
-                    new_contract_data = {
-                        "device_id": new_id,
-                        "monthly_rent": old_contract.get("monthly_rent", 0),
-                        "color_unit_price": old_contract.get("color_unit_price", 0),
-                        "bw_unit_price": old_contract.get("bw_unit_price", 0),
-                        "color_giveaway": old_contract.get("color_giveaway", 0),
-                        "bw_giveaway": old_contract.get("bw_giveaway", 0),
-                        "color_error_rate": old_contract.get("color_error_rate", 0),
-                        "bw_error_rate": old_contract.get("bw_error_rate", 0),
-                        "color_basic": old_contract.get("color_basic", 0),
-                        "bw_basic": old_contract.get("bw_basic", 0),
-                        "color_a3_unit_price": old_contract.get("color_a3_unit_price", 0),
-                        "color_a3_giveaway": old_contract.get("color_a3_giveaway", 0),
-                        "color_a3_error_rate": old_contract.get("color_a3_error_rate", 0),
-                        "color_a3_basic": old_contract.get("color_a3_basic", 0),
-                        "tax_type": old_contract.get("tax_type", ""),
-                        "contra": old_contract.get("contra", "")
-                    }
-
-                    ok1 = insert_customer(new_id, new_customer_data)
-                    ok2 = insert_contract(new_id, new_contract_data)
-
-                    if not ok1 or not ok2:
-                        message = "❌ 新客戶建檔失敗（Google Sheet 寫入錯誤）"
-                    else:
-                        return redirect(
-                            url_for(
-                                "billing.index",
-                                device_id=new_id,
-                                message="✅ 新客戶建檔成功！"
-                            )
+                    return redirect(
+                        url_for(
+                            "billing.index",
+                            device_id=new_id,
+                            message="✅ 新客戶建檔成功！"
                         )
+                    )
 
     elif request.args.get("device_id"):
         q_device = request.args.get("device_id")
@@ -961,6 +1112,7 @@ def index():
 
 # --- 顯示發票紀錄頁面 ---
 @billing_bp.route("/invoice_log/<device_id>")
+@login_required
 def invoice_log(device_id):
     selected_year = request.args.get("year", type=int) or datetime.now().year
     months = load_billing_summary(device_id, selected_year)
@@ -975,6 +1127,7 @@ def invoice_log(device_id):
 
 # --- 客戶總表 + 概況 ---
 @billing_bp.route('/mfp_summary')
+@login_required
 def mfp_summary():
     keyword = request.args.get("keyword", "").strip()
 
@@ -1073,8 +1226,13 @@ def upsert_person_field(sheet_name, device_id, field, value):
     ])
 
 @billing_bp.route("/save_person_field", methods=["POST"])
+@login_required
 def save_person_field():
-    data = request.json
+    data = request.get_json(silent=True) or {}
+    if (data.get("sheet") not in ALLOWED_PERSON_SHEETS
+            or data.get("field") not in ("remark", "method")
+            or not data.get("device_id")):
+        return {"ok": False, "error": "invalid request"}, 400
     upsert_person_field(
         sheet_name=data["sheet"],
         device_id=data["device_id"],
@@ -1084,7 +1242,10 @@ def save_person_field():
     return {"ok": True}
 
 @billing_bp.route("/person/<sheet>")
+@login_required
 def person_page(sheet):
+    if sheet not in ALLOWED_PERSON_SHEETS:
+        abort(404)
     keyword = request.args.get("keyword", "").strip()
 
     mfp_xls = load_github_excel("MFP.xlsx")
@@ -1138,7 +1299,7 @@ def person_page(sheet):
     df3 = df3[["項次", "客戶名稱", "備註", "保養週期", "最後保養日", "設備代號", "抄表方式"]]
 
     if keyword:
-        df3 = df3[df3.apply(lambda r: r.astype(str).str.contains(keyword, case=False, na=False).any(), axis=1)]
+        df3 = df3[df3.apply(lambda r: r.astype(str).str.contains(keyword, case=False, regex=False, na=False).any(), axis=1)]
 
     return render_template(
         "tjw.html",
@@ -1151,6 +1312,7 @@ def person_page(sheet):
     )
 
 @billing_bp.route('/get_last_counts', methods=['GET'])
+@login_required
 def route_get_last_counts():
     device_id = request.args.get('device_id')
     selected_year = int(request.args.get('year', datetime.now().year))
@@ -1185,9 +1347,12 @@ def route_get_last_counts():
             "prev_month": prev_month
         })
 
-@billing_bp.route('/logout')
+@billing_bp.route('/logout', methods=['GET', 'POST'])
 @login_required
 def logout():
+    if request.method != 'POST':
+        # GET 不登出，避免 <img src="/billing/logout"> 之類的跨站強制登出
+        return redirect(url_for('home'))
     logout_user()
     flash('您已成功登出', 'info')
     return redirect(url_for('billing.login'))

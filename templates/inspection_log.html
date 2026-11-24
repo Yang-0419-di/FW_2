@@ -149,6 +149,7 @@ tr:hover { background-color: #f1f5f9; }
     text-decoration: underline;
 }
 </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/mobile.css', v=1) }}">
 </head>
 
 <body>
@@ -295,5 +296,6 @@ tr:hover { background-color: #f1f5f9; }
         data-sess="{{ session.get('login_ts', '') }}"
         data-idle-minutes="{{ (config.PERMANENT_SESSION_LIFETIME.total_seconds() // 60) | int }}"></script>
 
+<script src="{{ url_for('static', filename='js/mobile.js', v=1) }}"></script>
 </body>
 </html>

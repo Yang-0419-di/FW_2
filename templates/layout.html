@@ -2,6 +2,7 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>門市資料查詢</title>
 
     <style>
@@ -133,7 +134,7 @@
             background-color: #edf2f7;
         }
 
-        .accordion-content {
+        .accordion-nav-container .accordion-content {
             display: none; 
             position: absolute;
             top: 100%;
@@ -151,7 +152,7 @@
             gap: 8px;
         }
 
-        .accordion-content.show {
+        .accordion-nav-container .accordion-content.show {
             display: flex !important;
         }
 
@@ -230,6 +231,7 @@
             display: none !important;
         }
     </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile.css', v=1) }}">
 </head>
 
 <body>
@@ -266,6 +268,12 @@
 
 {% if not billing_page and not billing_invoice_log and not billing_mfp_summary and not billing_person and not billing_index %}
 
+<!-- 手機版：選單收合按鈕（桌機不顯示） -->
+<button type="button" class="m-nav-toggle" aria-expanded="false" aria-controls="siteNav">
+    <span>☰ 功能選單</span><span class="m-nav-arrow">▼</span>
+</button>
+
+<div id="siteNav" class="site-nav">
 <div class="button-row" role="navigation">
     <a href="{{ url_for('personal', name='湯家瑋') }}"><button class="button-3">湯家瑋</button></a>
     <a href="{{ url_for('personal', name='吳宗鴻') }}"><button class="button-3">吳宗鴻</button></a>
@@ -324,6 +332,7 @@
     </div>
 
 </div>
+</div><!-- /#siteNav -->
 
 {% endif %}
 
@@ -373,6 +382,7 @@ document.addEventListener('click', function(e) {
 });
 </script>
 
+<script src="{{ url_for('static', filename='js/mobile.js', v=1) }}"></script>
 <script src="{{ url_for('static', filename='js/common.js', v=3) }}"
         data-auth="{{ '1' if current_user.is_authenticated else '0' }}"
         data-login-url="{{ url_for('billing.login') }}"
