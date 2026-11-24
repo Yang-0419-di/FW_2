@@ -75,8 +75,9 @@
     }
 
     /* ===== 工務文字大小：要調整只改這兩個數字 =====
-       FullCalendar 原本約 13.6px（電腦）；手機版原本 11px。目前皆縮小為一半。 */
-    #calendar { --ev-font: 12.5px; }
+       FullCalendar 原本約 13.6px（電腦）；手機版原本 11px。
+       電腦：一半 6.8px 再加大 1/2 → 10.2px；手機：一半 5.5px。 */
+    #calendar { --ev-font: 10.2px; }
     @media (max-width: 768px) { #calendar { --ev-font: 5.5px; } }
 
     /* 讓事件方塊更緊湊好閱讀 */
@@ -207,9 +208,22 @@
     .p2-row .lbl { color: #666; font-size: 13px; display: block; margin-bottom: 2px; }
     .p2-row .val { white-space: pre-wrap; overflow-wrap: anywhere; }
     .p2-row input { width: 100%; box-sizing: border-box; padding: 7px 8px; font-size: 15px; border: 1px solid #bbb; border-radius: 5px; }
+    .p2-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .p2-chip {
+      margin: 0; display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 14px; font-size: 15px; border-radius: 20px;
+      background: #fff; color: #1e293b; border: 1px solid #94a3b8; cursor: pointer;
+    }
+    .p2-chip { -webkit-tap-highlight-color: transparent; outline: none; }
+    .p2-chip:focus-visible { outline: 2px solid #007BFF; outline-offset: 2px; }
+    .p2-chip .p2-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .p2-chip[aria-pressed="true"] { background: #1e293b; color: #fff; border-color: #1e293b; }
+    .p2-chip[aria-pressed="true"]::after { content: "✓"; }
+    .p2-chip.is-owner { opacity: .45; }
+    #p2Preview { color: #1e293b; font-weight: bold; }
     .p2-err { color: #b71c1c; min-height: 1.2em; margin-top: 6px; font-size: 14px; }
     .p2-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; flex-wrap: wrap; }
-    .p2-btns button { padding: 6px 14px; font-size: 15px; border-radius: 5px; border: 1px solid #999; background: #f5f5f5; cursor: pointer; }
+    .p2-btns button { padding: 6px 14px; font-size: 15px; border-radius: 5px; border: 1px solid #999; background: #f5f5f5; color: #1e293b; cursor: pointer; }
     .p2-btns .primary { background: #007BFF; color: #fff; border-color: #007BFF; }
     .p2-btns .danger { color: #b71c1c; border-color: #e0a0a0; background: #fff; margin-right: auto; }
     .p2-btns button:disabled { opacity: .6; cursor: default; }
@@ -242,12 +256,16 @@
       <div class="p2-row"><span class="lbl">工務</span><span class="val" id="p2Title"></span></div>
       <div class="p2-row"><span class="lbl">預設人員（來自排程檔）</span><span class="val" id="p2Owner"></span></div>
       <div class="p2-row">
-        <label class="lbl" for="p2Input">人員2（可直接輸入姓名，多人可用「、」分隔）</label>
-        <input id="p2Input" type="text" maxlength="30" list="p2List" autocomplete="off">
-        <datalist id="p2List">
-          {% for s in STAFF %}<option value="{{ s.name }}">{% endfor %}
-        </datalist>
+        <span class="lbl">人員2（點選人員，可複選；再點一次取消）</span>
+        <div class="p2-chips" id="p2Chips">
+          {% for s in STAFF %}<button type="button" class="p2-chip" data-name="{{ s.name }}" aria-pressed="false"><span class="p2-dot" style="background: {{ s.color }};"></span>{{ s.name }}</button>{% endfor %}
+        </div>
       </div>
+      <div class="p2-row">
+        <label class="lbl" for="p2Input">其他人員（名單外，多人用「、」分隔）</label>
+        <input id="p2Input" type="text" maxlength="30" autocomplete="off" placeholder="例如：支援同事、廠商">
+      </div>
+      <div class="p2-row"><span class="lbl">將儲存為</span><span class="val" id="p2Preview"></span></div>
       <div class="p2-err" id="p2Err"></div>
       <div class="p2-btns">
         <button type="button" class="danger" id="p2Clear">清除人員2</button>
@@ -400,21 +418,55 @@ document.addEventListener('DOMContentLoaded', function () {
   const btnCancel = document.getElementById('p2Cancel');
   let editing = null;
 
+  const chips = Array.prototype.slice.call(document.querySelectorAll('.p2-chip'));
+  const preview = document.getElementById('p2Preview');
+  const P2_MAX = 30;
+
+  // 組合要儲存的人員2：點選的人員（依名單順序）＋其他欄位，以「、」分隔
+  function composeP2() {
+    const names = chips.filter(function (c) { return c.getAttribute('aria-pressed') === 'true'; })
+                       .map(function (c) { return c.dataset.name; });
+    inp.value.split(/[、,，\/&＆\s]+/).forEach(function (x) {
+      x = x.trim(); if (x && names.indexOf(x) < 0) names.push(x);
+    });
+    return names.join('、');
+  }
+  function refreshPreview() {
+    const v = composeP2();
+    preview.textContent = v || '（無）';
+    err.textContent = v.length > P2_MAX ? '人員2 最多 ' + P2_MAX + ' 個字，請減少人數或縮短名稱' : '';
+  }
+  chips.forEach(function (c) {
+    c.addEventListener('click', function () {
+      c.setAttribute('aria-pressed', c.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
+      refreshPreview();
+    });
+  });
+  inp.addEventListener('input', refreshPreview);
+
   function openEditor(ev) {
     const p = ev.extendedProps;
     editing = { date: ev.startStr.slice(0, 10), title: p.base_title };
     document.getElementById('p2Date').textContent = editing.date;
     document.getElementById('p2Title').textContent = p.base_title;
     document.getElementById('p2Owner').textContent = p.owner || '（未指定）';
-    inp.value = p.person2 || '';
+    // 依目前的人員2 還原點選狀態；名單外的名字放回「其他人員」
+    const saved = (p.person2 || '').split(/[、,，\/&＆\s]+/).map(function (x) { return x.trim(); }).filter(Boolean);
+    const others = [];
+    chips.forEach(function (c) {
+      c.setAttribute('aria-pressed', saved.indexOf(c.dataset.name) >= 0 ? 'true' : 'false');
+      c.classList.toggle('is-owner', c.dataset.name === p.owner);   // 預設人員淡化提示（仍可點）
+    });
+    saved.forEach(function (x) { if (!chips.some(function (c) { return c.dataset.name === x; })) others.push(x); });
+    inp.value = others.join('、');
     btnClear.style.display = p.person2 ? '' : 'none';
     err.textContent = '';
     setBusy(false);
+    refreshPreview();
     ov.classList.add('show');
-    setTimeout(function () { inp.focus(); inp.select(); }, 0);
   }
   function closeEditor() { ov.classList.remove('show'); editing = null; }
-  function setBusy(b) { [btnSave, btnClear, btnCancel, inp].forEach(function (x) { x.disabled = b; }); btnSave.textContent = b ? '儲存中…' : '儲存'; }
+  function setBusy(b) { [btnSave, btnClear, btnCancel, inp].concat(chips).forEach(function (x) { x.disabled = b; }); btnSave.textContent = b ? '儲存中…' : '儲存'; }
 
   function submit(person2) {
     if (!editing) return;
@@ -436,11 +488,15 @@ document.addEventListener('DOMContentLoaded', function () {
       .catch(function (e) { err.textContent = (e && e.message) || '儲存失敗'; setBusy(false); });
   }
 
-  btnSave.addEventListener('click', function () { submit(inp.value.trim()); });
+  btnSave.addEventListener('click', function () {
+    const v = composeP2();
+    if (v.length > P2_MAX) { refreshPreview(); return; }
+    submit(v);
+  });
   btnClear.addEventListener('click', function () { submit(''); });
   btnCancel.addEventListener('click', closeEditor);
   ov.addEventListener('click', function (e) { if (e.target === ov) closeEditor(); });
-  inp.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); submit(inp.value.trim()); } });
+  inp.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); btnSave.click(); } });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && ov.classList.contains('show')) closeEditor(); });
 });
 </script>
