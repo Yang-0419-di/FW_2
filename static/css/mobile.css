@@ -9,7 +9,6 @@
 
 /* ---------- 所有尺寸都適用（不影響桌機外觀）---------- */
 img, video { max-width: 100%; height: auto; }
-iframe { max-width: 100%; }
 
 /* 手機選單按鈕：桌機不顯示 */
 .m-nav-toggle { display: none; }
@@ -177,9 +176,6 @@ iframe { max-width: 100%; }
 
     /* 出勤時間：圖表寬度跟著螢幕 */
     html img[alt="出勤時間曲線圖"] { width: 100% !important; }
-
-    /* 報修刊版：iframe 高度依螢幕 */
-    html iframe { height: 75vh; }
 
     /* 報修查詢、MFP 零件表：查詢條件直向排列 */
     html .search-form,
