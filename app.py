@@ -3,6 +3,7 @@ import base64
 from datetime import datetime, timezone, timedelta
 
 import io
+import json
 from io import BytesIO
 import math
 import os
@@ -37,6 +38,7 @@ from modules.billing import billing_bp, User
 from modules import staff as STAFF_CFG
 from modules import calendar_people
 from modules import personal_calendar
+from modules import line_api, line_bind
 
 # 取得當前 app.py 所在的目錄，並指到 billing.db
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -932,6 +934,13 @@ def _pc_clean(d):
     data['special'] = sp
     if not (data['store'] or data['content']):
         raise ValueError('店編和內容至少要填一項')
+    # 提前通知：空白＝不通知、0＝當日、1~60＝提前幾天
+    nt = str(d.get('notify', '')).strip()
+    if nt != '':
+        if not nt.isdigit() or int(nt) > 60:
+            raise ValueError('提前通知天數請填 0～60 的整數（0＝當日）')
+        nt = str(int(nt))
+    data['notify'] = nt
     return data
 
 
@@ -957,7 +966,7 @@ def personal_calendar_events(name):
             'title': _pc_title(e) or '（未命名）',
             'start': e['date'],
             'color': STAFF_CFG.PAST_COLOR if d < today else STAFF_CFG.color_of(e['person']),
-            'extendedProps': {k: e[k] for k in ('person', 'store', 'name', 'content', 'time', 'special',
+            'extendedProps': {k: e[k] for k in ('person', 'store', 'name', 'content', 'time', 'special', 'notify', 'notified',
                                                 'created_by', 'created_at', 'updated_by', 'updated_at')},
         })
     return jsonify({'status': 'ok', 'events': events})
@@ -1001,6 +1010,101 @@ def personal_calendar_delete():
         print(f"⚠️ 個人行事曆刪除失敗: {e}")
         return jsonify({'status': 'error', 'message': '刪除失敗（Google Sheet），請稍後再試。'}), 502
     return jsonify({'status': 'ok'})
+
+
+# ====== LINE 通知：綁定（個人頁）與 webhook（LINE 官方帳號）======
+def _line_add_friend_url():
+    return os.environ.get('LINE_ADD_FRIEND_URL', '').strip()
+
+
+@app.route('/personal_calendar/<name>/line')
+@login_required
+def personal_line_status(name):
+    if name not in STAFF_CFG.STAFF_NAMES:
+        return jsonify({'status': 'error', 'message': f'找不到人員：{name}'}), 404
+    try:
+        st = line_bind.status(name)
+    except Exception as e:
+        print(f"⚠️ LINE 綁定狀態讀取失敗: {e}")
+        return jsonify({'status': 'error', 'message': '無法讀取 LINE 綁定狀態'}), 503
+    return jsonify({'status': 'ok', **st, 'add_friend_url': _line_add_friend_url(),
+                    'configured': bool(os.environ.get('LINE_CHANNEL_SECRET') and os.environ.get('LINE_CHANNEL_ACCESS_TOKEN'))})
+
+
+@app.route('/personal_calendar/<name>/line/code', methods=['POST'])
+@login_required
+def personal_line_code(name):
+    if name not in STAFF_CFG.STAFF_NAMES:
+        return jsonify({'status': 'error', 'message': f'找不到人員：{name}'}), 404
+    try:
+        code, expire = line_bind.new_code(name, getattr(current_user, 'username', ''))
+    except Exception as e:
+        print(f"⚠️ LINE 綁定碼產生失敗: {e}")
+        return jsonify({'status': 'error', 'message': '產生綁定碼失敗（Google Sheet），請稍後再試。'}), 502
+    return jsonify({'status': 'ok', 'code': code, 'expire': expire, 'minutes': line_bind.CODE_MINUTES,
+                    'add_friend_url': _line_add_friend_url()})
+
+
+@app.route('/personal_calendar/<name>/line/unbind', methods=['POST'])
+@login_required
+def personal_line_unbind(name):
+    if name not in STAFF_CFG.STAFF_NAMES:
+        return jsonify({'status': 'error', 'message': f'找不到人員：{name}'}), 404
+    try:
+        line_bind.unbind_person(name, getattr(current_user, 'username', ''))
+    except Exception as e:
+        print(f"⚠️ LINE 解除綁定失敗: {e}")
+        return jsonify({'status': 'error', 'message': '解除綁定失敗（Google Sheet），請稍後再試。'}), 502
+    return jsonify({'status': 'ok'})
+
+
+LINE_HELP = ("這是部門行事曆的 LINE 通知帳號。\n"
+             "・綁定：到網站自己的個人頁，在「個人行事曆」按「取得綁定碼」，再傳「綁定 123456」到這裡\n"
+             "・查詢目前綁定：傳「狀態」\n"
+             "・停止接收：傳「解除綁定」")
+
+
+def _line_handle_text(text, user_id):
+    """處理使用者傳給官方帳號的文字，回傳要回覆的內容。"""
+    t = text.strip().translate(str.maketrans('０１２３４５６７８９　', '0123456789 '))
+    m = re.fullmatch(r'(?:綁定\s*)?(\d{6})', t)
+    if m:
+        person = line_bind.bind_by_code(m.group(1), user_id)
+        if person:
+            return f"✅ 已綁定為「{person}」。\n之後個人行事曆設定的提前通知，會在每天早上 8 點左右傳到這裡。"
+        return "❌ 綁定碼錯誤或已過期（有效 10 分鐘）。請到個人頁重新按「取得綁定碼」。"
+    if t in ('解除綁定', '取消綁定'):
+        persons = line_bind.unbind_user(user_id)
+        return f"已解除「{'、'.join(persons)}」的綁定，之後不會再收到提醒。" if persons else "這個 LINE 帳號目前沒有綁定任何人員。"
+    if t in ('狀態', '查詢', '綁定狀態'):
+        persons = line_bind.persons_of(user_id)
+        return f"目前綁定：{'、'.join(persons)}" if persons else "目前沒有綁定。\n\n" + LINE_HELP
+    return LINE_HELP
+
+
+@app.route('/line/webhook', methods=['POST'])
+def line_webhook():
+    """LINE 官方帳號的 webhook（不需登入，改以 LINE 簽章驗證來源）。"""
+    body = request.get_data()
+    if not line_api.verify_signature(body, request.headers.get('X-Line-Signature', '')):
+        return 'invalid signature', 400
+    try:
+        events = json.loads(body.decode('utf-8')).get('events', [])
+    except Exception:
+        return 'bad request', 400
+    for ev in events:
+        try:
+            src = ev.get('source', {})
+            if src.get('type') != 'user':
+                continue                      # 只處理一對一聊天，群組訊息不回應
+            token = ev.get('replyToken')
+            if ev.get('type') == 'follow' and token:
+                line_api.reply(token, "感謝加入！\n\n" + LINE_HELP)
+            elif ev.get('type') == 'message' and ev.get('message', {}).get('type') == 'text' and token:
+                line_api.reply(token, _line_handle_text(ev['message'].get('text', ''), src.get('userId', '')))
+        except Exception as e:
+            print(f"⚠️ LINE webhook 處理失敗: {e}")
+    return 'OK'
 
 
 @app.route("/worktime")

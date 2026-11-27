@@ -6,6 +6,13 @@
 </h2>
 
 <div id="pcBody">
+<!-- LINE 通知綁定狀態 -->
+<div class="pc-line" id="pcLine">
+  <span id="pcLineText">LINE 通知：讀取中…</span>
+  <button type="button" class="pc-btn" id="pcLineCode" style="display:none;">取得綁定碼</button>
+  <button type="button" class="pc-btn pc-link" id="pcLineUnbind" style="display:none;">解除綁定</button>
+  <div id="pcLineCodeBox" class="pc-line-code" style="display:none;"></div>
+</div>
 <div class="pc-card">
   <div class="pc-card-title">新增事件</div>
   <form id="pcAddForm" class="pc-form" autocomplete="off">
@@ -20,6 +27,16 @@
     <label>內容<input name="content" list="pcContentList" maxlength="60"></label>
     <label>時間<input name="time" placeholder="10:00" maxlength="20"></label>
     <label>特殊（Y）<input name="special" maxlength="1" placeholder="Y"></label>
+    <label>LINE 提前通知
+      <span class="pc-notify">
+        <select name="notify_mode">
+          <option value="">不通知</option>
+          <option value="0">當日</option>
+          <option value="custom">提前天數</option>
+        </select>
+        <input type="number" name="notify_days" min="1" max="60" placeholder="天" style="display:none;">
+      </span>
+    </label>
   </form>
   <div class="pc-actions">
     <button type="button" class="pc-btn pc-primary" id="pcAddBtn">新增</button>
@@ -69,6 +86,16 @@
       <label>內容<input name="content" list="pcContentList" maxlength="60"></label>
       <label>時間<input name="time" placeholder="10:00" maxlength="20"></label>
       <label>特殊（Y）<input name="special" maxlength="1" placeholder="Y"></label>
+      <label>LINE 提前通知
+        <span class="pc-notify">
+          <select name="notify_mode">
+            <option value="">不通知</option>
+            <option value="0">當日</option>
+            <option value="custom">提前天數</option>
+          </select>
+          <input type="number" name="notify_days" min="1" max="60" placeholder="天" style="display:none;">
+        </span>
+      </label>
     </form>
     <div class="pc-meta" id="pcMeta"></div>
     <div class="pc-err" id="pcErr"></div>
@@ -95,6 +122,15 @@
     padding: 7px 8px; font-size: 14px; border: 1px solid #cbd5e1; border-radius: 6px;
     background: #fff; color: #1e293b; width: 100%; box-sizing: border-box; min-height: 36px;
   }
+  .pc-line { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 0 0 10px 0; font-size: 14px; color: #334155; }
+  .pc-line .ok { color: #15803d; font-weight: bold; }
+  .pc-line .warn { color: #b45309; font-weight: bold; }
+  .pc-line-code { flex: 1 1 100%; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px 14px; line-height: 1.8; }
+  .pc-line-code b.code { font-size: 22px; letter-spacing: 3px; color: #15803d; }
+  .pc-line-code a { color: #15803d; font-weight: bold; }
+  .pc-notify { display: flex; gap: 6px; }
+  .pc-notify select { flex: 1 1 auto; min-width: 0; }
+  .pc-notify input { flex: 0 0 64px; width: 64px; }
   .pc-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 10px; }
   .pc-hint { font-size: 13px; color: #64748b; }
   .pc-hint.ok { color: #15803d; font-weight: bold; }
@@ -181,8 +217,81 @@ document.addEventListener('DOMContentLoaded', function () {
     const d = new Date(); const p = function (n) { return (n < 10 ? '0' : '') + n; };
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
   }
-  function readForm(f) { const o = {}; FIELDS.forEach(function (k) { o[k] = (f.elements[k].value || '').trim(); }); o.special = o.special.toUpperCase(); return o; }
-  function fillForm(f, o) { FIELDS.forEach(function (k) { f.elements[k].value = o[k] || ''; }); }
+  // 提前通知：空白＝不通知、'0'＝當日、'N'＝提前 N 天
+  function readNotify(f) {
+    const m = f.elements.notify_mode.value;
+    if (m !== 'custom') return m;
+    const n = (f.elements.notify_days.value || '').trim();
+    if (!/^\d+$/.test(n) || +n < 1 || +n > 60) throw new Error('提前天數請填 1～60');
+    return String(+n);
+  }
+  function fillNotify(f, v) {
+    v = v == null ? '' : String(v);
+    f.elements.notify_mode.value = v === '' ? '' : (v === '0' ? '0' : 'custom');
+    f.elements.notify_days.value = (v !== '' && v !== '0') ? v : '';
+    syncNotify(f);
+  }
+  function syncNotify(f) {
+    const custom = f.elements.notify_mode.value === 'custom';
+    f.elements.notify_days.style.display = custom ? '' : 'none';
+    if (custom && !f.elements.notify_days.value) f.elements.notify_days.value = '1';
+  }
+  function readForm(f) {
+    const o = {}; FIELDS.forEach(function (k) { o[k] = (f.elements[k].value || '').trim(); });
+    o.special = o.special.toUpperCase(); o.notify = readNotify(f); return o;
+  }
+  function fillForm(f, o) { FIELDS.forEach(function (k) { f.elements[k].value = o[k] || ''; }); fillNotify(f, o.notify); }
+  function notifyText(v) { return v === '' || v == null ? '' : (String(v) === '0' ? '當日通知' : '提前 ' + v + ' 天通知'); }
+
+  // ===== LINE 通知綁定 =====
+  const URL_LINE = {{ url_for('personal_line_status', name=personal_page)|tojson }};
+  const URL_LINE_CODE = {{ url_for('personal_line_code', name=personal_page)|tojson }};
+  const URL_LINE_UNBIND = {{ url_for('personal_line_unbind', name=personal_page)|tojson }};
+  const lnText = document.getElementById('pcLineText'), lnCode = document.getElementById('pcLineCode');
+  const lnUnbind = document.getElementById('pcLineUnbind'), lnBox = document.getElementById('pcLineCodeBox');
+  let lineBound = null, linePoll = null, lineArmed = false;
+
+  function lineSet(html) { lnText.innerHTML = html; }
+  function esc(t) { const d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; }
+  function lineRender(st) {
+    lineBound = !!st.bound;
+    lnUnbind.textContent = '解除綁定'; lineArmed = false;
+    if (!st.configured) {
+      lineSet('LINE 通知：<span class="warn">網站尚未設定 LINE 金鑰</span>（設定後才能綁定與發送提醒）');
+      lnCode.style.display = 'none'; lnUnbind.style.display = 'none'; return;
+    }
+    if (lineBound) {
+      lineSet('🔔 LINE 通知：<span class="ok">已綁定</span>' + (st.bound_at ? '（' + esc(st.bound_at.slice(0, 16)) + '）' : '') + '，提醒會在每天早上 8 點左右送出');
+      lnCode.style.display = 'none'; lnUnbind.style.display = ''; lnBox.style.display = 'none';
+      clearInterval(linePoll); linePoll = null;
+    } else {
+      lineSet('LINE 通知：<span class="warn">尚未綁定</span>，設定的提前通知不會送出');
+      lnCode.style.display = ''; lnUnbind.style.display = 'none';
+    }
+  }
+  function lineLoad() { return call(URL_LINE).then(lineRender).catch(function (e) { lineSet('LINE 通知：' + esc(e.message)); }); }
+  lnCode.addEventListener('click', function () {
+    lnCode.disabled = true;
+    call(URL_LINE_CODE, {}).then(function (j) {
+      const add = j.add_friend_url ? '<a href="' + esc(j.add_friend_url) + '" target="_blank" rel="noopener">加入官方帳號好友</a>' : '加入部門 LINE 官方帳號好友';
+      lnBox.innerHTML = '綁定碼 <b class="code">' + esc(j.code) + '</b>（' + j.minutes + ' 分鐘內有效，至 ' + esc(j.expire.slice(11, 16)) + '）<br>' +
+        '① 用 <b>' + esc(PERSON) + '</b> 本人的 LINE ' + add + '<br>② 在聊天室傳送：<b>綁定 ' + esc(j.code) + '</b><br>' +
+        '③ 收到「已綁定」回覆後，這裡會自動更新（也可以按 <button type="button" class="pc-btn pc-link" id="pcLineRecheck">重新檢查</button>）';
+      lnBox.style.display = '';
+      document.getElementById('pcLineRecheck').addEventListener('click', lineLoad);
+      clearInterval(linePoll);
+      const until = Date.now() + j.minutes * 60000;
+      linePoll = setInterval(function () { if (Date.now() > until) { clearInterval(linePoll); linePoll = null; return; } lineLoad(); }, 5000);
+    }).catch(function (e) { lineSet('LINE 通知：' + esc(e.message)); })
+      .then(function () { lnCode.disabled = false; });
+  });
+  lnUnbind.addEventListener('click', function () {
+    if (!lineArmed) { lineArmed = true; lnUnbind.textContent = '確定解除綁定？'; return; }
+    lnUnbind.disabled = true;
+    call(URL_LINE_UNBIND, {}).then(lineLoad).catch(function (e) { lineSet('LINE 通知：' + esc(e.message)); })
+      .then(function () { lnUnbind.disabled = false; });
+  });
+  lineLoad();
 
   // ===== 門市清單：店編 → 店名自動帶入 =====
   const STORES = {};
@@ -243,11 +352,13 @@ document.addEventListener('DOMContentLoaded', function () {
         .catch(function (e) { showError(e.message || '個人行事曆載入失敗'); failure(e); });
     },
     eventContent: function (arg) {
-      const t = document.createElement('div'); t.className = 'pc-ev-title'; t.textContent = arg.event.title;
+      const t = document.createElement('div'); t.className = 'pc-ev-title';
+      t.textContent = (arg.event.extendedProps.notify !== '' && arg.event.extendedProps.notify != null ? '🔔 ' : '') + arg.event.title;
       return { domNodes: [t] };
     },
     eventDidMount: function (info) {
-      info.el.title = '點擊可編輯或刪除';
+      const nt = notifyText(info.event.extendedProps.notify);
+      info.el.title = '點擊可編輯或刪除' + (nt ? '（LINE ' + nt + '）' : '');
       if (info.event.extendedProps.special === 'Y') info.el.classList.add('ev-special');
     },
     eventsSet: updateWeekends,
@@ -282,14 +393,21 @@ document.addEventListener('DOMContentLoaded', function () {
   // ===== 新增 =====
   const addForm = document.getElementById('pcAddForm'), addBtn = document.getElementById('pcAddBtn'), addMsg = document.getElementById('pcAddMsg');
   addForm.elements.date.value = todayStr();
+  [addForm, document.getElementById('pcEditForm')].forEach(function (f) {
+    f.elements.notify_mode.addEventListener('change', function () { syncNotify(f); });
+  });
   const resetAddAuto = bindAutoName(addForm);
   function setAddMsg(text, kind) { addMsg.textContent = text; addMsg.className = 'pc-hint' + (kind ? ' ' + kind : ''); }
   function doAdd() {
-    const data = readForm(addForm);
+    let data;
+    try { data = readForm(addForm); } catch (e) { setAddMsg('❌ ' + e.message, 'err'); return; }
     addBtn.disabled = true; setAddMsg('新增中…');
     call(URL_SAVE, data).then(function () {
-      setAddMsg(data.person === PERSON ? '✅ 已新增 ' + data.date + ' 的事件' : '✅ 已新增到「' + data.person + '」的個人行事曆', 'ok');
+      let msg = data.person === PERSON ? '✅ 已新增 ' + data.date + ' 的事件' : '✅ 已新增到「' + data.person + '」的個人行事曆';
+      if (data.notify !== '' && data.person === PERSON && lineBound === false) msg += '（尚未綁定 LINE，提醒不會送出）';
+      setAddMsg(msg, 'ok');
       ['store', 'name', 'content', 'time', 'special'].forEach(function (k) { addForm.elements[k].value = ''; });
+      fillNotify(addForm, '');
       resetAddAuto();
       if (data.person === PERSON) { calendar.gotoDate(data.date); reload(); }
     }).catch(function (e) { setAddMsg('❌ ' + e.message, 'err'); })
@@ -311,10 +429,11 @@ document.addEventListener('DOMContentLoaded', function () {
   function openEdit(ev) {
     const p = ev.extendedProps;
     editingId = ev.id;
-    fillForm(editForm, { date: ev.startStr.slice(0, 10), person: p.person, store: p.store, name: p.name, content: p.content, time: p.time, special: p.special });
+    fillForm(editForm, { date: ev.startStr.slice(0, 10), person: p.person, store: p.store, name: p.name, content: p.content, time: p.time, special: p.special, notify: p.notify });
     resetEditAuto();
     meta.textContent = '建立：' + (p.created_by || '—') + '　' + (p.created_at || '') +
-      (p.updated_at && p.updated_at !== p.created_at ? '\n最後修改：' + (p.updated_by || '—') + '　' + p.updated_at : '');
+      (p.updated_at && p.updated_at !== p.created_at ? '\n最後修改：' + (p.updated_by || '—') + '　' + p.updated_at : '') +
+      (p.notified ? '\nLINE 提醒：已送出（若修改日期或提前天數，會再通知一次）' : '');
     meta.style.whiteSpace = 'pre-line';
     errBox.textContent = ''; disarm(); setBusy(false);
     ov.classList.add('show');
@@ -323,7 +442,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
   btnSave.addEventListener('click', function () {
     if (!editingId) return;
-    const data = readForm(editForm); data.id = editingId;
+    let data;
+    try { data = readForm(editForm); } catch (e) { errBox.textContent = e.message; return; }
+    data.id = editingId;
     setBusy(true); errBox.textContent = '';
     call(URL_SAVE, data).then(function () {
       closeEdit();
