@@ -36,6 +36,7 @@ from modules.gsheet import client, SHEET_ID
 from modules.billing import billing_bp, User
 from modules import staff as STAFF_CFG
 from modules import calendar_people
+from modules import personal_calendar
 
 # 取得當前 app.py 所在的目錄，並指到 billing.db
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -65,7 +66,7 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'billing.login'  # 未登入時自動重定向之登入頁面路由
 
-_API_PREFIXES = ('/api/', '/sc_disk/', '/calendar/events', '/calendar/assign', '/billing/get_last_counts', '/billing/save_person_field')
+_API_PREFIXES = ('/api/', '/sc_disk/', '/calendar/events', '/calendar/assign', '/personal_calendar/', '/billing/get_last_counts', '/billing/save_person_field')
 
 @login_manager.unauthorized_handler
 def _unauthorized():
@@ -868,6 +869,140 @@ def calendar_assign():
         return jsonify({'status': 'error', 'message': '寫入 Google Sheet 失敗，請稍後再試。'}), 502
     return jsonify({'status': 'ok', 'person2': person2})
 
+# ====== 個人行事曆（Google Sheet「個人行事曆」分頁）======
+_store_cache = {'at': None, 'list': []}
+
+
+def _store_list():
+    """首頁門市資料的 門市編號／門市名稱（跟著 data.xlsx 快取更新）。"""
+    xls = load_excel_from_github(GITHUB_XLSX_URL)
+    if _store_cache['at'] == cached_at and _store_cache['list']:
+        return _store_cache['list']
+    out = []
+    try:
+        df = clean_df(pd.read_excel(xls, sheet_name=0, header=20, nrows=500, usecols="A:O"))
+        seen = set()
+        for _, r in df.iterrows():
+            sid = re.sub(r'\.0$', '', str(r.get('門市編號', '')).strip())
+            name = str(r.get('門市名稱', '')).strip()
+            if sid and name and sid not in seen:
+                seen.add(sid)
+                out.append({'id': sid, 'name': name})
+    except Exception as e:
+        print(f"⚠️ 門市清單讀取失敗: {e}")
+    _store_cache.update(at=cached_at, list=out)
+    return out
+
+
+@app.route('/personal_calendar/stores')
+@login_required
+def personal_calendar_stores():
+    return jsonify({'status': 'ok', 'stores': _store_list()})
+
+
+def _pc_title(e):
+    """事件標題：店編_店名_內容_時間（空白的欄位略過），與部門排程表的格式一致。"""
+    return '_'.join(x for x in (e['store'], e['name'], e['content'], e['time']) if x)
+
+
+PC_LIMITS = {'store': 20, 'name': 40, 'content': 60, 'time': 20}
+
+
+def _pc_clean(d):
+    """檢查並整理表單資料；有問題丟出 ValueError（訊息給使用者看）。"""
+    data = {}
+    date_str = str(d.get('date', '')).strip()[:10]
+    try:
+        datetime.strptime(date_str, '%Y-%m-%d')
+    except ValueError:
+        raise ValueError('請選擇日期')
+    data['date'] = date_str
+    person = str(d.get('person', '')).strip()
+    if person not in STAFF_CFG.STAFF_NAMES:
+        raise ValueError('請選擇工程師')
+    data['person'] = person
+    for k, n in PC_LIMITS.items():
+        v = re.sub(r'\s+', ' ', str(d.get(k, ''))).strip()
+        if len(v) > n:
+            raise ValueError(f'{ {"store": "店編", "name": "店名", "content": "內容", "time": "時間"}[k] } 最多 {n} 個字')
+        data[k] = v
+    sp = str(d.get('special', '')).strip().upper()
+    if sp not in ('', 'Y'):
+        raise ValueError('特殊欄只能填 Y 或留白')
+    data['special'] = sp
+    if not (data['store'] or data['content']):
+        raise ValueError('店編和內容至少要填一項')
+    return data
+
+
+@app.route('/personal_calendar/<name>/events')
+@login_required
+def personal_calendar_events(name):
+    if name not in STAFF_CFG.STAFF_NAMES:
+        return jsonify({'status': 'error', 'message': f'找不到人員：{name}'}), 404
+    try:
+        rows = personal_calendar.list_events(name, fresh=request.args.get('fresh') == '1')
+    except Exception as e:
+        print(f"⚠️ 個人行事曆讀取失敗: {e}")
+        return jsonify({'status': 'error', 'message': '無法讀取個人行事曆（Google Sheet），請稍後再試。'}), 503
+    today = datetime.now(TW_TZ).date()
+    events = []
+    for e in rows:
+        try:
+            d = datetime.strptime(e['date'], '%Y-%m-%d').date()
+        except ValueError:
+            continue
+        events.append({
+            'id': e['id'],
+            'title': _pc_title(e) or '（未命名）',
+            'start': e['date'],
+            'color': STAFF_CFG.PAST_COLOR if d < today else STAFF_CFG.color_of(e['person']),
+            'extendedProps': {k: e[k] for k in ('person', 'store', 'name', 'content', 'time', 'special',
+                                                'created_by', 'created_at', 'updated_by', 'updated_at')},
+        })
+    return jsonify({'status': 'ok', 'events': events})
+
+
+@app.route('/personal_calendar/save', methods=['POST'])
+@login_required
+def personal_calendar_save():
+    d = request.get_json(silent=True) or {}
+    try:
+        data = _pc_clean(d)
+    except ValueError as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+    user = getattr(current_user, 'username', '')
+    event_id = str(d.get('id', '')).strip()
+    try:
+        if event_id:
+            personal_calendar.update_event(event_id, data, user)
+        else:
+            event_id = personal_calendar.add_event(data, user)
+    except LookupError as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 404
+    except Exception as e:
+        print(f"⚠️ 個人行事曆寫入失敗: {e}")
+        return jsonify({'status': 'error', 'message': '寫入 Google Sheet 失敗，請稍後再試。'}), 502
+    return jsonify({'status': 'ok', 'id': event_id})
+
+
+@app.route('/personal_calendar/delete', methods=['POST'])
+@login_required
+def personal_calendar_delete():
+    d = request.get_json(silent=True) or {}
+    event_id = str(d.get('id', '')).strip()
+    if not event_id:
+        return jsonify({'status': 'error', 'message': '缺少事件編號'}), 400
+    try:
+        personal_calendar.delete_event(event_id)
+    except LookupError as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 404
+    except Exception as e:
+        print(f"⚠️ 個人行事曆刪除失敗: {e}")
+        return jsonify({'status': 'error', 'message': '刪除失敗（Google Sheet），請稍後再試。'}), 502
+    return jsonify({'status': 'ok'})
+
+
 @app.route("/worktime")
 @login_required
 def worktime():
@@ -1013,4 +1148,3 @@ def make_session_permanent():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
     app.run(host='0.0.0.0', port=port)
-

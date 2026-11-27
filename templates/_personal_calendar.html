@@ -1,0 +1,346 @@
+<!-- === 個人行事曆（由 personal.html 引入）===
+     資料存在 Google Sheet「個人行事曆」分頁；新增、編輯、刪除即時寫入，不需經過 PM 工具與 Git 發佈。 -->
+<h2 id="pc-title">
+  <button type="button" id="pcToggle" aria-expanded="true" aria-controls="pcBody" style="margin-right: 8px;" title="顯示／隱藏個人行事曆">▼</button>
+  <span class="pc-title-text" id="pcTitleText">{{ personal_page }} - 個人行事曆</span>
+</h2>
+
+<div id="pcBody">
+<div class="pc-card">
+  <div class="pc-card-title">新增事件</div>
+  <form id="pcAddForm" class="pc-form" autocomplete="off">
+    <label>日期<input type="date" name="date" required></label>
+    <label>工程師
+      <select name="person">
+        {% for s in STAFF %}<option value="{{ s.name }}" {% if s.name == personal_page %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>店編（或 休／MFP 等）<input name="store" list="pcStoreList" maxlength="20"></label>
+    <label>店名（有店編會自動帶入）<input name="name" maxlength="40"></label>
+    <label>內容<input name="content" list="pcContentList" maxlength="60"></label>
+    <label>時間<input name="time" placeholder="10:00" maxlength="20"></label>
+    <label>特殊（Y）<input name="special" maxlength="1" placeholder="Y"></label>
+  </form>
+  <div class="pc-actions">
+    <button type="button" class="pc-btn pc-primary" id="pcAddBtn">新增</button>
+    <span class="pc-hint" id="pcAddMsg">新增後會立即顯示在下方行事曆；點行事曆上的事件可以編輯或刪除。</span>
+  </div>
+</div>
+
+<datalist id="pcStoreList"></datalist>
+<datalist id="pcContentList">
+  <option value="回裝"><option value="閉店"><option value="新開"><option value="裝潢撤機"><option value="裝潢撤店"><option value="休假"><option value="特休"><option value="保養">
+</datalist>
+
+<div id="pcMsg" class="pc-msg" style="display:none;"><span id="pcMsgText"></span><button type="button" id="pcRetry" class="pc-btn" style="display:none;">重新載入</button></div>
+
+<div class="pc-tools">
+  <button type="button" class="pc-btn" id="pcWeekendBtn">顯示週六日</button>
+  <button type="button" class="pc-btn pc-link" id="pcWeekendAuto" style="display:none;">恢復自動</button>
+</div>
+<div id="pcCalendar"></div>
+</div><!-- /#pcBody -->
+
+<script>
+  // 依記憶的狀態先套用收合（在畫面顯示前執行，避免先展開再收起的閃動）
+  (function () {
+    var collapsed = false;
+    try { collapsed = localStorage.getItem('pmq3.personalCalendar.collapsed') === '1'; } catch (e) {}
+    if (collapsed) {
+      document.getElementById('pcBody').style.display = 'none';
+      var b = document.getElementById('pcToggle'); b.textContent = '▶'; b.setAttribute('aria-expanded', 'false');
+    }
+  })();
+</script>
+
+<!-- 編輯／刪除視窗 -->
+<div id="pcOverlay" class="pc-overlay" role="dialog" aria-modal="true" aria-labelledby="pcEditHead">
+  <div class="pc-box">
+    <h3 id="pcEditHead">編輯事件</h3>
+    <form id="pcEditForm" class="pc-form pc-form-edit" autocomplete="off">
+      <label>日期<input type="date" name="date" required></label>
+      <label>工程師
+        <select name="person">
+          {% for s in STAFF %}<option value="{{ s.name }}">{{ s.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>店編（或 休／MFP 等）<input name="store" list="pcStoreList" maxlength="20"></label>
+      <label>店名<input name="name" maxlength="40"></label>
+      <label>內容<input name="content" list="pcContentList" maxlength="60"></label>
+      <label>時間<input name="time" placeholder="10:00" maxlength="20"></label>
+      <label>特殊（Y）<input name="special" maxlength="1" placeholder="Y"></label>
+    </form>
+    <div class="pc-meta" id="pcMeta"></div>
+    <div class="pc-err" id="pcErr"></div>
+    <div class="pc-box-btns">
+      <button type="button" class="pc-btn pc-danger" id="pcDelete">刪除</button>
+      <button type="button" class="pc-btn" id="pcCancel">取消</button>
+      <button type="button" class="pc-btn pc-primary" id="pcSave">儲存</button>
+    </div>
+  </div>
+</div>
+
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
+
+<style>
+  .pc-section { margin-top: 24px; }
+  .pc-title-text { cursor: pointer; user-select: none; }
+
+  .pc-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+  .pc-card-title { font-weight: bold; font-size: 17px; margin-bottom: 8px; color: #1e293b; }
+  .pc-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 10px; }
+  .pc-form label { display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; font-size: 13px; color: #475569; }
+  .pc-form input, .pc-form select {
+    padding: 7px 8px; font-size: 14px; border: 1px solid #cbd5e1; border-radius: 6px;
+    background: #fff; color: #1e293b; width: 100%; box-sizing: border-box; min-height: 36px;
+  }
+  .pc-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 10px; }
+  .pc-hint { font-size: 13px; color: #64748b; }
+  .pc-hint.ok { color: #15803d; font-weight: bold; }
+  .pc-hint.err { color: #b91c1c; font-weight: bold; }
+
+  .pc-btn {
+    margin: 0; padding: 6px 14px; font-size: 15px; border-radius: 6px; cursor: pointer;
+    background: #fff; color: #1e293b; border: 1px solid #94a3b8;
+  }
+  .pc-btn:hover { background: #f1f5f9; }
+  .pc-btn:disabled { opacity: .6; cursor: default; }
+  .pc-primary { background: #1d4ed8; color: #fff; border-color: #1d4ed8; padding: 8px 20px; }
+  .pc-primary:hover { background: #1e40af; }
+  .pc-danger { color: #b91c1c; border-color: #e0a0a0; margin-right: auto; }
+  .pc-danger.armed { background: #b91c1c; color: #fff; border-color: #b91c1c; }
+  .pc-link { border: none; background: none; color: #007BFF; text-decoration: underline; padding: 6px 4px; }
+  .pc-link:hover { background: none; }
+  .pc-btn.active { background: #1e293b; color: #fff; border-color: #1e293b; }
+  .pc-tools { display: flex; gap: 8px; align-items: center; margin: 0 0 8px 0; }
+
+  .pc-msg { margin: 0 0 10px 0; padding: 8px 12px; border-radius: 6px; font-size: 14px; display: flex; gap: 10px; align-items: center; }
+  .pc-msg.error { background: #fdecea; color: #b71c1c; border: 1px solid #f5c2c0; }
+
+  /* 行事曆外觀（與部門排程表一致）；工務文字大小：電腦 12.5px、手機 5.5px */
+  #pcCalendar { --ev-font: 12.5px; background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 10px; }
+  #pcCalendar .fc-daygrid-event { display: block; padding: 2px 4px; font-size: var(--ev-font); line-height: 1.3; white-space: normal !important; cursor: pointer; }
+  #pcCalendar .fc-event-main, #pcCalendar .fc-event-title { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; }
+  #pcCalendar .pc-ev-title { overflow-wrap: anywhere; word-break: break-word; }
+  #pcCalendar .fc-daygrid-day-frame { min-height: 110px; }
+  #pcCalendar .fc-day-sat, #pcCalendar .fc-day-sun { background-color: #fff8e6; }
+  #pcCalendar .fc-daygrid-event.ev-special { border: 2px solid red !important; font-weight: bold; }
+  #pcCalendar .fc-toolbar-title { font-size: 20px; }
+
+  /* 編輯視窗 */
+  .pc-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: center; justify-content: center; z-index: 2000; }
+  .pc-overlay.show { display: flex; }
+  .pc-box { background: #fff; border-radius: 10px; padding: 18px 20px; width: min(560px, 94vw); max-height: 92vh; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+  .pc-box h3 { margin: 0 0 12px 0; }
+  .pc-form-edit { grid-template-columns: 1fr 1fr; }
+  .pc-meta { font-size: 12px; color: #64748b; margin-top: 10px; line-height: 1.6; }
+  .pc-err { color: #b91c1c; min-height: 1.2em; margin-top: 6px; font-size: 14px; }
+  .pc-box-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; flex-wrap: wrap; }
+
+  @media (max-width: 768px) {
+    .pc-section { margin-top: 16px; }
+    .pc-form { grid-template-columns: 1fr 1fr; }
+    .pc-form input, .pc-form select { font-size: 16px; }
+    .pc-form-edit { grid-template-columns: 1fr; }
+    #pcCalendar { --ev-font: 5.5px; padding: 4px; }
+    #pcCalendar .fc-toolbar { flex-wrap: wrap; gap: 6px; }
+    #pcCalendar .fc-toolbar-title { font-size: 17px; }
+    #pcCalendar .fc-button { padding: 4px 8px; font-size: 13px; }
+    #pcCalendar .fc-daygrid-day-frame { min-height: 80px; }
+    #pcCalendar .fc-col-header-cell-cushion { font-size: 12px; padding: 2px; }
+    .pc-box-btns button { flex: 1 1 auto; }
+  }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const PERSON = {{ personal_page|tojson }};
+  const URL_EVENTS = {{ url_for('personal_calendar_events', name=personal_page)|tojson }};
+  const URL_SAVE = {{ url_for('personal_calendar_save')|tojson }};
+  const URL_DELETE = {{ url_for('personal_calendar_delete')|tojson }};
+  const URL_STORES = {{ url_for('personal_calendar_stores')|tojson }};
+  const LOGIN_URL = {{ url_for('billing.login')|tojson }};
+  const FIELDS = ['date', 'person', 'store', 'name', 'content', 'time', 'special'];
+
+  function readJson(r) { return r.json().catch(function () { return null; }); }
+  function call(url, body) {
+    return fetch(url, {
+      method: body ? 'POST' : 'GET', credentials: 'same-origin', cache: 'no-store',
+      headers: Object.assign({ 'X-Requested-With': 'fetch', 'Accept': 'application/json' }, body ? { 'Content-Type': 'application/json' } : {}),
+      body: body ? JSON.stringify(body) : undefined
+    }).then(function (r) {
+      return readJson(r).then(function (j) {
+        if (r.status === 401) { location.href = (j && j.login_url) || LOGIN_URL; throw new Error('登入已逾時'); }
+        if (!r.ok || !j || j.status !== 'ok') throw new Error((j && j.message) || ('伺服器錯誤（' + r.status + '）'));
+        return j;
+      });
+    }, function () { throw new Error('無法連線到伺服器'); });
+  }
+  function todayStr() {
+    const d = new Date(); const p = function (n) { return (n < 10 ? '0' : '') + n; };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  }
+  function readForm(f) { const o = {}; FIELDS.forEach(function (k) { o[k] = (f.elements[k].value || '').trim(); }); o.special = o.special.toUpperCase(); return o; }
+  function fillForm(f, o) { FIELDS.forEach(function (k) { f.elements[k].value = o[k] || ''; }); }
+
+  // ===== 門市清單：店編 → 店名自動帶入 =====
+  const STORES = {};
+  call(URL_STORES).then(function (j) {
+    const dl = document.getElementById('pcStoreList');
+    j.stores.forEach(function (s) {
+      STORES[s.id] = s.name;
+      const o = document.createElement('option'); o.value = s.id; o.label = s.name; dl.appendChild(o);
+    });
+  }).catch(function () { /* 讀不到門市清單時，店名改為手動輸入 */ });
+  function bindAutoName(f) {
+    let lastAuto = '';
+    f.elements.store.addEventListener('input', function () {
+      const name = STORES[f.elements.store.value.trim()];
+      const cur = f.elements.name.value.trim();
+      if (name && (!cur || cur === lastAuto)) { f.elements.name.value = name; lastAuto = name; }
+      else if (!name && cur && cur === lastAuto) { f.elements.name.value = ''; lastAuto = ''; }
+    });
+    return function reset() { lastAuto = ''; };
+  }
+
+  // ===== 訊息列 =====
+  const msgBox = document.getElementById('pcMsg'), msgText = document.getElementById('pcMsgText'), retryBtn = document.getElementById('pcRetry');
+  function showError(text) { msgText.textContent = '⚠️ ' + text; msgBox.className = 'pc-msg error'; retryBtn.style.display = ''; msgBox.style.display = 'flex'; }
+  function clearError() { msgBox.style.display = 'none'; }
+
+  // ===== 週末顯示（與部門排程表相同：預設隱藏，當月有排程才展開，可手動切換）=====
+  const wkBtn = document.getElementById('pcWeekendBtn'), wkAuto = document.getElementById('pcWeekendAuto');
+  let wkMode = 'auto', hiddenNow = [0, 6], forceFresh = false;
+  function updateWeekends() {
+    const v = calendar.view; let sat = 0, sun = 0;
+    calendar.getEvents().forEach(function (ev) {
+      const d = ev.start; if (!d || d < v.currentStart || d >= v.currentEnd) return;
+      if (d.getDay() === 6) sat++; if (d.getDay() === 0) sun++;
+    });
+    let hidden;
+    if (wkMode === 'show') hidden = []; else if (wkMode === 'hide') hidden = [0, 6];
+    else { hidden = []; if (!sun) hidden.push(0); if (!sat) hidden.push(6); }
+    if (hidden.join(',') !== hiddenNow.join(',')) { hiddenNow = hidden; calendar.setOption('hiddenDays', hidden); }
+    const shown = hidden.length < 2, total = sat + sun;
+    wkBtn.textContent = shown ? '隱藏週六日' : ('顯示週六日' + (total ? '（' + total + ' 筆）' : ''));
+    wkBtn.classList.toggle('active', wkMode === 'show');
+    wkAuto.style.display = wkMode === 'auto' ? 'none' : '';
+  }
+
+  const IS_MOBILE = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+  const calendar = new FullCalendar.Calendar(document.getElementById('pcCalendar'), {
+    initialView: 'dayGridMonth',
+    hiddenDays: [0, 6],
+    headerToolbar: IS_MOBILE ? { left: 'prev,next', center: 'title', right: 'today' } : { left: 'title', center: '', right: 'today prev,next' },
+    height: 'auto',
+    eventDisplay: 'block',
+    dayMaxEventRows: false,
+    dayCellContent: function (arg) { return arg.dayNumberText; },
+    events: function (info, success, failure) {
+      const url = URL_EVENTS + (forceFresh ? '?fresh=1' : ''); forceFresh = false;
+      call(url).then(function (j) { clearError(); success(j.events); })
+        .catch(function (e) { showError(e.message || '個人行事曆載入失敗'); failure(e); });
+    },
+    eventContent: function (arg) {
+      const t = document.createElement('div'); t.className = 'pc-ev-title'; t.textContent = arg.event.title;
+      return { domNodes: [t] };
+    },
+    eventDidMount: function (info) {
+      info.el.title = '點擊可編輯或刪除';
+      if (info.event.extendedProps.special === 'Y') info.el.classList.add('ev-special');
+    },
+    eventsSet: updateWeekends,
+    datesSet: updateWeekends,
+    dateClick: function (info) {            // 點空白日期：帶入新增表單的日期
+      addForm.elements.date.value = info.dateStr;
+      addForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    },
+    eventClick: function (info) { info.jsEvent.preventDefault(); openEdit(info.event); }
+  });
+  calendar.render();
+
+  // ===== 標題：顯示／隱藏整個行事曆區塊（狀態記在瀏覽器，所有人的個人頁共用）=====
+  const PC_KEY = 'pmq3.personalCalendar.collapsed';
+  const pcBody = document.getElementById('pcBody'), pcToggle = document.getElementById('pcToggle');
+  function setCollapsed(c) {
+    pcBody.style.display = c ? 'none' : '';
+    pcToggle.textContent = c ? '▶' : '▼';
+    pcToggle.setAttribute('aria-expanded', c ? 'false' : 'true');
+    try { localStorage.setItem(PC_KEY, c ? '1' : '0'); } catch (e) {}
+    if (!c) calendar.updateSize();          // 收合時無法計算尺寸，展開後重新排版
+  }
+  function toggleCalendar() { setCollapsed(pcBody.style.display !== 'none'); }
+  pcToggle.addEventListener('click', toggleCalendar);
+  document.getElementById('pcTitleText').addEventListener('click', toggleCalendar);
+
+  function reload() { forceFresh = true; calendar.refetchEvents(); }
+  retryBtn.addEventListener('click', reload);
+  wkBtn.addEventListener('click', function () { wkMode = hiddenNow.length < 2 ? 'hide' : 'show'; updateWeekends(); });
+  wkAuto.addEventListener('click', function () { wkMode = 'auto'; updateWeekends(); });
+
+  // ===== 新增 =====
+  const addForm = document.getElementById('pcAddForm'), addBtn = document.getElementById('pcAddBtn'), addMsg = document.getElementById('pcAddMsg');
+  addForm.elements.date.value = todayStr();
+  const resetAddAuto = bindAutoName(addForm);
+  function setAddMsg(text, kind) { addMsg.textContent = text; addMsg.className = 'pc-hint' + (kind ? ' ' + kind : ''); }
+  function doAdd() {
+    const data = readForm(addForm);
+    addBtn.disabled = true; setAddMsg('新增中…');
+    call(URL_SAVE, data).then(function () {
+      setAddMsg(data.person === PERSON ? '✅ 已新增 ' + data.date + ' 的事件' : '✅ 已新增到「' + data.person + '」的個人行事曆', 'ok');
+      ['store', 'name', 'content', 'time', 'special'].forEach(function (k) { addForm.elements[k].value = ''; });
+      resetAddAuto();
+      if (data.person === PERSON) { calendar.gotoDate(data.date); reload(); }
+    }).catch(function (e) { setAddMsg('❌ ' + e.message, 'err'); })
+      .then(function () { addBtn.disabled = false; });
+  }
+  addBtn.addEventListener('click', doAdd);
+  addForm.addEventListener('submit', function (e) { e.preventDefault(); doAdd(); });
+  addForm.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.isComposing && e.target.tagName === 'INPUT') { e.preventDefault(); doAdd(); } });
+
+  // ===== 編輯／刪除 =====
+  const ov = document.getElementById('pcOverlay'), editForm = document.getElementById('pcEditForm');
+  const btnSave = document.getElementById('pcSave'), btnDel = document.getElementById('pcDelete'), btnCancel = document.getElementById('pcCancel');
+  const errBox = document.getElementById('pcErr'), meta = document.getElementById('pcMeta');
+  const resetEditAuto = bindAutoName(editForm);
+  let editingId = null, delArmed = false;
+
+  function setBusy(b) { [btnSave, btnDel, btnCancel].forEach(function (x) { x.disabled = b; }); }
+  function disarm() { delArmed = false; btnDel.textContent = '刪除'; btnDel.classList.remove('armed'); }
+  function openEdit(ev) {
+    const p = ev.extendedProps;
+    editingId = ev.id;
+    fillForm(editForm, { date: ev.startStr.slice(0, 10), person: p.person, store: p.store, name: p.name, content: p.content, time: p.time, special: p.special });
+    resetEditAuto();
+    meta.textContent = '建立：' + (p.created_by || '—') + '　' + (p.created_at || '') +
+      (p.updated_at && p.updated_at !== p.created_at ? '\n最後修改：' + (p.updated_by || '—') + '　' + p.updated_at : '');
+    meta.style.whiteSpace = 'pre-line';
+    errBox.textContent = ''; disarm(); setBusy(false);
+    ov.classList.add('show');
+  }
+  function closeEdit() { ov.classList.remove('show'); editingId = null; disarm(); }
+
+  btnSave.addEventListener('click', function () {
+    if (!editingId) return;
+    const data = readForm(editForm); data.id = editingId;
+    setBusy(true); errBox.textContent = '';
+    call(URL_SAVE, data).then(function () {
+      closeEdit();
+      if (data.person !== PERSON) setAddMsg('✅ 事件已移到「' + data.person + '」的個人行事曆', 'ok');
+      reload();
+    }).catch(function (e) { errBox.textContent = e.message; setBusy(false); });
+  });
+  // 刪除：按兩次確認（第一次變紅色「確定刪除？」）
+  btnDel.addEventListener('click', function () {
+    if (!editingId) return;
+    if (!delArmed) { delArmed = true; btnDel.textContent = '確定刪除？'; btnDel.classList.add('armed'); return; }
+    setBusy(true); errBox.textContent = '';
+    call(URL_DELETE, { id: editingId }).then(function () { closeEdit(); reload(); })
+      .catch(function (e) { errBox.textContent = e.message; setBusy(false); disarm(); });
+  });
+  btnCancel.addEventListener('click', closeEdit);
+  ov.addEventListener('click', function (e) { if (e.target === ov) closeEdit(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && ov.classList.contains('show')) closeEdit(); });
+});
+</script>

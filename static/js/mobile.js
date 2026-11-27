@@ -127,9 +127,10 @@
         // 收合／展開區塊、旋轉螢幕後重新判斷提示
         document.addEventListener('click', refreshHintsSoon, true);
         window.addEventListener('resize', refreshHintsSoon);
-        // 由桌機寬度轉成手機寬度（例如旋轉螢幕）時再處理一次
-        if (MQ.addEventListener) MQ.addEventListener('change', function () { processTables(); });
-        else if (MQ.addListener) MQ.addListener(function () { processTables(); });
+        // 由桌機寬度轉成手機寬度（例如旋轉螢幕）時再處理一次；變回電腦寬度時也要重新判斷，把手機用的提示藏起來
+        function onMQChange() { processTables(); refreshHints(); }
+        if (MQ.addEventListener) MQ.addEventListener('change', onMQChange);
+        else if (MQ.addListener) MQ.addListener(onMQChange);
     }
 
     // 讓其他頁面（例如之後才產生的表格）可以手動呼叫
