@@ -59,10 +59,10 @@
 </div><!-- /#pcBody -->
 
 <script>
-  // 依記憶的狀態先套用收合（在畫面顯示前執行，避免先展開再收起的閃動）
+  // 依記憶的狀態先套用收合（在畫面顯示前執行，避免先展開再收起的閃動）；每位人員的頁面各自記憶
   (function () {
     var collapsed = false;
-    try { collapsed = localStorage.getItem('pmq3.personalCalendar.collapsed') === '1'; } catch (e) {}
+    try { collapsed = localStorage.getItem('pmq3.personalCalendar.collapsed.' + {{ personal_page|tojson }}) === '1'; } catch (e) {}
     if (collapsed) {
       document.getElementById('pcBody').style.display = 'none';
       var b = document.getElementById('pcToggle'); b.textContent = '▶'; b.setAttribute('aria-expanded', 'false');
@@ -371,8 +371,8 @@ document.addEventListener('DOMContentLoaded', function () {
   });
   calendar.render();
 
-  // ===== 標題：顯示／隱藏整個行事曆區塊（狀態記在瀏覽器，所有人的個人頁共用）=====
-  const PC_KEY = 'pmq3.personalCalendar.collapsed';
+  // ===== 標題：顯示／隱藏整個行事曆區塊（狀態記在瀏覽器，每位人員的頁面各自記憶）=====
+  const PC_KEY = 'pmq3.personalCalendar.collapsed.' + PERSON;
   const pcBody = document.getElementById('pcBody'), pcToggle = document.getElementById('pcToggle');
   function setCollapsed(c) {
     pcBody.style.display = c ? 'none' : '';
